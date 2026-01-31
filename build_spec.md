@@ -2,7 +2,7 @@
 
 ## Overview
 
-**elimgui** is a pure C99 rewrite of Dear ImGui, designed for WebAssembly targets. It provides an immediate-mode GUI API familiar to ImGui users while being fully compatible with JAClibc and the Canvil framework.
+**elimgui** is a pure C11 rewrite of Dear ImGui, designed for WebAssembly targets. It provides an immediate-mode GUI API familiar to ImGui users while being fully compatible with JAClibc and the Canvil framework.
 
 This is NOT a binding or wrapper - it's a ground-up reimplementation in C with **full feature parity** with Dear ImGui.
 
@@ -10,7 +10,7 @@ This is NOT a binding or wrapper - it's a ground-up reimplementation in C with *
 
 1. **Full feature parity with Dear ImGui** - All widgets, features, and capabilities
 2. **ImGui-familiar API** - Developers who know ImGui should feel at home
-3. **Pure C99** - No C++ features, compiles with clang to wasm32
+3. **Pure C11** - No C++ features, compiles with clang to wasm32
 4. **Header-only** - Single include, no separate compilation units
 5. **Zero dependencies** - Only JAClibc (for WASM) and optionally stb_truetype
 6. **Minimal footprint** - Small WASM binary size

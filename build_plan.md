@@ -2,226 +2,252 @@
 
 This plan reflects **full feature parity** with Dear ImGui. Tasks are organized into phases that build on each other.
 
+Each phase ends with a documentation task to create/update API docs in the `docs/` folder.
+
 ---
 
-## Phase 1: Foundation & Core Types
+## Phase 1: Foundation & Core Types ✓
 
 Core types, context management, and basic infrastructure.
 
 ### Core Types
-- [ ] Create `elimgui.h` with core types (eli_vec2, eli_vec4, eli_rect)
-- [ ] Define eli_col32 and color macros (ELI_COL32, ELI_COL32_WHITE, etc.)
-- [ ] Define eli_id type (uint32_t)
-- [ ] Define all flag enums (eli_window_flags, eli_child_flags, eli_item_flags)
-- [ ] Define eli_dir, eli_cond, eli_data_type enums
-- [ ] Define eli_key enum (full keyboard, mouse, gamepad)
-- [ ] Define eli_mouse_button and eli_mouse_cursor enums
-- [ ] Define eli_col enum (all 51 color indices)
-- [ ] Define eli_style_var enum (all 33 style variables)
+- [x] Create `elimgui.h` with core types (eli_vec2, eli_vec4, eli_rect)
+- [x] Define eli_col32 and color macros (ELI_COL32, ELI_COL32_WHITE, etc.)
+- [x] Define eli_id type (uint32_t)
+- [x] Define all flag enums (eli_window_flags, eli_child_flags, eli_item_flags)
+- [x] Define eli_dir, eli_cond, eli_data_type enums
+- [x] Define eli_key enum (full keyboard, mouse, gamepad)
+- [x] Define eli_mouse_button and eli_mouse_cursor enums
+- [x] Define eli_col enum (all 60 color indices)
+- [x] Define eli_style_var enum (all 40 style variables)
 
 ### Context & IO
-- [ ] Define eli_io structure (full version with all fields)
-- [ ] Define eli_style structure (60+ properties)
-- [ ] Define eli_context structure
-- [ ] Implement eli_create_context()
-- [ ] Implement eli_destroy_context()
-- [ ] Implement eli_get_current_context()
-- [ ] Implement eli_set_current_context()
+- [x] Define eli_io structure (full version with all fields)
+- [x] Define eli_style structure (60+ properties)
+- [x] Define eli_context structure
+- [x] Implement eli_create_context()
+- [x] Implement eli_destroy_context()
+- [x] Implement eli_get_current_context()
+- [x] Implement eli_set_current_context()
 
 ### Frame Lifecycle
-- [ ] Implement eli_new_frame()
-- [ ] Implement eli_end_frame()
-- [ ] Implement eli_render()
-- [ ] Implement eli_get_draw_data()
+- [x] Implement eli_new_frame()
+- [x] Implement eli_end_frame()
+- [x] Implement eli_render()
+- [x] Implement eli_get_draw_data()
+
+### Documentation
+- [x] Create `docs/README.md` with table of contents structure
+- [x] Create `docs/core-types.md` documenting core types, context, and frame lifecycle
+- [x] Add core-types link to docs/README.md index
 
 ---
 
-## Phase 2: Draw System
+## Phase 2: Draw System ✓
 
 Draw list, draw commands, and primitive rendering.
 
 ### Draw Types
-- [ ] Create `eli_draw.h`
-- [ ] Define eli_draw_cmd structure
-- [ ] Define eli_draw_vert structure
-- [ ] Define eli_draw_idx type
-- [ ] Define eli_draw_list structure (with path, clip, texture stacks)
-- [ ] Define eli_draw_data structure
-- [ ] Define eli_draw_list_flags and eli_draw_flags
+- [x] Create `eli_draw.h`
+- [x] Define eli_draw_cmd structure
+- [x] Define eli_draw_vert structure
+- [x] Define eli_draw_idx type
+- [x] Define eli_draw_list structure (with path, clip, texture stacks)
+- [x] Define eli_draw_data structure
+- [x] Define eli_draw_list_flags and eli_draw_flags
 
 ### Draw List Management
-- [ ] Implement draw list initialization
-- [ ] Implement draw list cleanup
-- [ ] Implement draw command buffer growth
-- [ ] Implement vertex/index buffer growth
-- [ ] Implement draw command batching/merging
+- [x] Implement draw list initialization
+- [x] Implement draw list cleanup
+- [x] Implement draw command buffer growth
+- [x] Implement vertex/index buffer growth
+- [x] Implement draw command batching/merging
 
 ### Basic Primitives
-- [ ] Implement eli_draw_list_add_line()
-- [ ] Implement eli_draw_list_add_rect()
-- [ ] Implement eli_draw_list_add_rect_filled()
-- [ ] Implement eli_draw_list_add_rect_filled_multi_color()
-- [ ] Implement eli_draw_list_add_triangle()
-- [ ] Implement eli_draw_list_add_triangle_filled()
-- [ ] Implement eli_draw_list_add_quad()
-- [ ] Implement eli_draw_list_add_quad_filled()
+- [x] Implement eli_draw_list_add_line()
+- [x] Implement eli_draw_list_add_rect()
+- [x] Implement eli_draw_list_add_rect_filled()
+- [x] Implement eli_draw_list_add_rect_filled_multi_color()
+- [x] Implement eli_draw_list_add_triangle()
+- [x] Implement eli_draw_list_add_triangle_filled()
+- [x] Implement eli_draw_list_add_quad()
+- [x] Implement eli_draw_list_add_quad_filled()
 
 ### Circle/Ellipse Primitives
-- [ ] Implement eli_draw_list_add_circle()
-- [ ] Implement eli_draw_list_add_circle_filled()
-- [ ] Implement eli_draw_list_add_ngon()
-- [ ] Implement eli_draw_list_add_ngon_filled()
-- [ ] Implement eli_draw_list_add_ellipse()
-- [ ] Implement eli_draw_list_add_ellipse_filled()
+- [x] Implement eli_draw_list_add_circle()
+- [x] Implement eli_draw_list_add_circle_filled()
+- [x] Implement eli_draw_list_add_ngon()
+- [x] Implement eli_draw_list_add_ngon_filled()
+- [x] Implement eli_draw_list_add_ellipse()
+- [x] Implement eli_draw_list_add_ellipse_filled()
 
 ### Bezier & Polyline
-- [ ] Implement eli_draw_list_add_polyline()
-- [ ] Implement eli_draw_list_add_convex_poly_filled()
-- [ ] Implement eli_draw_list_add_bezier_cubic()
-- [ ] Implement eli_draw_list_add_bezier_quadratic()
+- [x] Implement eli_draw_list_add_polyline()
+- [x] Implement eli_draw_list_add_convex_poly_filled()
+- [x] Implement eli_draw_list_add_bezier_cubic()
+- [x] Implement eli_draw_list_add_bezier_quadratic()
 
 ### Path API
-- [ ] Implement eli_draw_list_path_clear()
-- [ ] Implement eli_draw_list_path_line_to()
-- [ ] Implement eli_draw_list_path_line_to_merge_duplicate()
-- [ ] Implement eli_draw_list_path_fill_convex()
-- [ ] Implement eli_draw_list_path_stroke()
-- [ ] Implement eli_draw_list_path_arc_to()
-- [ ] Implement eli_draw_list_path_arc_to_fast()
-- [ ] Implement eli_draw_list_path_elliptical_arc_to()
-- [ ] Implement eli_draw_list_path_bezier_cubic_curve_to()
-- [ ] Implement eli_draw_list_path_bezier_quadratic_curve_to()
-- [ ] Implement eli_draw_list_path_rect()
+- [x] Implement eli_draw_list_path_clear()
+- [x] Implement eli_draw_list_path_line_to()
+- [x] Implement eli_draw_list_path_line_to_merge_duplicate()
+- [x] Implement eli_draw_list_path_fill_convex()
+- [x] Implement eli_draw_list_path_stroke()
+- [x] Implement eli_draw_list_path_arc_to()
+- [x] Implement eli_draw_list_path_arc_to_fast()
+- [x] Implement eli_draw_list_path_elliptical_arc_to()
+- [x] Implement eli_draw_list_path_bezier_cubic_curve_to()
+- [x] Implement eli_draw_list_path_bezier_quadratic_curve_to()
+- [x] Implement eli_draw_list_path_rect()
 
 ### Clip & Texture Stacks
-- [ ] Implement eli_draw_list_push_clip_rect()
-- [ ] Implement eli_draw_list_push_clip_rect_full_screen()
-- [ ] Implement eli_draw_list_pop_clip_rect()
-- [ ] Implement eli_draw_list_get_clip_rect_min/max()
-- [ ] Implement eli_draw_list_push_texture_id()
-- [ ] Implement eli_draw_list_pop_texture_id()
+- [x] Implement eli_draw_list_push_clip_rect()
+- [x] Implement eli_draw_list_push_clip_rect_full_screen()
+- [x] Implement eli_draw_list_pop_clip_rect()
+- [x] Implement eli_draw_list_get_clip_rect_min/max()
+- [x] Implement eli_draw_list_push_texture_id()
+- [x] Implement eli_draw_list_pop_texture_id()
 
 ### Primitives Reservation
-- [ ] Implement eli_draw_list_prim_reserve()
-- [ ] Implement eli_draw_list_prim_unreserve()
-- [ ] Implement eli_draw_list_prim_rect()
-- [ ] Implement eli_draw_list_prim_rect_uv()
-- [ ] Implement eli_draw_list_prim_quad_uv()
-- [ ] Implement eli_draw_list_prim_write_vtx()
-- [ ] Implement eli_draw_list_prim_write_idx()
-- [ ] Implement eli_draw_list_prim_vtx()
+- [x] Implement eli_draw_list_prim_reserve()
+- [x] Implement eli_draw_list_prim_unreserve()
+- [x] Implement eli_draw_list_prim_rect()
+- [x] Implement eli_draw_list_prim_rect_uv()
+- [x] Implement eli_draw_list_prim_quad_uv()
+- [x] Implement eli_draw_list_prim_write_vtx()
+- [x] Implement eli_draw_list_prim_write_idx()
+- [x] Implement eli_draw_list_prim_vtx()
 
 ### Channels (Draw List Splitting)
-- [ ] Implement eli_draw_list_channels_split()
-- [ ] Implement eli_draw_list_channels_merge()
-- [ ] Implement eli_draw_list_channels_set_current()
+- [x] Implement eli_draw_list_channels_split()
+- [x] Implement eli_draw_list_channels_merge()
+- [x] Implement eli_draw_list_channels_set_current()
 
 ### Advanced Draw List
-- [ ] Implement eli_draw_list_add_callback()
-- [ ] Implement eli_draw_list_add_draw_cmd()
-- [ ] Implement eli_draw_list_clone_output()
+- [x] Implement eli_draw_list_add_callback()
+- [x] Implement eli_draw_list_add_draw_cmd()
+- [x] Implement eli_draw_list_clone_output()
+
+### Documentation
+- [x] Create `docs/draw-system.md` documenting draw lists, primitives, paths, and channels
+- [x] Add draw-system link to docs/README.md index
 
 ---
 
-## Phase 3: Font System
+## Phase 3: Font System ✓
 
 Font loading, atlas generation, and text rendering.
 
 ### Font Types
-- [ ] Create `eli_font.h`
-- [ ] Define eli_font structure
-- [ ] Define eli_font_atlas structure
-- [ ] Define eli_font_config structure
-- [ ] Define eli_font_glyph structure
+- [x] Create `eli_font.h`
+- [x] Define eli_font structure
+- [x] Define eli_font_atlas structure
+- [x] Define eli_font_config structure
+- [x] Define eli_font_glyph structure
 
 ### Font Atlas
-- [ ] Integrate stb_truetype.h
-- [ ] Implement eli_font_atlas_add_font()
-- [ ] Implement eli_font_atlas_add_font_default()
-- [ ] Implement eli_font_atlas_add_font_from_memory_ttf()
-- [ ] Implement eli_font_atlas_add_font_from_memory_compressed_ttf()
-- [ ] Implement eli_font_atlas_add_font_from_memory_compressed_base85_ttf()
-- [ ] Implement eli_font_atlas_build()
-- [ ] Implement eli_font_atlas_get_tex_data_as_alpha8()
-- [ ] Implement eli_font_atlas_get_tex_data_as_rgba32()
-- [ ] Implement eli_font_atlas_is_built()
-- [ ] Implement eli_font_atlas_set_tex_id()
-- [ ] Implement eli_font_atlas_clear() variants
+- [x] Integrate stb_truetype.h (vendored in vendor/stb/)
+- [x] Implement eli_font_atlas_add_font_default() (with embedded ProggyClean)
+- [x] Implement eli_font_atlas_add_font_from_memory_ttf()
+- [x] Implement eli_font_atlas_build()
+- [x] Implement eli_font_atlas_get_tex_data_as_alpha8()
+- [x] Implement eli_font_atlas_get_tex_data_as_rgba32()
+- [x] Implement eli_font_atlas_is_built()
+- [x] Implement eli_font_atlas_set_tex_id()
+- [x] Implement eli_font_atlas_clear() variants
 
 ### Glyph Ranges
-- [ ] Implement eli_font_atlas_get_glyph_ranges_default()
-- [ ] Implement eli_font_atlas_get_glyph_ranges_greek()
-- [ ] Implement eli_font_atlas_get_glyph_ranges_korean()
-- [ ] Implement eli_font_atlas_get_glyph_ranges_japanese()
-- [ ] Implement eli_font_atlas_get_glyph_ranges_chinese_full()
-- [ ] Implement eli_font_atlas_get_glyph_ranges_chinese_simplified_common()
-- [ ] Implement eli_font_atlas_get_glyph_ranges_cyrillic()
-- [ ] Implement eli_font_atlas_get_glyph_ranges_thai()
-- [ ] Implement eli_font_atlas_get_glyph_ranges_vietnamese()
+- [x] Implement eli_font_atlas_get_glyph_ranges_default()
+- [x] Implement eli_font_atlas_get_glyph_ranges_greek()
+- [x] Implement eli_font_atlas_get_glyph_ranges_korean()
+- [x] Implement eli_font_atlas_get_glyph_ranges_japanese()
+- [x] Implement eli_font_atlas_get_glyph_ranges_chinese_full()
+- [x] Implement eli_font_atlas_get_glyph_ranges_chinese_simplified_common()
+- [x] Implement eli_font_atlas_get_glyph_ranges_cyrillic()
+- [x] Implement eli_font_atlas_get_glyph_ranges_thai()
+- [x] Implement eli_font_atlas_get_glyph_ranges_vietnamese()
 
 ### Text Rendering
-- [ ] Implement eli_draw_list_add_text()
-- [ ] Implement eli_draw_list_add_text_ex()
-- [ ] Implement eli_calc_text_size()
-- [ ] Implement embedded default font (proggy or similar)
+- [x] Implement eli_draw_list_add_text()
+- [x] Implement eli_draw_list_add_text_ex()
+- [x] Implement eli_calc_text_size()
+- [x] Implement embedded default font (ProggyClean in eli_font_proggy.h)
 
 ### Font Stack
-- [ ] Implement eli_push_font()
-- [ ] Implement eli_pop_font()
-- [ ] Implement eli_get_font()
-- [ ] Implement eli_get_font_size()
-- [ ] Implement eli_get_font_tex_uv_white_pixel()
+- [x] Implement eli_push_font()
+- [x] Implement eli_pop_font()
+- [x] Implement eli_get_font()
+- [x] Implement eli_get_font_size()
+- [x] Implement eli_get_font_tex_uv_white_pixel()
+
+### Documentation
+- [x] Create `docs/font-system.md` documenting font atlas, glyph ranges, and text rendering
+- [x] Add font-system link to docs/README.md index
 
 ---
 
-## Phase 4: Input System
+## Phase 4: Input System ✓
 
 Mouse, keyboard, and input handling.
 
 ### Mouse Input
-- [ ] Create `eli_input.h`
-- [ ] Implement mouse position tracking in IO
-- [ ] Implement mouse button state tracking
-- [ ] Implement mouse wheel/scroll tracking
-- [ ] Implement eli_is_mouse_down()
-- [ ] Implement eli_is_mouse_clicked()
-- [ ] Implement eli_is_mouse_released()
-- [ ] Implement eli_is_mouse_double_clicked()
-- [ ] Implement eli_get_mouse_clicked_count()
-- [ ] Implement eli_is_mouse_hovering_rect()
-- [ ] Implement eli_is_mouse_pos_valid()
-- [ ] Implement eli_is_any_mouse_down()
-- [ ] Implement eli_get_mouse_pos()
-- [ ] Implement eli_get_mouse_pos_on_opening_current_popup()
-- [ ] Implement eli_is_mouse_dragging()
-- [ ] Implement eli_get_mouse_drag_delta()
-- [ ] Implement eli_reset_mouse_drag_delta()
-- [ ] Implement eli_get_mouse_cursor()
-- [ ] Implement eli_set_mouse_cursor()
-- [ ] Implement eli_set_next_frame_want_capture_mouse()
+- [x] Create `eli_input.h`
+- [x] Implement mouse position tracking in IO
+- [x] Implement mouse button state tracking
+- [x] Implement mouse wheel/scroll tracking
+- [x] Implement eli_is_mouse_down()
+- [x] Implement eli_is_mouse_clicked()
+- [x] Implement eli_is_mouse_released()
+- [x] Implement eli_is_mouse_double_clicked()
+- [x] Implement eli_get_mouse_clicked_count()
+- [x] Implement eli_is_mouse_hovering_rect()
+- [x] Implement eli_is_mouse_pos_valid()
+- [x] Implement eli_is_any_mouse_down()
+- [x] Implement eli_get_mouse_pos()
+- [x] Implement eli_get_mouse_pos_on_opening_current_popup()
+- [x] Implement eli_is_mouse_dragging()
+- [x] Implement eli_get_mouse_drag_delta()
+- [x] Implement eli_reset_mouse_drag_delta()
+- [x] Implement eli_get_mouse_cursor()
+- [x] Implement eli_set_mouse_cursor()
+- [x] Implement eli_set_next_frame_want_capture_mouse()
 
 ### Keyboard Input
-- [ ] Implement keyboard key state tracking
-- [ ] Implement modifier keys (ctrl, shift, alt, super)
-- [ ] Implement eli_is_key_down()
-- [ ] Implement eli_is_key_pressed()
-- [ ] Implement eli_is_key_released()
-- [ ] Implement eli_is_key_chord_pressed()
-- [ ] Implement eli_get_key_pressed_amount()
-- [ ] Implement eli_get_key_name()
-- [ ] Implement eli_set_next_frame_want_capture_keyboard()
+- [x] Implement keyboard key state tracking
+- [x] Implement modifier keys (ctrl, shift, alt, super)
+- [x] Implement eli_is_key_down()
+- [x] Implement eli_is_key_pressed()
+- [x] Implement eli_is_key_released()
+- [x] Implement eli_is_key_chord_pressed()
+- [x] Implement eli_get_key_pressed_amount()
+- [x] Implement eli_get_key_name()
+- [x] Implement eli_set_next_frame_want_capture_keyboard()
 
 ### Text Input
-- [ ] Implement text input queue in IO
-- [ ] Implement character input handling
+- [x] Implement text input queue in IO
+- [x] Implement character input handling (eli_io_add_input_character, eli_io_add_input_characters_utf8)
 
 ### Shortcuts
-- [ ] Implement eli_shortcut()
-- [ ] Implement eli_set_next_item_shortcut()
+- [x] Implement eli_shortcut()
+- [x] Implement predefined shortcuts (ELI_SHORTCUT_COPY, etc.)
 
 ### Clipboard (via JS interop)
-- [ ] Implement eli_get_clipboard_text()
-- [ ] Implement eli_set_clipboard_text()
+- [x] Implement eli_get_clipboard_text()
+- [x] Implement eli_set_clipboard_text()
+- [x] Implement eli_set_clipboard_callbacks()
+
+### Backend Integration
+- [x] Implement eli_io_add_mouse_pos_event()
+- [x] Implement eli_io_add_mouse_button_event()
+- [x] Implement eli_io_add_mouse_wheel_event()
+- [x] Implement eli_io_add_key_event()
+- [x] Implement eli_io_add_key_analog_event()
+- [x] Implement eli_input_update_begin_frame()
+- [x] Implement eli_input_update_end_frame()
+
+### Documentation
+- [x] Create `docs/input-system.md` documenting mouse, keyboard, text input, and shortcuts
+- [x] Add input-system link to docs/README.md index
 
 ---
 
@@ -256,6 +282,10 @@ Widget identity, hashing, and state management.
 - [ ] Implement eli_storage operations (get/set int/float/ptr)
 - [ ] Implement eli_set_state_storage()
 - [ ] Implement eli_get_state_storage()
+
+### Documentation
+- [ ] Create `docs/id-system.md` documenting ID hashing, ID stack, and state storage
+- [ ] Add id-system link to docs/README.md index
 
 ---
 
@@ -297,6 +327,10 @@ Colors, sizing, and theming.
 - [ ] Implement eli_color_convert_float4_to_u32()
 - [ ] Implement eli_color_convert_rgb_to_hsv()
 - [ ] Implement eli_color_convert_hsv_to_rgb()
+
+### Documentation
+- [ ] Create `docs/style-system.md` documenting styles, colors, theming, and color utilities
+- [ ] Add style-system link to docs/README.md index
 
 ---
 
@@ -366,6 +400,10 @@ Window management and rendering.
 - [ ] Implement horizontal scrollbar
 - [ ] Implement mouse wheel scrolling
 
+### Documentation
+- [ ] Create `docs/windows.md` documenting window lifecycle, flags, child windows, and scrolling
+- [ ] Add windows link to docs/README.md index
+
 ---
 
 ## Phase 8: Layout System
@@ -420,6 +458,10 @@ Positioning, sizing, and layout helpers.
 - [ ] Implement eli_get_frame_height()
 - [ ] Implement eli_get_frame_height_with_spacing()
 
+### Documentation
+- [ ] Create `docs/layout-system.md` documenting cursor, layout helpers, groups, and sizing
+- [ ] Add layout-system link to docs/README.md index
+
 ---
 
 ## Phase 9: Basic Widgets
@@ -464,6 +506,10 @@ Text display and button widgets.
 - [ ] Implement eli_text_link()
 - [ ] Implement eli_text_link_open_url()
 
+### Documentation
+- [ ] Create `docs/basic-widgets.md` documenting text, buttons, checkboxes, radio, and progress
+- [ ] Add basic-widgets link to docs/README.md index
+
 ---
 
 ## Phase 10: Item Status Queries
@@ -487,6 +533,10 @@ Widget state queries (critical for composition).
 - [ ] Implement eli_get_item_rect_min()
 - [ ] Implement eli_get_item_rect_max()
 - [ ] Implement eli_get_item_rect_size()
+
+### Documentation
+- [ ] Create `docs/item-status.md` documenting item state queries and rect helpers
+- [ ] Add item-status link to docs/README.md index
 
 ---
 
@@ -520,6 +570,10 @@ Value adjustment widgets.
 - [ ] Implement eli_drag_scalar()
 - [ ] Implement eli_drag_scalar_n()
 
+### Documentation
+- [ ] Create `docs/sliders-drags.md` documenting slider and drag widgets
+- [ ] Add sliders-drags link to docs/README.md index
+
 ---
 
 ## Phase 12: Input Widgets
@@ -547,6 +601,10 @@ Text and number input.
 - [ ] Implement eli_input_scalar()
 - [ ] Implement eli_input_scalar_n()
 
+### Documentation
+- [ ] Create `docs/input-widgets.md` documenting text and numeric input widgets
+- [ ] Add input-widgets link to docs/README.md index
+
 ---
 
 ## Phase 13: Color Widgets
@@ -563,6 +621,10 @@ Color editing and picking.
 - [ ] Implement hue bar
 - [ ] Implement saturation/value square
 - [ ] Implement alpha bar
+
+### Documentation
+- [ ] Create `docs/color-widgets.md` documenting color edit, picker, and button widgets
+- [ ] Add color-widgets link to docs/README.md index
 
 ---
 
@@ -586,6 +648,10 @@ Dropdown and selection widgets.
 - [ ] Implement eli_end_list_box()
 - [ ] Implement eli_list_box()
 - [ ] Implement eli_list_box_fn()
+
+### Documentation
+- [ ] Create `docs/combo-selectable.md` documenting combo, selectable, and list box widgets
+- [ ] Add combo-selectable link to docs/README.md index
 
 ---
 
@@ -612,6 +678,10 @@ Hierarchical widgets.
 - [ ] Implement tree indentation
 - [ ] Implement tree arrow rendering
 
+### Documentation
+- [ ] Create `docs/trees-collapsing.md` documenting tree nodes and collapsing headers
+- [ ] Add trees-collapsing link to docs/README.md index
+
 ---
 
 ## Phase 16: Menus
@@ -631,6 +701,10 @@ Menu bar and menu items.
 - [ ] Implement eli_menu_item_bool()
 - [ ] Implement menu item shortcut display
 - [ ] Implement submenus
+
+### Documentation
+- [ ] Create `docs/menus.md` documenting menu bar and menu items
+- [ ] Add menus link to docs/README.md index
 
 ---
 
@@ -657,6 +731,10 @@ Popup windows and modal dialogs.
 - [ ] Implement eli_begin_popup_modal()
 - [ ] Implement modal backdrop rendering
 
+### Documentation
+- [ ] Create `docs/popups-modals.md` documenting popups, context menus, and modals
+- [ ] Add popups-modals link to docs/README.md index
+
 ---
 
 ## Phase 18: Tooltips
@@ -671,6 +749,10 @@ Hover tooltips.
 - [ ] Implement eli_set_item_tooltip()
 - [ ] Implement eli_set_item_tooltip_v()
 - [ ] Implement hover delay for tooltips
+
+### Documentation
+- [ ] Create `docs/tooltips.md` documenting tooltip widgets
+- [ ] Add tooltips link to docs/README.md index
 
 ---
 
@@ -717,6 +799,10 @@ Full table widget system.
 - [ ] Implement table scrolling
 - [ ] Implement row backgrounds
 
+### Documentation
+- [ ] Create `docs/tables.md` documenting table widget, columns, sorting, and features
+- [ ] Add tables link to docs/README.md index
+
 ---
 
 ## Phase 20: Tab Bars
@@ -733,6 +819,10 @@ Tab bar widget.
 - [ ] Implement tab reordering
 - [ ] Implement tab scrolling
 - [ ] Implement tab close button
+
+### Documentation
+- [ ] Create `docs/tab-bars.md` documenting tab bar and tab item widgets
+- [ ] Add tab-bars link to docs/README.md index
 
 ---
 
@@ -759,6 +849,10 @@ Drag and drop system.
 - [ ] Implement drag preview
 - [ ] Implement drop target highlight
 
+### Documentation
+- [ ] Create `docs/drag-drop.md` documenting drag and drop system
+- [ ] Add drag-drop link to docs/README.md index
+
 ---
 
 ## Phase 22: Images
@@ -771,6 +865,10 @@ Image display widgets.
 - [ ] Implement eli_draw_list_add_image_quad()
 - [ ] Implement eli_draw_list_add_image_rounded()
 
+### Documentation
+- [ ] Create `docs/images.md` documenting image display widgets
+- [ ] Add images link to docs/README.md index
+
 ---
 
 ## Phase 23: Data Plotting
@@ -782,6 +880,10 @@ Simple plotting widgets.
 - [ ] Implement eli_plot_histogram()
 - [ ] Implement eli_plot_histogram_fn()
 
+### Documentation
+- [ ] Create `docs/plotting.md` documenting plot lines and histogram widgets
+- [ ] Add plotting link to docs/README.md index
+
 ---
 
 ## Phase 24: Value Display
@@ -792,6 +894,10 @@ Simple value display widgets.
 - [ ] Implement eli_value_int()
 - [ ] Implement eli_value_uint()
 - [ ] Implement eli_value_float()
+
+### Documentation
+- [ ] Create `docs/value-display.md` documenting value display widgets
+- [ ] Add value-display link to docs/README.md index
 
 ---
 
@@ -811,6 +917,10 @@ Widget disabling and clipping.
 - [ ] Implement eli_set_item_default_focus()
 - [ ] Implement eli_set_keyboard_focus_here()
 
+### Documentation
+- [ ] Create `docs/disabling-clipping.md` documenting disabled state, clipping, and focus
+- [ ] Add disabling-clipping link to docs/README.md index
+
 ---
 
 ## Phase 26: List Clipper
@@ -824,6 +934,10 @@ Efficient list rendering.
 - [ ] Implement eli_list_clipper_include_item_by_index()
 - [ ] Implement eli_list_clipper_include_items_by_index()
 - [ ] Implement eli_list_clipper_seek_cursor_for_item()
+
+### Documentation
+- [ ] Create `docs/list-clipper.md` documenting list clipper for efficient rendering
+- [ ] Add list-clipper link to docs/README.md index
 
 ---
 
@@ -847,6 +961,10 @@ Remaining utility functions.
 - [ ] Implement eli_get_background_draw_list()
 - [ ] Implement eli_get_foreground_draw_list()
 
+### Documentation
+- [ ] Create `docs/utilities.md` documenting visibility, time, viewports, and draw lists
+- [ ] Add utilities link to docs/README.md index
+
 ---
 
 ## Phase 28: Settings & Logging
@@ -868,6 +986,10 @@ Configuration persistence and logging.
 - [ ] Implement eli_log_text()
 - [ ] Implement eli_log_text_v()
 
+### Documentation
+- [ ] Create `docs/settings-logging.md` documenting INI settings and logging
+- [ ] Add settings-logging link to docs/README.md index
+
 ---
 
 ## Phase 29: Memory Management
@@ -878,6 +1000,10 @@ Custom allocators.
 - [ ] Implement eli_get_allocator_functions()
 - [ ] Implement eli_mem_alloc()
 - [ ] Implement eli_mem_free()
+
+### Documentation
+- [ ] Create `docs/memory.md` documenting custom allocators and memory management
+- [ ] Add memory link to docs/README.md index
 
 ---
 
@@ -910,6 +1036,10 @@ Demo application and debug tools.
 - [ ] Implement eli_show_user_guide()
 - [ ] Implement eli_get_version()
 
+### Documentation
+- [ ] Create `docs/demo-debug.md` documenting demo window and debug tools
+- [ ] Add demo-debug link to docs/README.md index
+
 ---
 
 ## Phase 31: Web Integration
@@ -921,6 +1051,10 @@ WASM loader and browser integration.
 - [ ] Implement JS event handlers (mouse, keyboard)
 - [ ] Implement Canvas2D renderer backend
 - [ ] Implement WebGL renderer backend (optional)
+
+### Documentation
+- [ ] Create `docs/web-integration.md` documenting WASM loader, JS events, and renderers
+- [ ] Add web-integration link to docs/README.md index
 
 ---
 
@@ -938,6 +1072,10 @@ Test coverage.
 - [ ] Test: Widget behavior
 - [ ] Test: Table functionality
 
+### Documentation
+- [ ] Create `docs/testing.md` documenting test framework and coverage
+- [ ] Add testing link to docs/README.md index
+
 ---
 
 ## Phase 33: Optimization
@@ -949,6 +1087,10 @@ Performance improvements.
 - [ ] Implement draw call batching
 - [ ] Reduce allocations per frame
 - [ ] Measure and optimize WASM size
+
+### Documentation
+- [ ] Create `docs/optimization.md` documenting performance tips and benchmarks
+- [ ] Add optimization link to docs/README.md index
 
 ---
 
@@ -962,3 +1104,7 @@ Window docking system.
 - [ ] Implement dock splitting
 - [ ] Implement tab bar for docked windows
 - [ ] Implement dock space
+
+### Documentation
+- [ ] Create `docs/docking.md` documenting docking system
+- [ ] Add docking link to docs/README.md index

@@ -20,6 +20,12 @@ elimgui/
 │       ├── eli_style.h   # Styling
 │       ├── eli_tables.h  # Table widget
 │       └── eli_docking.h # Docking system (future)
+├── docs/
+│   ├── README.md         # Documentation index/table of contents
+│   ├── core-types.md     # Phase 1: Foundation & Core Types
+│   ├── draw-system.md    # Phase 2: Draw System
+│   ├── font-system.md    # Phase 3: Font System
+│   └── ...               # Additional docs per phase
 ├── examples/
 │   └── demo/             # Full widget demo
 ├── tests/
@@ -41,7 +47,7 @@ elimgui/
 
 ## Tech Stack
 
-- **Language**: C99 (header-only)
+- **Language**: C11 (header-only)
 - **Libc**: JAClibc (header-only, WASM-first)
 - **Target**: WebAssembly (browser)
 - **Compiler**: clang --target=wasm32 (NO Emscripten)
@@ -185,7 +191,7 @@ void on_mouse_move(float x, float y) {
 ## API Design Principles
 
 1. **Match ImGui where sensible** - Familiar API for ImGui users
-2. **C99 compatible** - No C++ features
+2. **C11 compatible** - No C++ features
 3. **No hidden allocations** - User controls memory
 4. **Immediate mode** - No retained state except what's explicit
 5. **Renderer-agnostic** - Output draw lists, not pixels
@@ -211,13 +217,13 @@ Key files to study:
 
 ## Description
 
-A ground-up reimplementation of Dear ImGui in pure C99, targeting WebAssembly. Designed for use with JAClibc and the Canvil framework, but usable standalone.
+A ground-up reimplementation of Dear ImGui in pure C11, targeting WebAssembly. Designed for use with JAClibc and the Canvil framework, but usable standalone.
 
 ## Key Differences from Dear ImGui
 
 | Aspect | Dear ImGui | elimgui |
 |--------|-----------|---------|
-| Language | C++ | C99 |
+| Language | C++ | C11 |
 | Headers | imgui.h | elimgui.h (+ eli_*.h) |
 | Prefix | ImGui:: | eli_ |
 | Target | Multi-platform | WASM-first |
