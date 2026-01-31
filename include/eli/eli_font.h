@@ -821,12 +821,12 @@ static inline eli_font* eli_font_atlas_add_font_from_memory_ttf(
 
     /* Store config */
     cfg.dst_font = font;
-    eli_vector_push(&atlas->config_data, cfg);
+    eli_vector_push(&atlas->config_data, cfg, eli_font_config);
     font->config_data = &atlas->config_data.data[atlas->config_data.size - 1];
     font->config_data_count = 1;
 
     /* Add font to atlas */
-    eli_vector_push(&atlas->fonts, font);
+    eli_vector_push(&atlas->fonts, font, eli_font*);
 
     /* Mark atlas as needing rebuild */
     atlas->tex_is_built = false;
@@ -932,7 +932,7 @@ static inline bool eli_font_atlas_build(eli_font_atlas* atlas) {
                 glyph.u1 = (float)pc->x1 / tex_width;
                 glyph.v1 = (float)pc->y1 / tex_height;
 
-                eli_vector_push(&font->glyphs, glyph);
+                eli_vector_push(&font->glyphs, glyph, eli_font_glyph);
             }
         }
 
