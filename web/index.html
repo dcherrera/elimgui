@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>elimgui Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        canvas {
+            border: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="1280" height="720"></canvas>
+    <script src="elimgui.js"></script>
+    <script>
+        loadElimgui('demo.wasm').then(() => {
+            console.log('elimgui loaded');
+        });
+    </script>
+</body>
+</html>

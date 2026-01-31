@@ -1,0 +1,22 @@
+# Build artifacts
+*.wasm
+*.o
+*.a
+web/*.wasm
+
+# Reference material (cloned repos)
+reference/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Debug
+*.dSYM/
