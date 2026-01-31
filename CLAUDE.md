@@ -26,6 +26,8 @@ elimgui/
 ├── web/
 │   ├── elimgui.js        # WASM loader
 │   └── index.html        # Demo shell
+├── vendor/
+│   └── jaclibc/          # JAClibc submodule (git submodule)
 └── reference/            # Dear ImGui clone (gitignored)
     └── imgui/
 ```
@@ -47,11 +49,13 @@ elimgui/
 
 ## JAClibc Dependency
 
-JAClibc is the foundation for all C-to-JS interop via `jsio.h`.
+JAClibc is the foundation for all C-to-JS interop via `jsio.h`. It is vendored as a git submodule.
 
-**Local fork location:**
-```
-/Users/davidherrera/TeamIDE/10558971-eb58-473b-818d-d8585ade4d41
+**Location:** `vendor/jaclibc/` (git submodule from https://github.com/dcherrera/jaclibc.git)
+
+**After cloning, initialize submodules:**
+```bash
+git submodule update --init --recursive
 ```
 
 **Key files from JAClibc:**
@@ -61,7 +65,7 @@ JAClibc is the foundation for all C-to-JS interop via `jsio.h`.
 
 **Include path for compilation:**
 ```bash
--I/Users/davidherrera/TeamIDE/10558971-eb58-473b-818d-d8585ade4d41/include
+-Ivendor/jaclibc/include
 ```
 
 ## Build Script
@@ -80,7 +84,7 @@ JAClibc is the foundation for all C-to-JS interop via `jsio.h`.
 ```bash
 clang --target=wasm32 \
     -nostdlib \
-    -I/Users/davidherrera/TeamIDE/10558971-eb58-473b-818d-d8585ade4d41/include \
+    -Ivendor/jaclibc/include \
     -Iinclude \
     -O2 \
     -Wl,--no-entry \
@@ -223,7 +227,7 @@ A ground-up reimplementation of Dear ImGui in pure C99, targeting WebAssembly. D
 
 | Dependency | Location | Purpose |
 |------------|----------|---------|
-| JAClibc | `/Users/davidherrera/TeamIDE/10558971-eb58-473b-818d-d8585ade4d41` | Header-only libc with JS interop |
+| JAClibc | `vendor/jaclibc/` (git submodule) | Header-only libc with JS interop |
 | stb_truetype | vendored (future) | TTF font parsing |
 
 ## URLs

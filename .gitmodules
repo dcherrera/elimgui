@@ -1,0 +1,3 @@
+[submodule "vendor/jaclibc"]
+	path = vendor/jaclibc
+	url = https://github.com/dcherrera/jaclibc.git

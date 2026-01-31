@@ -4,7 +4,7 @@
 
 set -e
 
-JACLIBC_PATH="/Users/davidherrera/TeamIDE/10558971-eb58-473b-818d-d8585ade4d41"
+JACLIBC_PATH="${SCRIPT_DIR}/vendor/jaclibc"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CC="clang"
