@@ -114,4 +114,4 @@ Actively in development. Core systems are implemented; widget and window layers 
 
 ## License
 
-MIT
+MIT-T
