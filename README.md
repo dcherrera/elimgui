@@ -6,6 +6,8 @@ A ground-up reimplementation of [Dear ImGui](https://github.com/ocornut/imgui) i
 
 Dear ImGui is the gold standard for immediate-mode GUIs, but it's C++ and assumes native platform targets. elimgui brings the same programming model to the web using raw WebAssembly — no Emscripten, no runtime bloat.
 
+Originally conceived by **Rodney Giles**, this project is being built out by **David Herrera** due to time constraints.
+
 ## Tech Stack
 
 | | |
