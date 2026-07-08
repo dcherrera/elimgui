@@ -38,14 +38,28 @@
 /* Thickness (px) of the draggable separator drawn between split children. */
 #define ELI_DOCK_SEPARATOR_SIZE 2.0f
 
-/* Side length (px) of each drop-zone hit square drawn while dragging to dock. */
-#define ELI_DOCK_PREVIEW_ZONE_SIZE 30.0f
+/* Side length (px) of each drop-zone hit square drawn while dragging to dock.
+ * ~36px visual per docking.md's dock-guide metric. */
+#define ELI_DOCK_PREVIEW_ZONE_SIZE 36.0f
 
 /* Distance (px) from a node's center to the center of an edge drop zone. */
-#define ELI_DOCK_PREVIEW_ZONE_OFFSET 45.0f
+#define ELI_DOCK_PREVIEW_ZONE_OFFSET 46.0f
 
-/* Mouse travel (px) past which pressing a docked tab tears it out (undocks). */
+/* Mouse travel (px) past which pressing a docked tab tears it out (undocks).
+ * docking.md tear-out threshold. */
 #define ELI_DOCK_UNDOCK_THRESHOLD 12.0f
+
+/* Minimum on-screen size (px) of a dock pane (docking.md's ~96px min pane). A
+ * node is only offered as a SPLIT target when both resulting panes would clear
+ * this, so tiny nodes can only be tabbed into. */
+#define ELI_DOCK_MIN_PANE 96.0f
+
+/* Width of the outer edge split band as a fraction of the node's side. The
+ * remaining (dominant) central area is the "tab here" region, so aiming for a
+ * tab does not accidentally split. Capped by ELI_DOCK_EDGE_BAND_MAX so large
+ * nodes keep a big center. */
+#define ELI_DOCK_EDGE_BAND_FRAC 0.25f
+#define ELI_DOCK_EDGE_BAND_MAX  64.0f
 
 /* ---------------------------------------------------------------------------
  * Enums

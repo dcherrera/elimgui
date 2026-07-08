@@ -317,6 +317,102 @@ ELI_TEST(tab_drag_out_undocks) {
     eli_destroy_context(ctx);
 }
 
+/* The central area AND the tab-bar strip both resolve to CENTER (tab), while the
+ * clear outer edge bands resolve to a split. This is the tab-vs-split rule that
+ * keeps a floated panel dragged back over the dock re-joining its tab group. */
+ELI_TEST(hit_zone_center_and_strip_tab_edges_split) {
+    eli_context *ctx = dock_setup();
+
+    frame_begin();
+    submit_dockspace();
+    eli_set_next_window_dock_id(DOCK_ID, 0);
+    eli_begin("Alpha", NULL, 0);
+    eli_end();
+    frame_end();
+
+    eli_dock_node *node = eli_dock_node_find(ctx, DOCK_ID);
+    ELI_ASSERT_NOT_NULL(node);
+    eli_rect r = node->rect;
+    eli_vec2 center = eli_rect_center(r);
+
+    /* Dead center -> tab. */
+    ELI_ASSERT_EQ(eli_dock__hit_zone(node, center), ELI_DOCK_DIR_CENTER);
+    /* On the tab-bar / header strip -> tab (the user's pain point). */
+    eli_vec2 on_strip = eli_make_vec2(r.x + r.w * 0.5f, r.y + 2.0f);
+    ELI_ASSERT_EQ(eli_dock__hit_zone(node, on_strip), ELI_DOCK_DIR_CENTER);
+
+    /* Clear outer edge bands -> split toward that edge. */
+    ELI_ASSERT_EQ(eli_dock__hit_zone(node, eli_make_vec2(r.x + 4.0f, center.y)),
+                  ELI_DOCK_DIR_LEFT);
+    ELI_ASSERT_EQ(eli_dock__hit_zone(node, eli_make_vec2(r.x + r.w - 4.0f, center.y)),
+                  ELI_DOCK_DIR_RIGHT);
+    ELI_ASSERT_EQ(eli_dock__hit_zone(node, eli_make_vec2(center.x, r.y + r.h - 4.0f)),
+                  ELI_DOCK_DIR_DOWN);
+
+    /* Outside the node -> no target. */
+    ELI_ASSERT_EQ(eli_dock__hit_zone(node, eli_make_vec2(r.x - 20.0f, center.y)),
+                  ELI_DOCK_DIR_NONE);
+
+    eli_destroy_context(ctx);
+}
+
+/* A drop resolved to the center TABS the window into the existing node (its
+ * window_count grows and the node stays a leaf), rather than splitting it. */
+ELI_TEST(center_drop_tabs_into_node) {
+    eli_context *ctx = dock_setup();
+
+    frame_begin();
+    submit_dockspace();
+    eli_set_next_window_dock_id(DOCK_ID, 0);
+    eli_begin("Alpha", NULL, 0);
+    eli_end();
+    eli_begin("Beta", NULL, 0);   /* floating, exists in the pool */
+    eli_end();
+    frame_end();
+
+    eli_dock_node *root = eli_dock_node_find(ctx, DOCK_ID);
+    ELI_ASSERT_NOT_NULL(root);
+    ELI_ASSERT_EQ(root->window_count, 1);
+
+    /* Frame 2: drop Beta in the CENTER -> it tabs in. */
+    ctx->has_dock_request = true;
+    ctx->dock_request_target = DOCK_ID;
+    ctx->dock_request_window = eli_hash_str("Beta", 0);
+    ctx->dock_request_dir = ELI_DOCK_DIR_CENTER;
+    frame_begin();
+    submit_dockspace();
+    frame_end();
+
+    root = eli_dock_node_find(ctx, DOCK_ID);
+    ELI_ASSERT_NOT_NULL(root);
+    ELI_ASSERT_TRUE(eli_dock_node_is_leaf(root));              /* no split occurred */
+    ELI_ASSERT_EQ(root->window_count, 2);                      /* both windows share tabs */
+    ELI_ASSERT_EQ(root->selected_window_id, eli_hash_str("Beta", 0));
+
+    eli_destroy_context(ctx);
+}
+
+/* A node too small to yield two >= min-pane panes can only be tabbed into: every
+ * point (including the far edges) resolves to CENTER, never a split. */
+ELI_TEST(tiny_node_only_tabs) {
+    eli_context *ctx = dock_setup();
+
+    eli_dock_node *node = eli_dock_node_get_or_create(ctx, 0xBEEFu, 0);
+    ELI_ASSERT_NOT_NULL(node);
+    node->rect = eli_make_rect(100.0f, 100.0f, 120.0f, 80.0f);  /* < 2*96 on both axes */
+    node->tab_bar_height = 20.0f;
+
+    ELI_ASSERT_TRUE(eli_dock__can_split_axis(node, ELI_DOCK_AXIS_X) == false);
+    ELI_ASSERT_TRUE(eli_dock__can_split_axis(node, ELI_DOCK_AXIS_Y) == false);
+
+    /* Body points near each edge still tab (only tabbing is offered). */
+    ELI_ASSERT_EQ(eli_dock__hit_zone(node, eli_make_vec2(101.0f, 150.0f)), ELI_DOCK_DIR_CENTER);
+    ELI_ASSERT_EQ(eli_dock__hit_zone(node, eli_make_vec2(219.0f, 150.0f)), ELI_DOCK_DIR_CENTER);
+    ELI_ASSERT_EQ(eli_dock__hit_zone(node, eli_make_vec2(160.0f, 178.0f)), ELI_DOCK_DIR_CENTER);
+
+    eli_destroy_context(ctx);
+}
+
 ELI_TEST(no_docking_flag_refuses_dock) {
     eli_context *ctx = dock_setup();
 

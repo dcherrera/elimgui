@@ -30,8 +30,15 @@
 #include "../util/eli_util.h"
 
 /* Translucent overlay used to preview the region a dropped window would occupy. */
-#define ELI_DOCK_PREVIEW_FILL_COL   ELI_COL32(60, 150, 250, 90)
-#define ELI_DOCK_PREVIEW_ZONE_COL   ELI_COL32(60, 150, 250, 170)
+#define ELI_DOCK_PREVIEW_FILL_COL        ELI_COL32(60, 150, 250, 90)
+/* 2px outline stroked around the previewed landing region for legibility. */
+#define ELI_DOCK_PREVIEW_EDGE_COL        ELI_COL32(90, 175, 255, 220)
+/* Idle vs hovered drop-zone indicator button fill. */
+#define ELI_DOCK_PREVIEW_ZONE_COL        ELI_COL32(60, 150, 250, 170)
+#define ELI_DOCK_PREVIEW_ZONE_ACTIVE_COL ELI_COL32(95, 180, 255, 245)
+/* Border + glyph drawn on a drop-zone indicator button. */
+#define ELI_DOCK_PREVIEW_BORDER_COL      ELI_COL32(20, 60, 110, 220)
+#define ELI_DOCK_PREVIEW_GLYPH_COL       ELI_COL32(235, 244, 255, 235)
 
 /* ---------------------------------------------------------------------------
  * Hook installation
@@ -272,12 +279,26 @@ static inline eli_dock_node *eli_dock__find_drop_node(eli_context *ctx, eli_vec2
 }
 
 /**
+ * @return true if `node` is large enough on `axis` to split into two panes that
+ *         both clear ELI_DOCK_MIN_PANE. Tiny nodes therefore only offer tabbing.
+ */
+static inline bool eli_dock__can_split_axis(const eli_dock_node *node, eli_dock_axis axis)
+{
+    float side = (axis == ELI_DOCK_AXIS_X) ? node->rect.w : node->rect.h;
+    return (side - ELI_DOCK_SEPARATOR_SIZE) >= ELI_DOCK_MIN_PANE * 2.0f;
+}
+
+/**
  * Hit-test `p` against a node's drop regions. The WHOLE node is a drop target
- * (not five tiny squares): dropping within an edge band splits toward that edge,
- * dropping anywhere in the central area tabs the window in. This makes dragging a
- * floated window back over the dock re-dock it, rather than forcing the cursor
- * onto a small center indicator. Returns ELI_DOCK_DIR_NONE only when `p` is
- * outside the node entirely.
+ * (not five tiny squares), and the central "tab here" area is deliberately large
+ * and dominant so dragging a floated window back over the dock re-joins its tab
+ * group instead of splitting:
+ *   - The node's tab-bar / header strip, and the whole central area, TAB
+ *     (ELI_DOCK_DIR_CENTER) — add the window to this node's tab group.
+ *   - Only the clear outer edge bands (a modest fraction of the side, capped)
+ *     SPLIT toward that edge, and only on an axis where both resulting panes
+ *     would clear the minimum pane size.
+ * Returns ELI_DOCK_DIR_NONE only when `p` is outside the node entirely.
  */
 static inline eli_dock_dir eli_dock__hit_zone(const eli_dock_node *node, eli_vec2 p)
 {
@@ -285,24 +306,35 @@ static inline eli_dock_dir eli_dock__hit_zone(const eli_dock_node *node, eli_vec
     if (p.x < r.x || p.x > r.x + r.w || p.y < r.y || p.y > r.y + r.h)
         return ELI_DOCK_DIR_NONE;
 
-    /* Edge band width: a fraction of the shorter side, capped so large nodes keep
-     * a big central "tab here" area. */
-    float band = eli_min_f(r.w, r.h) * 0.30f;
-    if (band > 60.0f)
-        band = 60.0f;
+    /* Dropping on (or level with) the existing tab strip always re-tabs: this is
+     * the user's exact "drop back onto the tabs" case. */
+    float strip_h = (node->tab_bar_height > 0.0f) ? node->tab_bar_height
+                                                   : ELI_DOCK_TAB_BAR_PADDING_Y * 2.0f;
+    if (p.y <= r.y + strip_h)
+        return ELI_DOCK_DIR_CENTER;
+
+    bool can_x = eli_dock__can_split_axis(node, ELI_DOCK_AXIS_X);
+    bool can_y = eli_dock__can_split_axis(node, ELI_DOCK_AXIS_Y);
+
+    /* Edge band per axis: a modest fraction of the side, capped so the center
+     * stays dominant. */
+    float band_x = r.w * ELI_DOCK_EDGE_BAND_FRAC;
+    float band_y = r.h * ELI_DOCK_EDGE_BAND_FRAC;
+    if (band_x > ELI_DOCK_EDGE_BAND_MAX) band_x = ELI_DOCK_EDGE_BAND_MAX;
+    if (band_y > ELI_DOCK_EDGE_BAND_MAX) band_y = ELI_DOCK_EDGE_BAND_MAX;
 
     float dist_l = p.x - r.x;
     float dist_r = (r.x + r.w) - p.x;
     float dist_t = p.y - r.y;
     float dist_b = (r.y + r.h) - p.y;
 
-    /* Nearest edge within the band wins; otherwise the center (tab). */
-    float nearest = band;
+    /* Nearest in-band, splittable edge wins; otherwise the center (tab). */
+    float nearest = 1e30f;
     eli_dock_dir dir = ELI_DOCK_DIR_CENTER;
-    if (dist_l < nearest) { nearest = dist_l; dir = ELI_DOCK_DIR_LEFT; }
-    if (dist_r < nearest) { nearest = dist_r; dir = ELI_DOCK_DIR_RIGHT; }
-    if (dist_t < nearest) { nearest = dist_t; dir = ELI_DOCK_DIR_UP; }
-    if (dist_b < nearest) { nearest = dist_b; dir = ELI_DOCK_DIR_DOWN; }
+    if (can_x && dist_l < band_x && dist_l < nearest) { nearest = dist_l; dir = ELI_DOCK_DIR_LEFT; }
+    if (can_x && dist_r < band_x && dist_r < nearest) { nearest = dist_r; dir = ELI_DOCK_DIR_RIGHT; }
+    if (can_y && dist_t < band_y && dist_t < nearest) { nearest = dist_t; dir = ELI_DOCK_DIR_UP; }
+    if (can_y && dist_b < band_y && dist_b < nearest) { nearest = dist_b; dir = ELI_DOCK_DIR_DOWN; }
     return dir;
 }
 
@@ -320,7 +352,68 @@ static inline eli_rect eli_dock__preview_region(const eli_dock_node *node, eli_d
     }
 }
 
-/** Draw the drop-zone guides and the highlighted target region on foreground. */
+/** Draw one drop-zone indicator "button" (rounded fill + border) centered at c. */
+static inline void eli_dock__draw_zone_box(eli_draw_list *fg, eli_vec2 c, bool active)
+{
+    float z = ELI_DOCK_PREVIEW_ZONE_SIZE * 0.5f;
+    eli_vec2 mn = eli_make_vec2(c.x - z, c.y - z);
+    eli_vec2 mx = eli_make_vec2(c.x + z, c.y + z);
+    eli_col32 fill = active ? ELI_DOCK_PREVIEW_ZONE_ACTIVE_COL : ELI_DOCK_PREVIEW_ZONE_COL;
+    eli_draw_list_add_rect_filled(fg, mn, mx, fill, 4.0f, ELI_DRAW_ROUND_CORNERS_ALL);
+    eli_draw_list_add_rect(fg, mn, mx, ELI_DOCK_PREVIEW_BORDER_COL, 4.0f,
+                           ELI_DRAW_ROUND_CORNERS_ALL, 1.5f);
+}
+
+/** Draw the center "tab here" pictogram (a pane outline with a tab-strip bar). */
+static inline void eli_dock__draw_center_glyph(eli_draw_list *fg, eli_vec2 c)
+{
+    float g = ELI_DOCK_PREVIEW_ZONE_SIZE * 0.30f;
+    eli_vec2 mn = eli_make_vec2(c.x - g, c.y - g);
+    eli_vec2 mx = eli_make_vec2(c.x + g, c.y + g);
+    eli_draw_list_add_rect(fg, mn, mx, ELI_DOCK_PREVIEW_GLYPH_COL, 0.0f,
+                           ELI_DRAW_ROUND_CORNERS_NONE, 1.5f);
+    eli_vec2 bar_mx = eli_make_vec2(mx.x, mn.y + g * 0.55f);
+    eli_draw_list_add_rect_filled(fg, mn, bar_mx, ELI_DOCK_PREVIEW_GLYPH_COL, 0.0f,
+                                  ELI_DRAW_ROUND_CORNERS_NONE);
+}
+
+/** Draw a directional split arrow glyph pointing toward `dir`, centered at c. */
+static inline void eli_dock__draw_arrow_glyph(eli_draw_list *fg, eli_vec2 c, eli_dock_dir dir)
+{
+    float a = ELI_DOCK_PREVIEW_ZONE_SIZE * 0.26f;
+    eli_vec2 tip, b1, b2;
+    switch (dir) {
+    case ELI_DOCK_DIR_LEFT:
+        tip = eli_make_vec2(c.x - a, c.y);
+        b1  = eli_make_vec2(c.x + a * 0.6f, c.y - a);
+        b2  = eli_make_vec2(c.x + a * 0.6f, c.y + a);
+        break;
+    case ELI_DOCK_DIR_RIGHT:
+        tip = eli_make_vec2(c.x + a, c.y);
+        b1  = eli_make_vec2(c.x - a * 0.6f, c.y + a);
+        b2  = eli_make_vec2(c.x - a * 0.6f, c.y - a);
+        break;
+    case ELI_DOCK_DIR_UP:
+        tip = eli_make_vec2(c.x, c.y - a);
+        b1  = eli_make_vec2(c.x + a, c.y + a * 0.6f);
+        b2  = eli_make_vec2(c.x - a, c.y + a * 0.6f);
+        break;
+    default: /* ELI_DOCK_DIR_DOWN */
+        tip = eli_make_vec2(c.x, c.y + a);
+        b1  = eli_make_vec2(c.x - a, c.y - a * 0.6f);
+        b2  = eli_make_vec2(c.x + a, c.y - a * 0.6f);
+        break;
+    }
+    eli_draw_list_add_triangle_filled(fg, tip, b1, b2, ELI_DOCK_PREVIEW_GLYPH_COL);
+}
+
+/**
+ * Draw the drop preview on the foreground: (1) fill + outline the exact region
+ * the window will land in (the full node for a tab, the resulting half for a
+ * split — no inversion), and (2) the dock-guide indicators, with the center
+ * "tab" pictogram always shown (dominant) and an outward split arrow shown only
+ * for axes where a split fits. The hovered target's indicator is highlighted.
+ */
 static inline void eli_dock__draw_preview(eli_dock_node *node, eli_dock_dir dir)
 {
     eli_draw_list *fg = eli_get_foreground_draw_list();
@@ -331,18 +424,30 @@ static inline void eli_dock__draw_preview(eli_dock_node *node, eli_dock_dir dir)
         eli_rect region = eli_dock__preview_region(node, dir);
         eli_draw_list_add_rect_filled(fg, eli_rect_min(region), eli_rect_max(region),
                                       ELI_DOCK_PREVIEW_FILL_COL, 0.0f, ELI_DRAW_ROUND_CORNERS_NONE);
+        eli_draw_list_add_rect(fg, eli_rect_min(region), eli_rect_max(region),
+                               ELI_DOCK_PREVIEW_EDGE_COL, 0.0f, ELI_DRAW_ROUND_CORNERS_NONE, 2.0f);
     }
 
     eli_vec2 c = eli_rect_center(node->rect);
-    float z = ELI_DOCK_PREVIEW_ZONE_SIZE * 0.5f;
     float o = ELI_DOCK_PREVIEW_ZONE_OFFSET;
-    float cx[5] = { c.x, c.x - o, c.x + o, c.x, c.x };
-    float cy[5] = { c.y, c.y, c.y, c.y - o, c.y + o };
-    for (int i = 0; i < 5; i++) {
-        eli_vec2 mn = eli_make_vec2(cx[i] - z, cy[i] - z);
-        eli_vec2 mx = eli_make_vec2(cx[i] + z, cy[i] + z);
-        eli_draw_list_add_rect_filled(fg, mn, mx, ELI_DOCK_PREVIEW_ZONE_COL, 3.0f,
-                                      ELI_DRAW_ROUND_CORNERS_ALL);
+
+    /* Center (tab) indicator — always available and visually dominant. */
+    eli_dock__draw_zone_box(fg, c, dir == ELI_DOCK_DIR_CENTER);
+    eli_dock__draw_center_glyph(fg, c);
+
+    /* Edge (split) indicators — only for splittable axes (invalid arrows hidden). */
+    struct { eli_dock_dir d; float dx; float dy; eli_dock_axis ax; } edges[4] = {
+        { ELI_DOCK_DIR_LEFT,  -o,  0.0f, ELI_DOCK_AXIS_X },
+        { ELI_DOCK_DIR_RIGHT,  o,  0.0f, ELI_DOCK_AXIS_X },
+        { ELI_DOCK_DIR_UP,    0.0f, -o,  ELI_DOCK_AXIS_Y },
+        { ELI_DOCK_DIR_DOWN,  0.0f,  o,  ELI_DOCK_AXIS_Y },
+    };
+    for (int i = 0; i < 4; i++) {
+        if (!eli_dock__can_split_axis(node, edges[i].ax))
+            continue;
+        eli_vec2 ec = eli_make_vec2(c.x + edges[i].dx, c.y + edges[i].dy);
+        eli_dock__draw_zone_box(fg, ec, dir == edges[i].d);
+        eli_dock__draw_arrow_glyph(fg, ec, edges[i].d);
     }
 }
 
