@@ -448,23 +448,53 @@ static inline void eli_end(void)
  * ------------------------------------------------------------------------- */
 
 /** Find the top-most window under the mouse from last frame's geometry. */
+/** Nesting depth of a window (0 for a top-level/root window). */
+static inline int eli_window_hover_depth(const eli_window *win)
+{
+    int depth = 0;
+    while (win->parent_window != NULL) { depth++; win = win->parent_window; }
+    return depth;
+}
+
+/**
+ * Find the window under the mouse, INCLUDING child windows. The topmost match
+ * wins: highest root in focus order, and within the same tree the most deeply
+ * nested child (children draw on top of their parent). Children only count where
+ * their parent's clip actually shows them, so a child scrolled out of view does
+ * not steal hover. Returning children here lets the wheel scroll the pane the
+ * cursor is actually over (Dear ImGui's FindHoveredWindow behavior).
+ */
 static inline eli_window *eli_window_find_hovered(eli_context *ctx)
 {
     const eli_io *io = &ctx->io;
     if (!eli_mouse_pos_is_valid(io->mouse_pos))
         return NULL;
 
-    for (int i = ctx->windows_focus_order_count - 1; i >= 0; i--) {
-        eli_window *win = ctx->windows_focus_order[i];
+    eli_window *best = NULL;
+    int best_z = -1, best_depth = -1;
+    for (int i = 0; i < ctx->windows_count; i++) {
+        eli_window *win = ctx->windows[i];
         if (win->last_frame_active < ctx->frame_count - 1)
             continue;
         if (win->flags & ELI_WINDOW_NO_MOUSE_INPUTS)
             continue;
         eli_rect r = win->collapsed ? win->title_bar_rect : win->outer_rect;
-        if (eli_rect_contains(r, io->mouse_pos))
-            return win;
+        if (!eli_rect_contains(r, io->mouse_pos))
+            continue;
+        /* A child is hoverable only where its (parent-intersected) clip shows it. */
+        if (win->parent_window != NULL && !eli_rect_contains(win->clip_rect, io->mouse_pos))
+            continue;
+
+        eli_window *root = win->root_window ? win->root_window : win;
+        int z = eli_window_focus_index(ctx, root);
+        int depth = eli_window_hover_depth(win);
+        if (z > best_z || (z == best_z && depth >= best_depth)) {
+            best_z = z;
+            best_depth = depth;
+            best = win;
+        }
     }
-    return NULL;
+    return best;
 }
 
 /**

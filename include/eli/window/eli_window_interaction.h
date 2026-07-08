@@ -58,27 +58,52 @@ static inline void eli_window_update_moving(eli_context *ctx)
  *
  * @param ctx  Context (non-NULL).
  */
+/** Nearest ancestor of `win` (including itself) that can wheel-scroll on the
+ *  given axis (axis_y != 0 for the Y axis). NULL if none. A hovered child with
+ *  no scroll range on that axis hands the wheel up to its parent pane. */
+static inline eli_window *eli_window_wheel_target(eli_window *win, int axis_y)
+{
+    while (win != NULL) {
+        if (!(win->flags & ELI_WINDOW_NO_SCROLL_WITH_MOUSE)) {
+            float m = axis_y ? win->scroll_max.y : win->scroll_max.x;
+            if (m > 0.0f)
+                return win;
+        }
+        win = win->parent_window;
+    }
+    return NULL;
+}
+
 static inline void eli_window_update_wheel(eli_context *ctx)
 {
-    eli_window *win = ctx->hovered_window;
-    if (win == NULL)
-        return;
-    if (win->flags & ELI_WINDOW_NO_SCROLL_WITH_MOUSE)
+    eli_window *hov = ctx->hovered_window;
+    if (hov == NULL)
         return;
 
     const eli_io *io = &ctx->io;
-    float step = eli_window_wheel_step(ctx, win);
 
     if (io->mouse_wheel != 0.0f) {
-        if (io->key_shift && win->scroll_max.x > 0.0f && win->scroll_max.y <= 0.0f)
-            win->scroll.x -= io->mouse_wheel * step;
-        else
-            win->scroll.y -= io->mouse_wheel * step;
+        int axis_y = !(io->key_shift);   /* shift = scroll horizontally */
+        eli_window *win = eli_window_wheel_target(hov, axis_y);
+        if (win == NULL)                 /* fall back to the other axis */
+            win = eli_window_wheel_target(hov, !axis_y);
+        if (win != NULL) {
+            float step = eli_window_wheel_step(ctx, win);
+            if (win->scroll_max.y > 0.0f && !(io->key_shift && win->scroll_max.x > 0.0f))
+                win->scroll.y -= io->mouse_wheel * step;
+            else
+                win->scroll.x -= io->mouse_wheel * step;
+            eli_window_clamp_scroll(win);
+        }
     }
-    if (io->mouse_wheel_h != 0.0f)
-        win->scroll.x -= io->mouse_wheel_h * step;
-
-    eli_window_clamp_scroll(win);
+    if (io->mouse_wheel_h != 0.0f) {
+        eli_window *win = eli_window_wheel_target(hov, 0);
+        if (win != NULL) {
+            float step = eli_window_wheel_step(ctx, win);
+            win->scroll.x -= io->mouse_wheel_h * step;
+            eli_window_clamp_scroll(win);
+        }
+    }
 }
 
 /**
