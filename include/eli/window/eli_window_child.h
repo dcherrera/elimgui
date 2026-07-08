@@ -120,12 +120,59 @@ static inline bool eli_begin_child_id(eli_id id, eli_vec2 size, eli_child_flags 
 /**
  * End the current child window opened with eli_begin_child/eli_begin_child_id.
  *
+ * After closing the child, it is registered as an item in the PARENT window so
+ * the parent's layout cursor advances past it (mirroring Dear ImGui's EndChild
+ * -> ItemSize/ItemAdd). Without this, eli_same_line() after a child and two
+ * stacked children would overlap, because the parent cursor would never move.
+ * The layout item helpers live in a category included after this one, so the
+ * cursor-advance is replicated inline here on the parent window.
+ *
  * Thread-safe: no
  * Reentrant: no
  */
 static inline void eli_end_child(void)
 {
-    eli_end();
+    eli_context *ctx = eli_get_current_context();
+    eli_window *child = (ctx != NULL) ? ctx->current_window : NULL;
+    eli_vec2 child_size = (child != NULL) ? child->size : eli_make_vec2(0.0f, 0.0f);
+    eli_vec2 child_pos  = (child != NULL) ? child->pos  : eli_make_vec2(0.0f, 0.0f);
+    eli_id   child_id   = (child != NULL) ? child->id   : 0u;
+
+    eli_end();  /* pop the child; restores the parent as current_window */
+
+    eli_window *win = (ctx != NULL) ? ctx->current_window : NULL;
+    if (win == NULL || win->skip_items)
+        return;
+
+    const eli_style *style = &ctx->style;
+    eli_vec2 size = child_size;
+
+    /* Replicated eli_item_size(size): advance the parent cursor by the child. */
+    float line_y1 = win->is_same_line ? win->cursor_pos_prev_line.y : win->cursor_pos.y;
+    float line_height = eli_max_f(win->curr_line_size.y, win->cursor_pos.y - line_y1 + size.y);
+
+    win->cursor_pos_prev_line.x = win->cursor_pos.x + size.x;
+    win->cursor_pos_prev_line.y = line_y1;
+    win->cursor_pos.x = (float)(long)(win->pos.x + win->indent);
+    win->cursor_pos.y = (float)(long)(line_y1 + line_height + style->item_spacing.y);
+
+    win->cursor_max_pos.x = eli_max_f(win->cursor_max_pos.x, win->cursor_pos_prev_line.x);
+    win->cursor_max_pos.y = eli_max_f(win->cursor_max_pos.y,
+                                      win->cursor_pos.y - style->item_spacing.y);
+
+    win->prev_line_size.y = line_height;
+    win->curr_line_size.y = 0.0f;
+    win->curr_line_text_baseline_offset = 0.0f;
+    win->is_same_line = false;
+    win->is_set_pos = false;
+
+    /* Record the child as the last item so is_item_hovered/rect queries work. */
+    ctx->last_item_id = child_id;
+    ctx->last_item_rect.x = child_pos.x;
+    ctx->last_item_rect.y = child_pos.y;
+    ctx->last_item_rect.w = size.x;
+    ctx->last_item_rect.h = size.y;
+    ctx->last_item_status_flags = 0;
 }
 
 #endif /* ELI_WINDOW_ELI_WINDOW_CHILD_H */
