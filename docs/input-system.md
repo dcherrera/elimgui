@@ -1,349 +1,162 @@
-# Input System
+# Input System (Phase 4)
 
-This document covers mouse input, keyboard input, text input, shortcuts, and clipboard handling in elimgui.
+The input system tracks mouse, keyboard, and text input, derives per-frame state
+(clicks, presses, drags, durations), and exposes shortcuts and clipboard access.
+Backends feed raw events into a queue; elimgui drains and processes them once per
+frame.
 
-## Table of Contents
-
-- [Overview](#overview)
-- [Mouse Input](#mouse-input)
-  - [Position](#position)
-  - [Buttons](#buttons)
-  - [Hovering](#hovering)
-  - [Dragging](#dragging)
-  - [Cursor](#cursor)
-- [Keyboard Input](#keyboard-input)
-  - [Key State](#key-state)
-  - [Modifiers](#modifiers)
-  - [Key Names](#key-names)
-- [Text Input](#text-input)
-- [Shortcuts](#shortcuts)
-- [Clipboard](#clipboard)
-- [Backend Integration](#backend-integration)
-
----
-
-## Overview
-
-The input system provides:
-- **Mouse queries** - Position, buttons, hovering, dragging, cursor
-- **Keyboard queries** - Key state, modifiers, key names
-- **Text input** - Unicode character input queue
-- **Shortcuts** - Key chord detection (Ctrl+C, etc.)
-- **Clipboard** - Copy/paste via callbacks
-
-**Data flow:**
-```
-Platform Events → eli_io_add_*_event() → eli_io state → eli_is_*() queries → Widgets
-```
-
----
-
-## Mouse Input
-
-### Position
+Include the whole category directly:
 
 ```c
-// Get current mouse position
-eli_vec2 pos = eli_get_mouse_pos();
-
-// Check if mouse position is valid
-if (eli_is_mouse_pos_valid(NULL)) {
-    // Mouse is within window
-}
-
-// Get mouse position when popup was opened (for context menus)
-eli_vec2 popup_pos = eli_get_mouse_pos_on_opening_current_popup();
+#include <eli/input/eli_input.h>
 ```
 
-### Buttons
+or pull it in via the umbrella header once the library is wired (`<eli/elimgui.h>`).
 
-```c
-// Is button currently held down?
-if (eli_is_mouse_down(ELI_MOUSE_BUTTON_LEFT)) { ... }
+## Data flow
 
-// Was button clicked this frame?
-if (eli_is_mouse_clicked(ELI_MOUSE_BUTTON_LEFT, false)) { ... }
+```
+backend callback ─► eli_io_add_*_event()  ─┐
+                                           │  (buffered in io.input_events[])
+eli_input_update_begin_frame() ────────────┘
+    ├─ drains the event queue into live IO state
+    ├─ derives mouse state (clicked/released/counts/drag/durations)
+    └─ derives keyboard state (modifiers, per-key down durations)
 
-// With repeat (for scrolling, etc.)
-if (eli_is_mouse_clicked(ELI_MOUSE_BUTTON_LEFT, true)) { ... }
+... your UI reads eli_is_*/eli_get_* queries ...
 
-// Was button released this frame?
-if (eli_is_mouse_released(ELI_MOUSE_BUTTON_LEFT)) { ... }
-
-// Was button double-clicked?
-if (eli_is_mouse_double_clicked(ELI_MOUSE_BUTTON_LEFT)) { ... }
-
-// Get click count (for triple-click detection)
-int clicks = eli_get_mouse_clicked_count(ELI_MOUSE_BUTTON_LEFT);
-
-// Is any mouse button down?
-if (eli_is_any_mouse_down()) { ... }
+eli_input_update_end_frame()
+    └─ rolls mouse_pos_prev, clears wheel + text queue
 ```
 
-**Mouse Buttons:**
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `ELI_MOUSE_BUTTON_LEFT` | 0 | Left button |
-| `ELI_MOUSE_BUTTON_RIGHT` | 1 | Right button |
-| `ELI_MOUSE_BUTTON_MIDDLE` | 2 | Middle button |
+All state lives in `eli_io` (see `eli/core/eli_io.h`) on the current context. The
+input clock (`io.input_time`) advances by `io.delta_time` at each begin-frame and
+drives click timing, so tests and hosts only need to set `io.delta_time`.
 
-### Hovering
+Configuration tunables are initialized lazily on the first begin-frame (or via
+`eli_input_init_io`). Defaults match Dear ImGui: double-click time 0.30s, double-
+click max distance 6px, drag threshold 6px, key repeat delay 0.275s, key repeat
+rate 0.050s.
+
+## Backend integration
+
+| Function | Purpose |
+|----------|---------|
+| `void eli_io_add_mouse_pos_event(float x, float y)` | Queue a mouse move (top-left origin; use an offscreen value when the pointer leaves). |
+| `void eli_io_add_mouse_button_event(int button, bool down)` | Queue a button press/release (`ELI_MOUSE_BUTTON_LEFT/RIGHT/MIDDLE`, ...). |
+| `void eli_io_add_mouse_wheel_event(float wheel_x, float wheel_y)` | Queue a wheel delta (accumulated into the frame total). |
+| `void eli_io_add_key_event(eli_key key, bool down)` | Queue a key press/release. |
+| `void eli_io_add_key_analog_event(eli_key key, bool down, float value)` | Queue a key transition carrying an analog value in [0,1]. |
+| `void eli_input_update_begin_frame(void)` | Drain events and derive per-frame state. Call once at frame start. |
+| `void eli_input_update_end_frame(void)` | Roll per-frame accumulators. Call once at frame end. |
+| `void eli_input_init_io(eli_io *io)` | Apply input defaults explicitly (optional; begin-frame does this lazily). |
+
+## Mouse queries
+
+| Function | Returns |
+|----------|---------|
+| `bool eli_is_mouse_down(button)` | Button currently held. |
+| `bool eli_is_mouse_clicked(button)` | Button went down this frame. |
+| `bool eli_is_mouse_released(button)` | Button went up this frame. |
+| `bool eli_is_mouse_double_clicked(button)` | Second click of a double-click this frame. |
+| `int  eli_get_mouse_clicked_count(button)` | Successive click count on the click frame (1, 2, ...), else 0. |
+| `bool eli_is_any_mouse_down(void)` | Any button held. |
+| `eli_vec2 eli_get_mouse_pos(void)` | Current mouse position. |
+| `eli_vec2 eli_get_mouse_pos_on_opening_current_popup(void)` | Live position (popups pending a later phase). |
+| `bool eli_is_mouse_pos_valid(const eli_vec2 *pos)` | Position is on-screen (`NULL` tests the current position). |
+| `bool eli_is_mouse_hovering_rect(min, max, clip)` | Mouse inside a rect (min inclusive, max exclusive, expanded by touch padding). |
+| `bool eli_is_mouse_dragging(button, lock_threshold)` | Held and dragged past the threshold (negative threshold = default). |
+| `eli_vec2 eli_get_mouse_drag_delta(button, lock_threshold)` | Movement since the click origin, locked to (0,0) until the threshold is passed. |
+| `void eli_reset_mouse_drag_delta(button)` | Reset the drag origin to the current position. |
+| `eli_mouse_cursor eli_get_mouse_cursor(void)` | Requested cursor shape (resets to arrow each frame). |
+| `void eli_set_mouse_cursor(cursor)` | Request a cursor shape for this frame. |
+| `void eli_set_next_frame_want_capture_mouse(bool)` | Force `io.want_capture_mouse` next frame. |
+
+## Keyboard queries
+
+| Function | Returns |
+|----------|---------|
+| `bool eli_is_key_down(key)` | Key currently held. |
+| `bool eli_is_key_pressed(key)` | Key went down this frame (no repeat). |
+| `bool eli_is_key_pressed_ex(key, repeat)` | As above, optionally including typematic repeats. |
+| `bool eli_is_key_released(key)` | Key went up this frame. |
+| `bool eli_is_key_chord_pressed(chord)` | Modifier chord fired this frame (mods must match exactly). |
+| `int  eli_get_key_pressed_amount(key, delay, rate)` | Presses (with repeats) this frame; negative delay/rate use IO defaults. |
+| `const char *eli_get_key_name(key)` | Static human-readable key name. |
+| `void eli_set_next_frame_want_capture_keyboard(bool)` | Force `io.want_capture_keyboard` next frame. |
+
+Modifiers (`io.key_ctrl/shift/alt/super` and the `ELI_KEY_MOD_*` keys) are derived
+each frame from the physical left/right modifier keys.
+
+### Key chords
+
+A chord is an `eli_key` OR'd with modifier flags:
 
 ```c
-// Check if mouse is hovering a rect (screen coordinates)
-eli_vec2 min = eli_make_vec2(100, 100);
-eli_vec2 max = eli_make_vec2(200, 150);
-
-if (eli_is_mouse_hovering_rect(min, max, false)) {
-    // Mouse is over the rect
-}
+#define ELI_MOD_CTRL  (1 << 12)
+#define ELI_MOD_SHIFT (1 << 13)
+#define ELI_MOD_ALT   (1 << 14)
+#define ELI_MOD_SUPER (1 << 15)
 ```
 
-### Dragging
+Named key values are all below `1<<12`, so key and modifier bits never overlap.
+
+## Text input
+
+| Function | Purpose |
+|----------|---------|
+| `void eli_io_add_input_character(unsigned int codepoint)` | Append one typed character (0 ignored; non-BMP stored as U+FFFD). |
+| `void eli_io_add_input_characters_utf8(const char *utf8)` | Append a UTF-8 string, decoding each code point. |
+
+Characters land in `io.input_queue_characters[]` (16-bit code units) and are cleared
+at end-frame.
+
+## Shortcuts and clipboard
+
+| Function / macro | Purpose |
+|------------------|---------|
+| `bool eli_shortcut(chord)` | Whether a shortcut chord fired this frame (routing/focus deferred; currently the raw chord state). |
+| `ELI_SHORTCUT_COPY/CUT/PASTE/UNDO/REDO/SELECT_ALL` | Predefined Ctrl-based edit chords. |
+| `const char *eli_get_clipboard_text(void)` | Current clipboard text (never NULL). |
+| `void eli_set_clipboard_text(const char *text)` | Set clipboard text (NULL clears). |
+| `void eli_set_clipboard_callbacks(get_fn, set_fn, user_data)` | Install custom clipboard handlers. |
+
+Clipboard resolution: IO callbacks take priority; otherwise an internal static
+buffer is used. In the browser build (`ELI_JSIO`), `eli_set_clipboard_text` also
+forwards to the host page (`eli_host_set_clipboard`), and the host delivers OS
+clipboard text back via the exported `eli_host_provide_clipboard`. Hosted unit
+builds have `ELI_JSIO` undefined and use the static buffer only.
+
+## Example
 
 ```c
-// Is user dragging with left button?
-if (eli_is_mouse_dragging(ELI_MOUSE_BUTTON_LEFT, -1.0f)) {
-    // Get drag delta since button was pressed
-    eli_vec2 delta = eli_get_mouse_drag_delta(ELI_MOUSE_BUTTON_LEFT, -1.0f);
+#include <eli/input/eli_input.h>
 
-    // Use delta for dragging...
+void frame(eli_context *ctx, float dt) {
+    ctx->io.delta_time = dt;
 
-    // Reset delta when done
-    eli_reset_mouse_drag_delta(ELI_MOUSE_BUTTON_LEFT);
-}
-```
+    /* Backend pushes raw events (e.g. from browser listeners). */
+    eli_io_add_mouse_pos_event(120.0f, 80.0f);
+    eli_io_add_mouse_button_event(ELI_MOUSE_BUTTON_LEFT, true);
+    eli_io_add_key_event(ELI_KEY_LEFT_CTRL, true);
+    eli_io_add_key_event(ELI_KEY_C, true);
 
-The `lock_threshold` parameter (-1.0f = use default) is the minimum distance before dragging is considered active.
+    eli_input_update_begin_frame();
 
-### Cursor
+    if (eli_is_mouse_clicked(ELI_MOUSE_BUTTON_LEFT)) { /* handle click */ }
+    if (eli_shortcut(ELI_SHORTCUT_COPY)) {
+        eli_set_clipboard_text("copied!");
+    }
 
-```c
-// Get current cursor type
-eli_mouse_cursor cursor = eli_get_mouse_cursor();
-
-// Set cursor type (for next frame)
-eli_set_mouse_cursor(ELI_MOUSE_CURSOR_RESIZE_EW);
-
-// Request mouse capture
-eli_set_next_frame_want_capture_mouse(true);
-```
-
-**Cursor Types:**
-| Constant | Description |
-|----------|-------------|
-| `ELI_MOUSE_CURSOR_NONE` | No cursor |
-| `ELI_MOUSE_CURSOR_ARROW` | Default arrow |
-| `ELI_MOUSE_CURSOR_TEXT_INPUT` | I-beam for text |
-| `ELI_MOUSE_CURSOR_RESIZE_ALL` | Four-way resize |
-| `ELI_MOUSE_CURSOR_RESIZE_NS` | North-south resize |
-| `ELI_MOUSE_CURSOR_RESIZE_EW` | East-west resize |
-| `ELI_MOUSE_CURSOR_RESIZE_NESW` | Diagonal NE-SW |
-| `ELI_MOUSE_CURSOR_RESIZE_NWSE` | Diagonal NW-SE |
-| `ELI_MOUSE_CURSOR_HAND` | Hand pointer |
-| `ELI_MOUSE_CURSOR_NOT_ALLOWED` | Not allowed |
-
----
-
-## Keyboard Input
-
-### Key State
-
-```c
-// Is key currently held down?
-if (eli_is_key_down(ELI_KEY_SPACE)) { ... }
-
-// Was key pressed this frame?
-if (eli_is_key_pressed(ELI_KEY_ENTER, false)) { ... }
-
-// With repeat
-if (eli_is_key_pressed(ELI_KEY_BACKSPACE, true)) { ... }
-
-// Was key released this frame?
-if (eli_is_key_released(ELI_KEY_ESCAPE)) { ... }
-
-// Get key hold duration (seconds, or -1 if not held)
-float duration = eli_get_key_pressed_amount(ELI_KEY_A);
-```
-
-### Modifiers
-
-```c
-// Check modifier state
-eli_io* io = eli_get_io();
-if (io->key_ctrl) { ... }   // Ctrl is down
-if (io->key_shift) { ... }  // Shift is down
-if (io->key_alt) { ... }    // Alt is down
-if (io->key_super) { ... }  // Super/Cmd is down
-
-// Check specific modifier combination
-if (eli_is_key_mod_down(ELI_MOD_CTRL | ELI_MOD_SHIFT)) {
-    // Ctrl+Shift held
+    eli_input_update_end_frame();
 }
 ```
 
-**Modifier Constants:**
-| Constant | Description |
-|----------|-------------|
-| `ELI_MOD_NONE` | No modifiers |
-| `ELI_MOD_CTRL` | Ctrl key |
-| `ELI_MOD_SHIFT` | Shift key |
-| `ELI_MOD_ALT` | Alt key |
-| `ELI_MOD_SUPER` | Super/Cmd/Windows key |
+## Notes / deferred
 
-### Key Names
-
-```c
-// Get human-readable key name
-const char* name = eli_get_key_name(ELI_KEY_ENTER);  // "Enter"
-
-// Request keyboard capture
-eli_set_next_frame_want_capture_keyboard(true);
-```
-
----
-
-## Text Input
-
-Text input is handled through a character queue that the platform backend fills:
-
-```c
-// Platform backend adds characters
-eli_io_add_input_character('H');
-eli_io_add_input_character('i');
-
-// Or add UTF-8 string
-eli_io_add_input_characters_utf8("Hello!");
-
-// Read input queue in widgets
-eli_io* io = eli_get_io();
-for (int i = 0; i < io->input_queue_chars_count; i++) {
-    uint32_t c = io->input_queue_chars[i];
-    // Process character...
-}
-```
-
-The input queue is automatically cleared at the end of each frame.
-
----
-
-## Shortcuts
-
-```c
-// Check for key chord (key + modifiers)
-if (eli_shortcut(ELI_KEY_S | ELI_MOD_CTRL, false)) {
-    // Ctrl+S pressed
-}
-
-// With repeat
-if (eli_shortcut(ELI_KEY_Z | ELI_MOD_CTRL, true)) {
-    // Ctrl+Z pressed (repeating)
-}
-
-// Predefined shortcuts
-if (eli_shortcut(ELI_SHORTCUT_COPY, false)) { ... }   // Ctrl+C
-if (eli_shortcut(ELI_SHORTCUT_PASTE, false)) { ... }  // Ctrl+V
-if (eli_shortcut(ELI_SHORTCUT_CUT, false)) { ... }    // Ctrl+X
-if (eli_shortcut(ELI_SHORTCUT_UNDO, false)) { ... }   // Ctrl+Z
-if (eli_shortcut(ELI_SHORTCUT_REDO, false)) { ... }   // Ctrl+Y
-if (eli_shortcut(ELI_SHORTCUT_SELECT_ALL, false)) { ... } // Ctrl+A
-```
-
----
-
-## Clipboard
-
-Clipboard requires platform-specific callbacks:
-
-```c
-// Set up clipboard callbacks
-const char* my_get_clipboard(void* user_data) {
-    // Return clipboard text from platform
-    return platform_get_clipboard();
-}
-
-void my_set_clipboard(void* user_data, const char* text) {
-    // Set clipboard text via platform
-    platform_set_clipboard(text);
-}
-
-eli_set_clipboard_callbacks(my_get_clipboard, my_set_clipboard, NULL);
-
-// Use clipboard
-const char* text = eli_get_clipboard_text();
-eli_set_clipboard_text("Hello clipboard!");
-```
-
----
-
-## Backend Integration
-
-The platform backend must feed input events to elimgui each frame:
-
-```c
-// At start of frame, before eli_new_frame()
-
-// Mouse position
-eli_io_add_mouse_pos_event(mouse_x, mouse_y);
-
-// Mouse buttons
-eli_io_add_mouse_button_event(ELI_MOUSE_BUTTON_LEFT, left_button_down);
-eli_io_add_mouse_button_event(ELI_MOUSE_BUTTON_RIGHT, right_button_down);
-
-// Mouse wheel
-eli_io_add_mouse_wheel_event(wheel_x, wheel_y);
-
-// Keyboard
-eli_io_add_key_event(ELI_KEY_A, a_key_down);
-eli_io_add_key_event(ELI_KEY_ENTER, enter_key_down);
-// ... etc
-
-// Text input
-eli_io_add_input_character(typed_char);
-```
-
-### Complete Frame Loop
-
-```c
-void frame() {
-    // 1. Process platform events, call eli_io_add_*_event()
-
-    // 2. Update IO state
-    eli_io* io = eli_get_io();
-    io->display_size_x = window_width;
-    io->display_size_y = window_height;
-    io->delta_time = frame_time;
-
-    // 3. Start frame
-    eli_new_frame();
-
-    // 4. Build UI (widgets use eli_is_*() queries internally)
-    // ...
-
-    // 5. Render
-    eli_render();
-
-    // 6. Draw via renderer
-    // ...
-}
-```
-
----
-
-## Timing Constants
-
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `ELI_MOUSE_DOUBLE_CLICK_TIME` | 0.30s | Max time between double-click |
-| `ELI_MOUSE_DOUBLE_CLICK_DIST` | 6px | Max distance for double-click |
-| `ELI_MOUSE_DRAG_THRESHOLD` | 6px | Min distance to start drag |
-| `ELI_KEY_REPEAT_DELAY` | 0.275s | Initial delay before repeat |
-| `ELI_KEY_REPEAT_RATE` | 0.050s | Repeat rate once started |
-
----
-
-## See Also
-
-- [Core Types & Context](core-types.md)
-- [Draw System](draw-system.md)
-- [Font System](font-system.md)
+- `eli_shortcut` does not yet perform routing or focus arbitration — that needs the
+  window/focus system (later phases). It currently reports the raw chord state.
+- `eli_get_mouse_pos_on_opening_current_popup` returns the live mouse position
+  until popups exist.
+- The `clip` argument of `eli_is_mouse_hovering_rect` is accepted for API parity;
+  window-clip integration lands with the window phase.
