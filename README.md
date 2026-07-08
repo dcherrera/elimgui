@@ -8,6 +8,24 @@ Dear ImGui is the gold standard for immediate-mode GUIs, but it's C++ and assume
 
 Originally conceived by **Rodney Giles**, this project is being built out by **David Herrera** due to time constraints.
 
+## Visual Cheatsheet
+
+The repo ships an interactive **visual cheatsheet** — an elimgui app that showcases every widget live and pairs it with the exact `eli_*()` call plus a copy-paste snippet. It's the fastest way to see what elimgui can do and how to call it (and it dogfoods the whole library).
+
+- Searchable, category-filtered browser of 80+ widget examples
+- Each card shows the **live interactive widget** + its API signature + a **copyable code snippet**
+- A live **docking playground** — drag panels to dock / undock / split / tab
+
+### Run it
+
+```bash
+./build.sh serve
+```
+
+That builds the cheatsheet to WebAssembly, starts a local server, and opens it at **http://localhost:8080/cheatsheet.html**. (Use `./build.sh serve demo.html` for the simpler widget demo.)
+
+**Why a browser?** elimgui is WASM/browser-first: the library emits renderer-agnostic draw lists, and the only bundled renderer is the Canvas2D backend in `web/elimgui.js`. So the app runs in the browser — there's no native (SDL/GLFW) backend yet. For headless checks there's `./build.sh dogfood`, and the unit tests run natively via `./build.sh test`.
+
 ## Tech Stack
 
 | | |
@@ -31,16 +49,24 @@ User code → eli_*() widgets → eli_draw_list → eli_draw_data → Your rende
 
 ```
 include/eli/
-├── elimgui.h          # Master include, core types, context
-├── eli_draw.h         # Draw primitives, paths, beziers, channels
-├── eli_font.h         # Font atlas, glyph ranges, text rendering
-├── eli_input.h        # Mouse, keyboard, shortcuts, clipboard
-├── eli_widgets.h      # Buttons, sliders, inputs, trees, tables
-├── eli_layout.h       # Cursor, spacing, groups, content regions
-├── eli_style.h        # Colors, sizing, theming
-├── eli_tables.h       # Full table widget system
-└── eli_docking.h      # Window docking (planned)
+├── elimgui.h        # umbrella — one include pulls in the whole library
+├── core/            # types, enums, IO, style struct, context, frame lifecycle
+├── draw/            # draw lists, primitives, paths, beziers, channels
+├── font/            # atlas (stb_truetype), embedded font, glyph ranges, text
+├── input/           # mouse, keyboard, text, shortcuts, clipboard
+├── id/              # ID hashing/stack, active/hot id, storage
+├── style/           # themes, style stacks, color utilities
+├── window/          # windows: move/resize/scroll, child windows
+├── layout/          # cursor, item layout, groups, sizing
+├── widgets/         # every widget: text, buttons, sliders, inputs, color,
+│                    #   combo, trees, menus, popups, tooltips, tables, tabs, …
+├── interaction/     # disabling, clipping, focus
+├── util/            # list clipper, viewport, settings, logging, memory
+├── demo/            # demo + debug windows
+└── docking/         # dock nodes, split, dock space
 ```
+
+Header-only, but organized into small, focused files by category (nothing over ~1000 LOC). A single `#include <eli/elimgui.h>` pulls in everything. See [`docs/`](docs/) for per-phase API docs and [`UI_UX/`](UI_UX/) for the UI/UX best-practices reference the app is built on.
 
 ## Design Decisions
 
@@ -57,60 +83,66 @@ include/eli/
 #include <eli/elimgui.h>
 
 eli_context* ctx = eli_create_context();
+eli_set_current_context(ctx);
+eli_style_colors_dark(NULL);
+// ... build a font atlas, set io.display_size ...
 
-// Frame loop
-eli_new_frame();
+// Each frame:
+eli_frame_begin();                    // composes the per-subsystem frame hooks
 
 eli_begin("My Window", NULL, 0);
-  eli_text("Hello from WASM");
-  if (eli_button("Click me", (eli_vec2){0, 0})) {
-      // handle click
-  }
-  eli_slider_float("Speed", &speed, 0.0f, 10.0f, "%.1f", 0);
+    eli_text("Hello from WASM");
+    if (eli_button("Click me")) {
+        // handle click
+    }
+    static float speed = 1.0f;
+    eli_slider_float("Speed", &speed, 0.0f, 10.0f, "%.1f", 0);
 eli_end();
 
-eli_render();
+eli_frame_end();                      // assembles the frame's draw data
 eli_draw_data* draw = eli_get_draw_data();
 // feed draw data to your Canvas2D/WebGL renderer
 ```
 
-## Build
+## Build & Run
+
+Clone with submodules so JAClibc is present, and use a wasm-capable clang + `wasm-ld`
+(on macOS: `brew install llvm lld`):
 
 ```bash
-clang --target=wasm32 \
-    -nostdlib \
-    -Ivendor/jaclibc/include \
-    -Iinclude \
-    -O2 \
-    -Wl,--no-entry \
-    -Wl,--export-dynamic \
-    -o web/demo.wasm \
-    examples/demo/main.c
+git submodule update --init --recursive
+
+./build.sh serve            # build the cheatsheet, serve it, open the browser
+./build.sh serve demo.html  # …the simpler widget demo instead
+./build.sh test             # build + run the native unit-test suite
+./build.sh dogfood          # headless: run the app natively and dump UI state
+./build.sh clean            # remove build artifacts
 ```
 
-Or use the build script:
+Under the hood, a build is a single `clang` invocation — no Emscripten:
 
 ```bash
-./build.sh demo     # Build the demo
-./build.sh serve    # Start dev server at localhost:8080
+clang --target=wasm32 -nostdlib \
+    -Ivendor/jaclibc/include -Iinclude -Ivendor -Os \
+    -Wl,--no-entry -Wl,--export-dynamic \
+    -o web/cheatsheet.wasm examples/cheatsheet/main.c
 ```
 
 ## Status
 
-Actively in development. Core systems are implemented; widget and window layers are in progress.
+Feature-complete: the full Dear ImGui feature set is implemented, covered by a native unit-test suite, and runs in the browser via the Canvas2D renderer.
 
-| Phase | Status |
-|-------|--------|
-| Core types & context | Done |
-| Draw system (primitives, paths, beziers, channels) | Done |
-| Font system (atlas, stb_truetype, glyph ranges) | Done |
-| Input system (mouse, keyboard, shortcuts, clipboard) | Done |
-| ID system & state management | In progress |
-| Style system & theming | Planned |
-| Windows & scrolling | Planned |
-| Layout system | Planned |
-| Widgets (buttons, sliders, inputs, trees, tables) | Planned |
-| Web integration & renderers | Planned |
+| Area | Status |
+|------|--------|
+| Core — types, context, draw, font, input, id, style, memory | ✅ |
+| Windows, layout, scrolling, child windows | ✅ |
+| Widgets — text, buttons, sliders, drags, inputs, color, combo, trees, tables, tabs, … | ✅ |
+| Menus, popups, modals, tooltips, drag & drop | ✅ |
+| Disabling/clipping, list clipper, viewports, settings, logging | ✅ |
+| Docking — dock space, split, tab, tear-out | ✅ |
+| Demo & debug windows, visual cheatsheet | ✅ |
+| Web integration — WASM loader, Canvas2D renderer, input | ✅ |
+| Native rendering backend (SDL/GLFW/OpenGL) | Not yet |
 
 ## License
 

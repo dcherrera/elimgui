@@ -31,7 +31,8 @@ usage() {
     echo "  cheatsheet  Build the visual cheatsheet app"
     echo "  test      Build and run native unit tests (tests/run_tests.sh)"
     echo "  clean     Remove build artifacts"
-    echo "  serve     Start local dev server"
+    echo "  serve     Build + serve the cheatsheet and open it in the browser"
+    echo "            (use 'serve demo.html' for the widget demo)"
     echo "  help      Show this help"
     echo ""
 }
@@ -78,8 +79,20 @@ clean() {
     echo "Done."
 }
 
+# serve [page] — build the app, start a local server, and open it in the browser.
+# Defaults to the visual cheatsheet; pass `demo.html` for the widget demo.
 serve() {
-    echo "Starting server at http://localhost:8080"
+    local page="${1:-cheatsheet.html}"
+    case "$page" in
+        demo.html) build_demo ;;
+        *)         build_cheatsheet ;;
+    esac
+    local url="http://localhost:8080/${page}"
+    echo "Serving web/ at ${url}  (Ctrl-C to stop)"
+    # Open the browser once the server is up (macOS `open`, Linux `xdg-open`).
+    ( sleep 1
+      if command -v open >/dev/null 2>&1; then open "${url}"
+      elif command -v xdg-open >/dev/null 2>&1; then xdg-open "${url}"; fi ) >/dev/null 2>&1 &
     cd "${SCRIPT_DIR}/web"
     python3 -m http.server 8080
 }
@@ -102,7 +115,8 @@ case "${1:-help}" in
         clean
         ;;
     serve)
-        serve
+        shift || true
+        serve "$@"
         ;;
     help|--help|-h)
         usage
