@@ -226,6 +226,41 @@ ELI_TEST(split_keeps_existing_window_docked) {
     eli_destroy_context(ctx);
 }
 
+/* Regression: re-docking a window must detach it from its old node, or the old
+ * node keeps a stale entry, never empties, never gets GC'd, and the dock-node
+ * pool grows without bound (which froze the app under heavy docking). */
+ELI_TEST(redock_does_not_leak_nodes) {
+    eli_context *ctx = dock_setup();
+
+    frame_begin();
+    submit_dockspace();
+    eli_set_next_window_dock_id(DOCK_ID, 0);
+    eli_begin("Alpha", NULL, 0);
+    eli_end();
+    eli_set_next_window_dock_id(DOCK_ID, 0);
+    eli_begin("Beta", NULL, 0);
+    eli_end();
+    frame_end();
+
+    /* Churn: repeatedly split then re-tab the two windows around the space. */
+    for (int i = 0; i < 40; i++) {
+        ctx->has_dock_request = true;
+        ctx->dock_request_target = DOCK_ID;
+        ctx->dock_request_window = eli_hash_str((i & 1) ? "Alpha" : "Beta", 0);
+        ctx->dock_request_dir = (i % 2) ? ELI_DOCK_DIR_RIGHT : ELI_DOCK_DIR_CENTER;
+        ctx->dock_drag_window_id = ctx->dock_request_window;
+        frame_begin();
+        submit_dockspace();
+        frame_end();
+    }
+
+    /* Two windows + one dock space can never need more than a handful of nodes.
+     * Before the fix this grew unboundedly. */
+    ELI_ASSERT_LT(ctx->dock_nodes_count, 8);
+
+    eli_destroy_context(ctx);
+}
+
 ELI_TEST(tab_drag_out_undocks) {
     eli_context *ctx = dock_setup();
 

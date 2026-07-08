@@ -271,25 +271,39 @@ static inline eli_dock_node *eli_dock__find_drop_node(eli_context *ctx, eli_vec2
     return NULL;
 }
 
-/** Hit-test the five drop zones of `node` against `p`; returns the zone dir. */
+/**
+ * Hit-test `p` against a node's drop regions. The WHOLE node is a drop target
+ * (not five tiny squares): dropping within an edge band splits toward that edge,
+ * dropping anywhere in the central area tabs the window in. This makes dragging a
+ * floated window back over the dock re-dock it, rather than forcing the cursor
+ * onto a small center indicator. Returns ELI_DOCK_DIR_NONE only when `p` is
+ * outside the node entirely.
+ */
 static inline eli_dock_dir eli_dock__hit_zone(const eli_dock_node *node, eli_vec2 p)
 {
-    eli_vec2 c = eli_rect_center(node->rect);
-    float z = ELI_DOCK_PREVIEW_ZONE_SIZE * 0.5f;
-    float o = ELI_DOCK_PREVIEW_ZONE_OFFSET;
-    struct { eli_dock_dir dir; float cx; float cy; } zones[] = {
-        { ELI_DOCK_DIR_CENTER, c.x,     c.y     },
-        { ELI_DOCK_DIR_LEFT,   c.x - o, c.y     },
-        { ELI_DOCK_DIR_RIGHT,  c.x + o, c.y     },
-        { ELI_DOCK_DIR_UP,     c.x,     c.y - o },
-        { ELI_DOCK_DIR_DOWN,   c.x,     c.y + o }
-    };
-    for (int i = 0; i < 5; i++) {
-        if (p.x >= zones[i].cx - z && p.x <= zones[i].cx + z &&
-            p.y >= zones[i].cy - z && p.y <= zones[i].cy + z)
-            return zones[i].dir;
-    }
-    return ELI_DOCK_DIR_NONE;
+    eli_rect r = node->rect;
+    if (p.x < r.x || p.x > r.x + r.w || p.y < r.y || p.y > r.y + r.h)
+        return ELI_DOCK_DIR_NONE;
+
+    /* Edge band width: a fraction of the shorter side, capped so large nodes keep
+     * a big central "tab here" area. */
+    float band = eli_min_f(r.w, r.h) * 0.30f;
+    if (band > 60.0f)
+        band = 60.0f;
+
+    float dist_l = p.x - r.x;
+    float dist_r = (r.x + r.w) - p.x;
+    float dist_t = p.y - r.y;
+    float dist_b = (r.y + r.h) - p.y;
+
+    /* Nearest edge within the band wins; otherwise the center (tab). */
+    float nearest = band;
+    eli_dock_dir dir = ELI_DOCK_DIR_CENTER;
+    if (dist_l < nearest) { nearest = dist_l; dir = ELI_DOCK_DIR_LEFT; }
+    if (dist_r < nearest) { nearest = dist_r; dir = ELI_DOCK_DIR_RIGHT; }
+    if (dist_t < nearest) { nearest = dist_t; dir = ELI_DOCK_DIR_UP; }
+    if (dist_b < nearest) { nearest = dist_b; dir = ELI_DOCK_DIR_DOWN; }
+    return dir;
 }
 
 /** @return the region a window dropped with `dir` would occupy inside `node`. */
@@ -339,6 +353,16 @@ static inline void eli_dock__process_request(eli_context *ctx)
     eli_window *win = eli_find_window_by_id(ctx, ctx->dock_request_window);
     if (target == NULL || win == NULL || (win->flags & ELI_WINDOW_NO_DOCKING))
         return;
+
+    /* Detach the window from its current node first. Otherwise the old node keeps
+     * a stale entry (never empties, never gets GC'd -> the node pool grows without
+     * bound and the window is listed in two tab bars). Also keeps a re-split of the
+     * window's own node correct: it is removed before the split moves the rest. */
+    if (win->dock_id != 0) {
+        eli_dock_node *old = eli_dock_node_find(ctx, win->dock_id);
+        if (old != NULL)
+            eli_dock_node_remove_window(old, win->id);
+    }
 
     if (ctx->dock_request_dir == ELI_DOCK_DIR_CENTER) {
         eli_dock_node_add_window(target, win->id);
