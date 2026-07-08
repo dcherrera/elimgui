@@ -1,430 +1,145 @@
 # Font System
 
-This document covers font loading, atlas generation, glyph management, and text rendering in elimgui.
+Phase 3 adds font loading, atlas generation, text measurement, and text
+rendering. Everything lives under `include/eli/font/` and is pulled in with:
 
-## Table of Contents
+```c
+#include <eli/font/eli_font.h>
+```
 
-- [Overview](#overview)
-- [Font Types](#font-types)
-  - [eli_font_glyph](#eli_font_glyph)
-  - [eli_font_config](#eli_font_config)
-  - [eli_font](#eli_font)
-  - [eli_font_atlas](#eli_font_atlas)
-- [Font Atlas](#font-atlas)
-  - [Initialization](#initialization)
-  - [Adding Fonts](#adding-fonts)
-  - [Building](#building)
-  - [Texture Access](#texture-access)
-- [Glyph Ranges](#glyph-ranges)
-- [Text Rendering](#text-rendering)
-  - [Calculating Text Size](#calculating-text-size)
-  - [Drawing Text](#drawing-text)
-- [Font Stack](#font-stack)
-- [Font Atlas Flags](#font-atlas-flags)
-
----
+The font system builds on top of the draw system (Phase 2): text is emitted as
+textured quads into an `eli_draw_list`. Glyph rasterization is done with the
+vendored `stb_truetype.h` and `stb_rect_pack.h` (routed through the libc seam so
+the same code compiles for wasm32 and for native host tests).
 
 ## Overview
 
-The font system provides:
-- **Font Atlas** - Packs multiple fonts into a single texture
-- **Glyph Data** - Per-character metrics and UV coordinates
-- **Text Rendering** - Renders text to draw lists as textured quads
+| Concern | Header | Key types / functions |
+|---------|--------|-----------------------|
+| Data types | `eli_font_types.h` | `eli_font`, `eli_font_atlas`, `eli_font_config`, `eli_font_glyph` |
+| Embedded font | `eli_font_proggy.h` | ProggyClean blob + `eli_font_stb_decompress` |
+| Glyph ranges | `eli_font_glyph_ranges.h` | `eli_font_atlas_get_glyph_ranges_*` |
+| Atlas build | `eli_font_atlas.h` | `eli_font_atlas_add_font_*`, `eli_font_atlas_build`, tex-data getters |
+| Text + stack | `eli_font_text.h` | `eli_draw_list_add_text[_ex]`, `eli_calc_text_size`, `eli_push_font` |
 
-**Data flow:**
-```
-TTF/OTF Data → Font Atlas Build → Glyph Table + Texture → Text Rendering → Draw List
-```
+A `eli_font_atlas` owns a single-channel (alpha8) texture and the fonts baked
+into it. A `eli_font` owns a flat `eli_font_glyph` array plus a codepoint→glyph
+lookup. Glyphs store the pen-relative corner offsets (`x0..y1`, top-left origin)
+and atlas UVs (`u0..v1`) needed to build a text quad, plus `advance_x`.
 
-### Dependencies
-
-The font system uses two vendored STB libraries:
-- **stb_truetype.h** - TTF/OTF parsing and glyph rasterization
-- **stb_rect_pack.h** - Efficient rectangle packing for the texture atlas
-
-Both are included automatically via `eli_font.h`.
-
-### Complete Example
+## Building an atlas
 
 ```c
-#include "eli/eli_font.h"
+eli_font_atlas *atlas = eli_font_atlas_create();
 
-// Create and initialize atlas
-eli_font_atlas atlas;
-eli_font_atlas_init(&atlas);
+/* Embedded ProggyClean at 13px (the default). */
+eli_font *font = eli_font_atlas_add_font_default(atlas, NULL);
 
-// Add the default font
-eli_font* font = eli_font_atlas_add_font_default(&atlas, NULL);
+/* Or from your own TTF/OTF bytes: */
+/* eli_font *font = eli_font_atlas_add_font_from_memory_ttf(
+ *     atlas, ttf_bytes, ttf_size, 16.0f, NULL,
+ *     eli_font_atlas_get_glyph_ranges_cyrillic(atlas)); */
 
-// Build the atlas (rasterizes glyphs)
-eli_font_atlas_build(&atlas);
+eli_font_atlas_build(atlas);            /* rasterize + pack all fonts */
 
-// Get texture data for GPU upload
-unsigned char* pixels;
-int width, height;
-eli_font_atlas_get_tex_data_as_rgba32(&atlas, &pixels, &width, &height, NULL);
-
-// Upload to GPU and set texture ID
-// my_texture_id = upload_texture_to_gpu(pixels, width, height);
-// eli_font_atlas_set_tex_id(&atlas, my_texture_id);
-
-// Use font for rendering...
-
-// Cleanup
-eli_font_atlas_destroy(&atlas);
+unsigned char *pixels; int w, h, bpp;
+eli_font_atlas_get_tex_data_as_alpha8(atlas, &pixels, &w, &h, &bpp);
+/* upload `pixels` (w*h, 1 byte/texel) to your renderer, then: */
+eli_font_atlas_set_tex_id(atlas, my_backend_texture_id);
 ```
 
----
+`eli_font_atlas_build` gathers the glyph bitmap boxes for every configured font,
+packs them (plus one reserved opaque white texel) with the skyline packer,
+chooses a texture width from the total surface area, rounds the height up to a
+power of two, rasterizes each glyph, then fills per-font metrics and glyph
+tables. It is safe to call again (it frees prior texture/glyph data first).
 
-## Font Types
+### Atlas API
 
-### eli_font_glyph
+| Function | Purpose |
+|----------|---------|
+| `eli_font_atlas_create()` / `_destroy()` | Allocate / free a heap atlas |
+| `eli_font_atlas_init(atlas)` | Initialize an atlas in place |
+| `eli_font_atlas_add_font(atlas, cfg)` | Add a source from a full config |
+| `eli_font_atlas_add_font_default(atlas, cfg)` | Add embedded ProggyClean |
+| `eli_font_atlas_add_font_from_memory_ttf(...)` | Add from raw TTF/OTF bytes |
+| `eli_font_atlas_add_font_from_memory_compressed_ttf(...)` | Add from stb-compressed TTF |
+| `eli_font_atlas_build(atlas)` | Bake the texture (returns `bool`) |
+| `eli_font_atlas_is_built(atlas)` | Whether a texture has been baked |
+| `eli_font_atlas_get_tex_data_as_alpha8(...)` | Fetch 1-byte texels (builds on demand) |
+| `eli_font_atlas_get_tex_data_as_rgba32(...)` | Fetch RGBA (white + alpha), cached |
+| `eli_font_atlas_set_tex_id(atlas, id)` | Store the backend texture id |
+| `eli_font_atlas_clear[_tex_data\|_input_data\|_fonts]()` | Release owned data |
 
-Rendering data for a single character.
+`eli_font_config` (see `eli_font_types.h`) controls `size_pixels`,
+`glyph_ranges` (a zero-terminated list of `[lo, hi]` codepoint pairs; `NULL`
+selects the default Latin range), glyph offset/advance clamps, and pixel
+snapping. Pass `NULL` for the config to accept defaults (13px, 1× oversample,
+horizontal snap on).
+
+### Glyph ranges
+
+Each getter returns a static, immutable range table. The `atlas` argument is
+accepted for API symmetry and is unused:
+
+`eli_font_atlas_get_glyph_ranges_default` / `_greek` / `_korean` / `_japanese` /
+`_chinese_full` / `_chinese_simplified_common` / `_cyrillic` / `_thai` /
+`_vietnamese`. Large-script ranges cover the relevant Unicode blocks (favoring
+completeness over atlas size).
+
+## Measuring and drawing text
 
 ```c
-struct eli_font_glyph {
-    uint32_t codepoint;     // Unicode codepoint
+/* Measure with an explicit font/size. */
+eli_vec2 size = eli_font_calc_text_size(font, font->font_size, "Hello", NULL);
 
-    bool visible;           // Has visible pixels
-    bool colored;           // Colored glyph (no tinting)
-
-    float advance_x;        // Horizontal advance for layout
-    float x0, y0;           // Top-left corner (relative to cursor)
-    float x1, y1;           // Bottom-right corner
-
-    float u0, v0;           // Top-left UV in atlas
-    float u1, v1;           // Bottom-right UV in atlas
-};
+/* Draw with an explicit font/size (caller binds the atlas texture). */
+eli_draw_list_add_text_ex(draw_list, font, font->font_size,
+                          eli_make_vec2(x, y), ELI_COL32_WHITE,
+                          "Hello", NULL, 0.0f, NULL);
 ```
 
-### eli_font_config
+- `text_end` may be `NULL` to use `strlen`. Text is UTF-8 decoded.
+- Width is the widest line; height is `line_count * line_height`
+  (`line_height == font_size`). `'\n'` starts a new line.
+- Whitespace glyphs advance the pen but emit no geometry, so `add_text` emits
+  exactly `4` vertices and `6` indices per **visible** glyph.
+- The optional `cpu_fine_clip_rect` (`min.x, min.y, max.x, max.y`) skips glyphs
+  that fall fully outside it.
 
-Configuration for loading a font.
+## Font stack
 
-```c
-struct eli_font_config {
-    // Input
-    void* font_data;                // TTF/OTF binary data
-    int font_data_size;             // Data size
-    bool font_data_owned_by_atlas;  // Atlas owns memory (default: true)
+The current font lives on the active context. These operate on
+`ctx->font` / `ctx->font_size` / `ctx->font_stack`:
 
-    // Rendering options
-    float size_pixels;              // Output size in pixels
-    int oversample_h;               // Horizontal oversampling (1-4)
-    int oversample_v;               // Vertical oversampling (1-4)
-    bool pixel_snap_h;              // Snap glyphs to pixel boundaries
+| Function | Purpose |
+|----------|---------|
+| `eli_push_font(font)` | Make `font` current, saving the previous one |
+| `eli_pop_font()` | Restore the saved font |
+| `eli_get_font()` | Current font (or `NULL`) |
+| `eli_get_font_size()` | Current size = `font_size * io.font_global_scale` |
+| `eli_get_font_tex_uv_white_pixel()` | Current atlas's opaque white-texel UV |
 
-    // Glyph options
-    eli_vec2 glyph_offset;          // Offset all glyphs
-    float glyph_min_advance_x;      // Minimum advance width
-    float glyph_max_advance_x;      // Maximum advance width
-    const uint16_t* glyph_ranges;   // Unicode ranges to include
+`eli_draw_list_add_text` and `eli_calc_text_size` (the no-font-argument forms)
+use the current context font and size.
 
-    // Merging
-    bool merge_mode;                // Merge into previous font
+## Compiling example
 
-    // Special characters
-    uint32_t ellipsis_char;         // Character for "..." (0 = auto)
+wasm32 (production) — `stb` is on the include path via `-Ivendor`:
 
-    char name[40];                  // Debug name
-};
+```bash
+/opt/homebrew/opt/llvm/bin/clang --target=wasm32 -nostdlib \
+    -Ivendor/jaclibc/include -Iinclude -Ivendor -O2 -c -o app.o app.c
 ```
 
-**Initialization:**
-```c
-eli_font_config config;
-eli_font_config_init(&config);
-
-config.size_pixels = 16.0f;
-config.glyph_ranges = eli_font_atlas_get_glyph_ranges_default();
-```
-
-### eli_font
-
-Runtime font data with glyph lookup and metrics.
-
-```c
-struct eli_font {
-    // Glyphs
-    eli_font_glyph_array glyphs;
-
-    // Lookup tables (sparse arrays)
-    float* index_advance_x;
-    uint16_t* index_lookup;
-
-    // Fallback character
-    float fallback_advance_x;
-    uint16_t fallback_glyph;
-    uint32_t fallback_char;         // Default: U+FFFD
-
-    // Metrics
-    float size;                     // Font height in pixels
-    float ascent;                   // Pixels above baseline
-    float descent;                  // Pixels below baseline
-    float scale;                    // Scale factor (usually 1.0)
-
-    // Parent atlas
-    eli_font_atlas* container_atlas;
-
-    // Ellipsis handling
-    uint32_t ellipsis_char;
-    float ellipsis_width;
-};
-```
-
-### eli_font_atlas
-
-Manages multiple fonts packed into a single texture.
-
-```c
-struct eli_font_atlas {
-    // Flags
-    eli_font_atlas_flags flags;
-
-    // Texture settings
-    eli_texture_id tex_id;
-    int tex_desired_width;
-    int tex_glyph_padding;
-
-    // Texture output
-    unsigned char* tex_pixels_alpha8;   // 1-byte per pixel
-    unsigned char* tex_pixels_rgba32;   // 4-bytes per pixel
-    int tex_width;
-    int tex_height;
-    eli_vec2 tex_uv_scale;              // (1/w, 1/h)
-    eli_vec2 tex_uv_white_pixel;        // White pixel location
-    bool tex_is_built;
-
-    // Fonts
-    eli_font_ptr_array fonts;           // fonts.data[0] is default
-};
-```
-
----
-
-## Font Atlas
-
-### Initialization
-
-```c
-eli_font_atlas atlas;
-eli_font_atlas_init(&atlas);
-
-// ... add fonts and build ...
-
-eli_font_atlas_destroy(&atlas);
-```
-
-### Adding Fonts
-
-**Default Font (ProggyClean):**
-```c
-// Add embedded ProggyClean font (13px, pixel-perfect)
-eli_font* font = eli_font_atlas_add_font_default(&atlas, NULL);
-
-// With custom config
-eli_font_config config;
-eli_font_config_init(&config);
-config.size_pixels = 16.0f;
-eli_font* font = eli_font_atlas_add_font_default(&atlas, &config);
-```
-
-**From Memory (TTF/OTF data):**
-```c
-// Add font from TTF data in memory
-eli_font* font = eli_font_atlas_add_font_from_memory_ttf(
-    &atlas,
-    my_ttf_data,        // TTF data pointer
-    my_ttf_size,        // TTF data size
-    16.0f,              // Size in pixels
-    NULL,               // Config (NULL = defaults)
-    NULL);              // Glyph ranges (NULL = default Latin)
-
-// With custom config
-eli_font_config config;
-eli_font_config_init(&config);
-config.oversample_h = 2;
-config.oversample_v = 2;
-config.glyph_ranges = eli_font_atlas_get_glyph_ranges_japanese();
-
-eli_font* font = eli_font_atlas_add_font_from_memory_ttf(
-    &atlas, my_ttf_data, my_ttf_size, 18.0f, &config, config.glyph_ranges);
-```
-
-### Building
-
-After adding fonts, build the atlas to generate the texture:
-
-```c
-bool success = eli_font_atlas_build(&atlas);
-if (!success) {
-    // Handle error - no fonts added or allocation failed
-}
-```
-
-The build process:
-1. Allocates texture memory (default 512x512)
-2. Uses stb_truetype to rasterize glyphs
-3. Packs glyphs into the texture using stb_rect_pack
-4. Generates lookup tables for fast glyph access
-5. Sets up fallback glyphs for missing characters
-
-### Texture Access
-
-Get the texture data for your renderer:
-
-```c
-// As Alpha8 (1 byte per pixel)
-unsigned char* pixels;
-int width, height;
-eli_font_atlas_get_tex_data_as_alpha8(&atlas, &pixels, &width, &height, NULL);
-
-// As RGBA32 (4 bytes per pixel)
-eli_font_atlas_get_tex_data_as_rgba32(&atlas, &pixels, &width, &height, NULL);
-
-// Set texture ID after uploading to GPU
-eli_font_atlas_set_tex_id(&atlas, my_gl_texture);
-```
-
----
-
-## Glyph Ranges
-
-Glyph ranges specify which Unicode codepoints to include. Each range is a pair of values (start, end), terminated by 0.
-
-### Predefined Ranges
-
-```c
-// Basic Latin + Extended Latin
-const uint16_t* ranges = eli_font_atlas_get_glyph_ranges_default();
-
-// Language-specific ranges
-eli_font_atlas_get_glyph_ranges_greek();
-eli_font_atlas_get_glyph_ranges_korean();
-eli_font_atlas_get_glyph_ranges_japanese();
-eli_font_atlas_get_glyph_ranges_chinese_simplified_common();
-eli_font_atlas_get_glyph_ranges_chinese_full();
-eli_font_atlas_get_glyph_ranges_cyrillic();
-eli_font_atlas_get_glyph_ranges_thai();
-eli_font_atlas_get_glyph_ranges_vietnamese();
-```
-
-### Custom Ranges
-
-```c
-static const uint16_t my_ranges[] = {
-    0x0020, 0x00FF,  // Basic Latin
-    0x0400, 0x04FF,  // Cyrillic
-    0x2000, 0x206F,  // General Punctuation
-    0                 // Terminator
-};
-
-config.glyph_ranges = my_ranges;
-```
-
----
-
-## Text Rendering
-
-### Calculating Text Size
-
-```c
-eli_font* font = eli_get_font();
-float font_size = eli_get_font_size();
-const char* text = "Hello, World!";
-
-eli_vec2 size = eli_calc_text_size(font, font_size, 0.0f, 0.0f, text, NULL);
-// size.x = text width, size.y = text height
-```
-
-### Drawing Text
-
-```c
-// Full version with all parameters
-eli_draw_list_add_text(draw_list,
-    font,                           // Font to use
-    16.0f,                          // Font size
-    eli_make_vec2(100, 100),        // Position
-    ELI_COL32_WHITE,                // Color
-    "Hello, World!",                // Text start
-    NULL,                           // Text end (NULL = auto)
-    0.0f,                           // Wrap width (0 = no wrap)
-    NULL);                          // CPU clip rect (NULL = use draw list)
-
-// Simple version using current context font
-eli_draw_list_add_text_simple(draw_list,
-    eli_make_vec2(100, 100),
-    ELI_COL32_WHITE,
-    "Hello, World!");
-```
-
----
-
-## Font Stack
-
-Push and pop fonts for temporary changes:
-
-```c
-eli_push_font(my_bold_font);
-
-// Widgets here use my_bold_font
-eli_text("Bold text");
-
-eli_pop_font();  // Restore previous font
-```
-
-**Access current font:**
-```c
-eli_font* current = eli_get_font();
-float size = eli_get_font_size();
-eli_vec2 uv = eli_get_font_tex_uv_white_pixel();
-```
-
----
-
-## Font Atlas Flags
-
-```c
-typedef enum eli_font_atlas_flags {
-    ELI_FONT_ATLAS_FLAGS_NONE                   = 0,
-    ELI_FONT_ATLAS_FLAGS_NO_POWER_OF_TWO_HEIGHT = 1 << 0,
-    ELI_FONT_ATLAS_FLAGS_NO_MOUSE_CURSORS       = 1 << 1,
-    ELI_FONT_ATLAS_FLAGS_NO_BAKED_LINES         = 1 << 2
-} eli_font_atlas_flags;
-```
-
-| Flag | Description |
-|------|-------------|
-| `NO_POWER_OF_TWO_HEIGHT` | Don't round texture height to power of 2 |
-| `NO_MOUSE_CURSORS` | Don't build mouse cursor shapes (saves texture space) |
-| `NO_BAKED_LINES` | Don't bake thick line textures (use polygon rendering) |
-
----
-
-## Glyph Lookup
-
-```c
-// Find glyph with fallback
-const eli_font_glyph* glyph = eli_font_find_glyph(font, 'A');
-
-// Find glyph without fallback (returns NULL if missing)
-const eli_font_glyph* glyph = eli_font_find_glyph_no_fallback(font, codepoint);
-
-// Get advance width
-float advance = eli_font_get_char_advance(font, 'A');
-
-// Check if glyph is loaded
-bool loaded = eli_font_is_glyph_loaded(font, codepoint);
-
-// Check if font is loaded into atlas
-bool ready = eli_font_is_loaded(font);
-```
-
----
-
-## See Also
-
-- [Core Types & Context](core-types.md)
-- [Draw System](draw-system.md)
-- [API Quick Reference](README.md#api-quick-reference)
+Native unit tests build with `-DELI_TEST_HOSTED` (host libc) and also need
+`-Ivendor` for the `stb` headers; `./build.sh test` handles this.
+
+## Notes / gotchas
+
+- `add_text[_ex]` does **not** manage the draw list's texture stack; the caller
+  is expected to have the font atlas texture bound (matches Dear ImGui).
+- `wrap_width` is currently accepted but unwrapped (reserved for a later pass).
+- The embedded ProggyClean blob (`eli_font_proggy.h`) is the big-data exception
+  to the per-file size guideline. Its `eli_font_stb_decompress` also expands any
+  stb-compressed TTF passed to `add_font_from_memory_compressed_ttf`.
