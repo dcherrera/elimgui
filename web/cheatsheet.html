@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>elimgui - Visual Cheatsheet</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script src="elimgui.js"></script>
+    <script>
+        loadElimgui('cheatsheet.wasm').catch((err) => {
+            console.error('Failed to load elimgui cheatsheet:', err);
+            document.body.innerHTML =
+                '<pre class="load-error">Failed to load cheatsheet.wasm\n' + err + '</pre>';
+        });
+    </script>
+</body>
+</html>

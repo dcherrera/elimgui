@@ -28,6 +28,7 @@ usage() {
     echo ""
     echo "Commands:"
     echo "  demo      Build the demo example"
+    echo "  cheatsheet  Build the visual cheatsheet app"
     echo "  test      Build and run native unit tests (tests/run_tests.sh)"
     echo "  clean     Remove build artifacts"
     echo "  serve     Start local dev server"
@@ -48,6 +49,15 @@ build_demo() {
     echo "Built: web/demo.wasm"
 }
 
+build_cheatsheet() {
+    echo "Building cheatsheet..."
+    mkdir -p "${SCRIPT_DIR}/web"
+    ${CC} ${CFLAGS} ${LDFLAGS} \
+        -o "${SCRIPT_DIR}/web/cheatsheet.wasm" \
+        "${SCRIPT_DIR}/examples/cheatsheet/main.c"
+    echo "Built: web/cheatsheet.wasm"
+}
+
 clean() {
     echo "Cleaning..."
     rm -f "${SCRIPT_DIR}/web/"*.wasm
@@ -65,6 +75,9 @@ serve() {
 case "${1:-help}" in
     demo)
         build_demo
+        ;;
+    cheatsheet)
+        build_cheatsheet
         ;;
     test)
         shift || true
