@@ -62,45 +62,48 @@
 
 {
     "Docking",
-    "Dock Space",
-    "eli_id eli_dock_space(eli_id id, eli_vec2 size, int flags)",
-    "Reserves a rectangular region in the current window as a docking target."
-    " Windows can be dragged into this region or programmatically docked via"
-    " eli_set_next_window_dock_id. A zero size axis fills the available content"
-    " region. Returns the dock-space node id (same as id).\n"
-    "Note: live render shows an empty dock-space region inside the card.",
+    "Docking Playground",
+    "eli_dock_space(id, size, flags) + eli_set_next_window_dock_id(id, cond)",
+    "A live dock area: three real windows (Files, Editor, Output) start docked"
+    " in the space below. Drag a panel's tab to undock it, drag it back over a"
+    " drop zone to re-dock or split the space, or drop it on the center to tab"
+    " panels together. Use \"Reset layout\" to restore the initial layout. The"
+    " space is generous so all five drop zones and the split preview are usable"
+    " inside the card.",
     "/* Each frame, inside your host window: */\n"
-    "eli_id ds_id = eli_get_id(\"MyDockSpace\");\n"
-    "eli_dock_space(ds_id, eli_make_vec2(0.0f, 0.0f), 0);\n"
+    "eli_id ds = eli_get_id(\"MyDockSpace\");\n"
+    "eli_dock_space(ds, eli_make_vec2(560.0f, 340.0f), 0);\n"
     "\n"
-    "/* Dock a window into the space on first use: */\n"
-    "eli_set_next_window_dock_id(ds_id, ELI_COND_FIRST_USE_EVER);\n"
-    "eli_begin(\"Docked Window\", NULL, ELI_WINDOW_NONE);\n"
-    "eli_text(\"I am docked!\");\n"
-    "eli_end();",
-    cheat_render_dock_space
+    "/* Dock each window into the space on first appearance: */\n"
+    "eli_set_next_window_dock_id(ds, ELI_COND_FIRST_USE_EVER);\n"
+    "if (eli_begin(\"Files\", NULL, ELI_WINDOW_NONE))\n"
+    "    eli_text(\"file list...\");\n"
+    "eli_end();\n"
+    "\n"
+    "eli_set_next_window_dock_id(ds, ELI_COND_FIRST_USE_EVER);\n"
+    "if (eli_begin(\"Editor\", NULL, ELI_WINDOW_NONE))\n"
+    "    eli_text(\"source...\");\n"
+    "eli_end();\n"
+    "/* The user drags tabs to undock / split / tab from here. */",
+    cheat_render_dock_playground
 },
 
 {
     "Docking",
-    "Set Next Window Dock ID",
-    "void eli_set_next_window_dock_id(eli_id dock_id, eli_cond cond)",
-    "Requests that the next eli_begin attach the window to an existing dock"
-    " node. Use ELI_COND_FIRST_USE_EVER to dock only on first appearance, or"
-    " ELI_COND_ALWAYS to re-dock every frame. Pass dock_id=0 to detach"
-    " (float) the window.",
-    "eli_id ds_id = eli_get_id(\"MyDockSpace\");\n"
-    "\n"
-    "/* Dock on first appearance only: */\n"
-    "eli_set_next_window_dock_id(ds_id, ELI_COND_FIRST_USE_EVER);\n"
+    "Dock State Query",
+    "eli_id eli_get_window_dock_id(void) / bool eli_is_window_docked(void)",
+    "Inspect a window's docking state from inside its eli_begin/eli_end scope."
+    " eli_get_window_dock_id returns the node id the window is attached to (0"
+    " when floating), and eli_is_window_docked is true when it is docked this"
+    " frame. Pass dock_id=0 to eli_set_next_window_dock_id to detach a window.",
+    "eli_set_next_window_dock_id(ds, ELI_COND_FIRST_USE_EVER);\n"
     "eli_begin(\"My Window\", NULL, ELI_WINDOW_NONE);\n"
-    "/* ... */\n"
-    "eli_end();\n"
     "\n"
-    "/* Query docking state from inside a window: */\n"
-    "bool   docked   = eli_is_window_docked();\n"
-    "eli_id cur_id   = eli_get_window_dock_id(); /* 0 if floating */",
-    cheat_render_set_next_dock_id
+    "/* Query docking state from inside the window: */\n"
+    "bool   docked = eli_is_window_docked();\n"
+    "eli_id cur_id = eli_get_window_dock_id(); /* 0 if floating */\n"
+    "eli_end();",
+    cheat_render_dock_query
 },
 
 {

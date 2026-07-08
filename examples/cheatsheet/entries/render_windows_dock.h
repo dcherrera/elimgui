@@ -9,6 +9,11 @@
  * Include this file before rows_windows_dock.h so the cheat_render_* symbols
  * are already declared when the entry initializers reference them.
  *
+ * The Docking entry is a full interactive playground: it hosts a live
+ * eli_dock_space inside the card and docks three real windows into it, so the
+ * user can drag panel tabs to undock, re-dock, split and tab them together and
+ * SEE docking behave. See cheat_render_dock_playground.
+ *
  * @status Cheatsheet content. Not part of the library.
  * @issues None
  * @todo None
@@ -77,32 +82,120 @@ static void cheat_render_clip_rect(void)
 }
 
 /* ---------------------------------------------------------------------------
- * Docking
+ * Docking Playground
+ *
+ * A live, usable dock area hosted inside the card. eli_dock_space reserves a
+ * region; three real windows ("Files", "Editor", "Output") are docked into it
+ * via eli_set_next_window_dock_id on first appearance. From there the user can
+ * drag a panel's tab to undock it, re-dock it, split the space, or tab panels
+ * back together — the full docking interaction, live.
  * ------------------------------------------------------------------------- */
 
+/* Generous dock area so all five drop zones and split previews are usable. */
+#define CHEAT_DOCK_PG_W 560.0f
+#define CHEAT_DOCK_PG_H 340.0f
+
+/* The three docked panels. "##dockpg" keeps their ids unique to this card while
+ * the tab/title shows only the text before "##". */
+static const char *const cheat_dock_pg_wins[3] = {
+    "Files##dockpg", "Editor##dockpg", "Output##dockpg"
+};
+
+/* Shared, function-static playground state (immediate-mode friendly). */
+static int cheat_dock_pg_selected_file = 0; /* row selected in the Files panel */
+static int cheat_dock_pg_log_lines = 3;     /* lines shown in the Output panel */
+
 /**
- * Creates a fixed-size dock space region. eli_get_id derives a stable id from
- * the current window's id stack. Drag any floating window over the shaded area
- * to dock it.
+ * Restore the initial layout: strip every playground window out of all dock
+ * nodes and point its dock_id back at the root space. Emptied split children get
+ * garbage-collected next frame (the root collapses back to a single leaf), then
+ * the windows re-dock into it as tabs. Called from the "Reset layout" button.
  *
- * Simplification: the live render shows only the empty dock-space region
- * inside the cheatsheet card. The full workflow (eli_dock_space +
- * eli_set_next_window_dock_id) is shown in the snippet.
+ * @param ctx   Current context (non-NULL).
+ * @param root  Root dock-space id to re-home the panels onto.
  */
-static void cheat_render_dock_space(void)
+static void cheat_dock_pg_reset(eli_context *ctx, eli_id root)
 {
-    eli_id   ds_id = eli_get_id("wd_dockspace");
-    eli_vec2 size  = eli_make_vec2(180.0f, 70.0f);
-    eli_dock_space(ds_id, size, 0);
-    eli_text_disabled("(dock space region above)");
+    for (int i = 0; i < 3; i++) {
+        eli_id wid = eli_hash_str(cheat_dock_pg_wins[i], 0);
+        eli_window *win = eli_find_window_by_id(ctx, wid);
+        if (win == NULL)
+            continue;
+        for (int k = 0; k < ctx->dock_nodes_count; k++)
+            eli_dock_node_remove_window(ctx->dock_nodes[k], wid);
+        win->dock_id = root;
+    }
+}
+
+/** Files panel body: a selectable file list driving the shared selection. */
+static void cheat_dock_pg_body_files(void)
+{
+    static const char *files[] = { "main.c", "eli_dock.h", "README.md", "build.sh" };
+    for (int i = 0; i < (int)(sizeof(files) / sizeof(files[0])); i++) {
+        if (eli_selectable(files[i], cheat_dock_pg_selected_file == i,
+                           ELI_SELECTABLE_NONE, eli_make_vec2(0, 0)))
+            cheat_dock_pg_selected_file = i;
+    }
+}
+
+/** Editor panel body: shows the selected file and appends to the Output log. */
+static void cheat_dock_pg_body_editor(void)
+{
+    static const char *files[] = { "main.c", "eli_dock.h", "README.md", "build.sh" };
+    eli_text("Editing: %s", files[cheat_dock_pg_selected_file]);
+    eli_text_wrapped("int main(void) { return 0; }");
+    if (eli_button("Run") && cheat_dock_pg_log_lines < 99)
+        cheat_dock_pg_log_lines++;
+}
+
+/** Output panel body: a small log whose length the Editor's Run button grows. */
+static void cheat_dock_pg_body_output(void)
+{
+    for (int i = 0; i < cheat_dock_pg_log_lines; i++)
+        eli_text("[%02d] build step ok", i);
+    if (eli_button("Clear"))
+        cheat_dock_pg_log_lines = 0;
+}
+
+/** Submit one docked panel window; docks into `root` on first appearance. */
+static void cheat_dock_pg_panel(const char *name, eli_id root, void (*body)(void))
+{
+    eli_set_next_window_dock_id(root, ELI_COND_FIRST_USE_EVER);
+    if (eli_begin(name, NULL, ELI_WINDOW_NONE))
+        body();
+    eli_end();
 }
 
 /**
- * Queries the current window's dock state and displays it as text. Inside the
- * cheatsheet card the window is always a plain child (dock_id == 0, not
- * docked), illustrating the default floating state.
+ * The interactive docking playground. Hosts a dock space in the card and docks
+ * three real windows into it. Drag a panel's tab to undock / re-dock / split /
+ * tab; "Reset layout" restores the initial tabbed layout.
  */
-static void cheat_render_set_next_dock_id(void)
+static void cheat_render_dock_playground(void)
+{
+    eli_context *ctx = eli_get_current_context();
+    if (ctx == NULL)
+        return;
+
+    eli_id root = eli_get_id("cheat_dock_playground_space");
+
+    eli_text_disabled("Drag a panel's tab to dock / undock / split / tab.");
+    if (eli_button("Reset layout"))
+        cheat_dock_pg_reset(ctx, root);
+
+    eli_dock_space(root, eli_make_vec2(CHEAT_DOCK_PG_W, CHEAT_DOCK_PG_H), 0);
+
+    cheat_dock_pg_panel(cheat_dock_pg_wins[0], root, cheat_dock_pg_body_files);
+    cheat_dock_pg_panel(cheat_dock_pg_wins[1], root, cheat_dock_pg_body_editor);
+    cheat_dock_pg_panel(cheat_dock_pg_wins[2], root, cheat_dock_pg_body_output);
+}
+
+/**
+ * Supporting reference: queries the current window's dock state. Inside the
+ * cheatsheet card the host is a plain child (dock_id == 0), illustrating the
+ * floating default and the query API used to inspect docking at runtime.
+ */
+static void cheat_render_dock_query(void)
 {
     eli_id dock_id = eli_get_window_dock_id();
     bool   docked  = eli_is_window_docked();
