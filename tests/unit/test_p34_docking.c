@@ -187,6 +187,45 @@ ELI_TEST(edge_drop_splits_node) {
     eli_destroy_context(ctx);
 }
 
+/* Regression: a split must keep the PRE-EXISTING window docked. The split moved
+ * the window list into a new "keep" child but left the window's dock_id naming
+ * the (now non-leaf) parent, so it floated away one frame later. */
+ELI_TEST(split_keeps_existing_window_docked) {
+    eli_context *ctx = dock_setup();
+
+    frame_begin();
+    submit_dockspace();
+    eli_set_next_window_dock_id(DOCK_ID, 0);
+    eli_begin("Alpha", NULL, 0);
+    eli_end();
+    eli_begin("Beta", NULL, 0);
+    eli_end();
+    frame_end();
+
+    ctx->has_dock_request = true;
+    ctx->dock_request_target = DOCK_ID;
+    ctx->dock_request_window = eli_hash_str("Beta", 0);
+    ctx->dock_request_dir = ELI_DOCK_DIR_RIGHT;
+    frame_begin();
+    submit_dockspace();
+    frame_end();
+
+    /* Alpha (the pre-existing panel) must still be docked into a LEAF node, not
+     * left pointing at the now non-leaf root. */
+    eli_id alpha_id = eli_hash_str("Alpha", 0);
+    eli_window *alpha = NULL;
+    for (int i = 0; i < ctx->windows_count; i++)
+        if (ctx->windows[i]->id == alpha_id) alpha = ctx->windows[i];
+    ELI_ASSERT_NOT_NULL(alpha);
+    ELI_ASSERT_NE(alpha->dock_id, 0u);                         /* not floating */
+
+    eli_dock_node *an = eli_dock_node_find(ctx, alpha->dock_id);
+    ELI_ASSERT_NOT_NULL(an);
+    ELI_ASSERT_TRUE(eli_dock_node_is_leaf(an));                /* docked in a leaf */
+
+    eli_destroy_context(ctx);
+}
+
 ELI_TEST(tab_drag_out_undocks) {
     eli_context *ctx = dock_setup();
 

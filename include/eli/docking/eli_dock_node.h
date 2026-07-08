@@ -297,6 +297,21 @@ static inline eli_dock_node *eli_dock_node_split(eli_context *ctx, eli_dock_node
     node->window_capacity = 0;
     node->selected_window_id = 0;
 
+    /* Repoint the moved windows at the keep child. Their dock_id still names the
+       parent node, which becomes a non-leaf after this split — without this they
+       resolve to a non-leaf node next frame and float away (only the incoming
+       dropped window was being fixed). */
+    for (int wi = 0; wi < keep->window_count; wi++) {
+        eli_id wid = keep->window_ids[wi];
+        for (int i = 0; i < ctx->windows_count; i++) {
+            eli_window *win = ctx->windows[i];
+            if (win != NULL && win->id == wid) {
+                win->dock_id = keep->id;
+                break;
+            }
+        }
+    }
+
     keep->parent = node;
     fresh->parent = node;
     node->split_axis = axis;
