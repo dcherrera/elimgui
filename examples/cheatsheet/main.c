@@ -26,7 +26,8 @@
  * demo's runtime header is reused verbatim. */
 #include "../demo/eli_wasm_runtime.h"
 
-/* Cheatsheet engine + aggregated content registry. */
+/* Cheatsheet engine, design system, and aggregated content registry. */
+#include "cheat_theme.h"
 #include "cheat_engine.h"
 #include "cheat_entries.h"
 
@@ -59,10 +60,7 @@ static void cheat_build_ui(void)
                              ELI_WINDOW_NO_BRING_TO_FRONT_ON_FOCUS;
 
     if (eli_begin("elimgui Cheatsheet", NULL, flags)) {
-        eli_text("elimgui Visual Cheatsheet");
-        eli_same_line(0.0f, -1.0f);
-        eli_text_disabled("- live widgets with copyable eli_*() calls");
-        eli_separator();
+        /* The engine renders its own header (title, count, subtitle, divider). */
         cheat_show(cheat_all_entries, cheat_all_entries_count);
     }
     eli_end();
@@ -81,7 +79,10 @@ JS_EXPORT(js_start)
 void js_start(void)
 {
     g_ctx = eli_create_context();
-    eli_style_colors_dark(&g_ctx->style);
+
+    /* Program the shared style with the cheatsheet design system (dark-mode
+     * role palette + spacing/rounding scale). Seeds the dark base internally. */
+    cheat_theme_apply();
 
     g_atlas = eli_font_atlas_create();
     eli_font_atlas_add_font_default(g_atlas, NULL);

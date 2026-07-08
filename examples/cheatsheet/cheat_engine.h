@@ -10,7 +10,14 @@
  * without symbol collisions; per-frame widget state lives in function-static
  * variables, matching elimgui's immediate-mode model.
  *
- * @status Cheatsheet app engine (stage 1). Not part of the elimgui library API.
+ * Presentation is driven entirely by the design tokens in cheat_theme.h (spacing
+ * scale, dark-mode role palette, rounding), so the look stays consistent with
+ * the global eli_style that cheat_theme_apply() programs. Hierarchy is built
+ * from color + spacing + dividers (there is only one 13px font, so we never lean
+ * on font size) per UI_UX/typography.md and layout-and-spacing.md.
+ *
+ * @status Cheatsheet app engine (stage 2, UI/UX pass). Not part of the elimgui
+ *         library API.
  * @issues None
  * @todo None
  */
@@ -18,6 +25,8 @@
 #define CHEAT_ENGINE_H
 
 #include <eli/elimgui.h>
+
+#include "cheat_theme.h"
 
 /* ---------------------------------------------------------------------------
  * Entry model
@@ -38,55 +47,31 @@ typedef struct cheat_entry {
 } cheat_entry;
 
 /* ---------------------------------------------------------------------------
- * Engine tunables
+ * Engine tunables (all lengths are scale tokens from cheat_theme.h)
  * ------------------------------------------------------------------------- */
 
-#define CHEAT_LEFT_PANE_WIDTH   260.0f   /* fixed width of the category/search column */
-#define CHEAT_SEARCH_CAP        128      /* search box buffer capacity (bytes) */
-#define CHEAT_SNIPPET_CAP       2048     /* per-card snippet display buffer (bytes) */
-#define CHEAT_MAX_CATEGORIES    64       /* distinct categories the left pane lists */
-#define CHEAT_MAX_ENTRY_SLOTS   512      /* per-entry layout-cache slots (card heights) */
-#define CHEAT_CARD_ROUNDING     6.0f     /* card / code-box corner radius (px) */
-#define CHEAT_CARD_PADDING      12.0f    /* inner padding inside each card (px) */
-#define CHEAT_CARD_SPACING      12.0f    /* vertical gap between successive cards (px) */
-#define CHEAT_PANE_PADDING      12.0f    /* inner padding of the two panes (px) */
+#define CHEAT_LEFT_PANE_WIDTH   260.0f          /* sidebar/nav column width (240-320 band) */
+#define CHEAT_SEARCH_CAP        128             /* search box buffer capacity (bytes) */
+#define CHEAT_SNIPPET_CAP       2048            /* per-card snippet display buffer (bytes) */
+#define CHEAT_MAX_CATEGORIES    64              /* distinct categories the left pane lists */
+#define CHEAT_MAX_ENTRY_SLOTS   512             /* per-entry layout-cache slots (card heights) */
+
+#define CHEAT_CARD_ROUNDING     CHEAT_ROUND_CARD  /* card / code-box corner radius (8px) */
+#define CHEAT_CARD_PADDING      CHEAT_SPACE_16     /* inner padding inside each card (16px) */
+#define CHEAT_CARD_SPACING      CHEAT_SPACE_24     /* gap between cards (24px; >= card padding) */
+#define CHEAT_PANE_PADDING      CHEAT_SPACE_12     /* inner padding of each pane (12px) */
+#define CHEAT_PANE_GUTTER       CHEAT_SPACE_16     /* gutter between the two panes (16px) */
+#define CHEAT_CAT_ROW_HEIGHT    28.0f              /* category row height (comfortable-dense, >=24 hit) */
+#define CHEAT_PREVIEW_PADDING   CHEAT_SPACE_8      /* inset padding around a live preview (8px) */
 
 /* ---------------------------------------------------------------------------
- * Presentation palette
- *
- * A small set of named tints keeps the look consistent across the header, the
- * cards, and the code boxes. Backgrounds are resolved through
- * eli_get_color_u32_vec4 so the global style alpha applies uniformly.
+ * Small helpers
  * ------------------------------------------------------------------------- */
 
-/** Bright accent used for titles and highlights. */
-static inline eli_vec4 cheat_accent_vec4(void)
+/** Snap a (non-negative screen) coordinate to a whole pixel to avoid shimmer. */
+static inline float cheat_snap(float v)
 {
-    return eli_make_vec4(0.34f, 0.64f, 1.00f, 1.00f);
-}
-
-/** Filled background of a card (a panel slightly lighter than the window). */
-static inline eli_col32 cheat_card_bg_u32(void)
-{
-    return eli_get_color_u32_vec4(eli_make_vec4(0.15f, 0.16f, 0.19f, 1.00f));
-}
-
-/** Hairline border around cards and inset sub-areas. */
-static inline eli_col32 cheat_card_border_u32(void)
-{
-    return eli_get_color_u32_vec4(eli_make_vec4(0.30f, 0.32f, 0.38f, 1.00f));
-}
-
-/** Inset background behind a live-widget preview (a touch lighter than a card). */
-static inline eli_col32 cheat_preview_bg_u32(void)
-{
-    return eli_get_color_u32_vec4(eli_make_vec4(0.10f, 0.11f, 0.13f, 1.00f));
-}
-
-/** Dark, code-styled background for the copyable snippet box. */
-static inline eli_vec4 cheat_code_bg_vec4(void)
-{
-    return eli_make_vec4(0.07f, 0.075f, 0.09f, 1.00f);
+    return (float)(long)(v + 0.5f);
 }
 
 /* ---------------------------------------------------------------------------
@@ -202,8 +187,47 @@ static inline int cheat_count_matches(const cheat_entry *entries, int count,
 }
 
 /* ---------------------------------------------------------------------------
- * Left pane: search box, clear button, category selectors
+ * Shared building blocks
  * ------------------------------------------------------------------------- */
+
+/**
+ * A small all-caps group label in the lowest (38%) text tier. All-caps section
+ * headers are a typographic hierarchy lever that costs no font size
+ * (typography.md); the low tier keeps them quiet above their content.
+ */
+static inline void cheat_group_label(const char *text)
+{
+    eli_text_colored(cheat_text_lo_vec4(), "%s", text);
+}
+
+/* ---------------------------------------------------------------------------
+ * Sidebar: search field + category navigation
+ *
+ * Nav best-practices (menus-and-navigation.md, data-display.md): a labelled
+ * search with a visible Clear affordance, a "CATEGORIES" group label, rows with
+ * a clear selected state (accent state layer), a neutral hover, comfortable
+ * density, and right-aligned counts so magnitudes line up.
+ * ------------------------------------------------------------------------- */
+
+/** One category row: full-width selectable name + right-aligned match count. */
+static inline bool cheat_category_row(const char *name, int match_count, bool selected)
+{
+    eli_draw_list *dl = eli_get_window_draw_list();
+    bool clicked = eli_selectable(name, selected, ELI_SELECTABLE_NONE,
+                                  eli_make_vec2(0.0f, CHEAT_CAT_ROW_HEIGHT));
+
+    eli_vec2 rmin = eli_get_item_rect_min();
+    eli_vec2 rmax = eli_get_item_rect_max();
+
+    char cnt[16];
+    snprintf(cnt, sizeof(cnt), "%d", match_count);
+    eli_vec2 ts = eli_calc_text_size(cnt, NULL);
+    eli_col32 col = selected ? cheat_accent_u32() : cheat_text_med_u32();
+    eli_vec2 tp = eli_make_vec2(cheat_snap(rmax.x - ts.x - CHEAT_SPACE_8),
+                                cheat_snap(rmin.y + (rmax.y - rmin.y - ts.y) * 0.5f));
+    eli_draw_list_add_text(dl, tp, col, cnt, NULL);
+    return clicked;
+}
 
 /**
  * Render the left column. Reads/writes the persistent `search` buffer and the
@@ -221,53 +245,56 @@ static inline void cheat_render_left_pane(const cheat_entry *entries, int count,
                                           const char **selected_cat)
 {
     eli_vec2 size = eli_make_vec2(CHEAT_LEFT_PANE_WIDTH, 0.0f);
+
+    /* The sidebar is a raised neutral surface (background shift = containment),
+     * with its own comfortable padding and no border. */
+    eli_push_style_color_vec4(ELI_COL_CHILD_BG, cheat_surface_sidebar_vec4());
     eli_push_style_var_vec2(ELI_STYLE_VAR_WINDOW_PADDING,
                             eli_make_vec2(CHEAT_PANE_PADDING, CHEAT_PANE_PADDING));
-    bool open = eli_begin_child("cheat_left", size, ELI_CHILD_BORDERS, ELI_WINDOW_NONE);
+    bool open = eli_begin_child("cheat_left", size, ELI_CHILD_NONE, ELI_WINDOW_NONE);
     eli_pop_style_var(1);
+    eli_pop_style_color(1);
     if (!open) {
         eli_end_child();
         return;
     }
 
-    /* Labelled, full-width search field with a Clear affordance. */
-    eli_text_disabled("SEARCH");
+    /* Search group: label, full-width field with a hint + Clear affordance. */
+    cheat_group_label("SEARCH");
     eli_set_next_item_width(-1.0f);
-    eli_input_text("##search", search, CHEAT_SEARCH_CAP, ELI_INPUT_TEXT_NONE, NULL, NULL);
+    eli_input_text_with_hint("##search", "Filter widgets\xe2\x80\xa6", search, CHEAT_SEARCH_CAP,
+                             ELI_INPUT_TEXT_NONE, NULL, NULL);
     if (eli_button("Clear"))
         search[0] = '\0';
 
-    eli_spacing();
-    eli_separator_text("CATEGORIES");
+    /* Category group: a full-width divider header, then the nav rows. */
+    eli_dummy(eli_make_vec2(0.0f, CHEAT_SPACE_8));
+    cheat_group_label("CATEGORIES");
+    eli_dummy(eli_make_vec2(0.0f, CHEAT_SPACE_2));
 
-    /* Roomier rows and a stronger selected-row highlight than the theme default. */
-    eli_push_style_var_vec2(ELI_STYLE_VAR_ITEM_SPACING, eli_make_vec2(6.0f, 6.0f));
-    eli_push_style_color_vec4(ELI_COL_HEADER, eli_make_vec4(0.26f, 0.55f, 0.95f, 0.55f));
+    /* Tighten the row rhythm so nav reads as one dense group. */
+    eli_push_style_var_vec2(ELI_STYLE_VAR_ITEM_SPACING, eli_make_vec2(CHEAT_SPACE_8, CHEAT_SPACE_2));
 
     int all_n = cheat_count_matches(entries, count, NULL, search);
-    char label[160];
-    snprintf(label, sizeof(label), "All (%d)", all_n);
-    if (eli_selectable(label, *selected_cat == NULL, ELI_SELECTABLE_NONE, eli_make_vec2(0, 0)))
+    if (cheat_category_row("All widgets", all_n, *selected_cat == NULL))
         *selected_cat = NULL;
 
     for (int i = 0; i < cats->count; i++) {
         const char *cat = cats->names[i];
         int n = cheat_count_matches(entries, count, cat, search);
-        snprintf(label, sizeof(label), "%s (%d)", cat, n);
         bool selected = (*selected_cat != NULL && strcmp(*selected_cat, cat) == 0);
         eli_push_id_int(i);
-        if (eli_selectable(label, selected, ELI_SELECTABLE_NONE, eli_make_vec2(0, 0)))
+        if (cheat_category_row(cat, n, selected))
             *selected_cat = cat;
         eli_pop_id();
     }
 
-    eli_pop_style_color(1);
     eli_pop_style_var(1);
     eli_end_child();
 }
 
 /* ---------------------------------------------------------------------------
- * Main pane: one card per matching entry
+ * Cards: one per matching entry (containment + data-display)
  * ------------------------------------------------------------------------- */
 
 /** Estimate the pixel height needed to show `text` as `snippet` lines. */
@@ -282,22 +309,24 @@ static inline float cheat_snippet_height(const char *text)
     return (float)lines * line_h + eli_get_text_line_height();
 }
 
-/** Draw the live widget inside a subtle, bordered inset panel of width `w`. */
+/** Draw the live widget inside a raised, rounded inset panel of width `w`. */
 static inline void cheat_render_preview(const cheat_entry *e, int index, float w)
 {
     static float s_prev_h[CHEAT_MAX_ENTRY_SLOTS];
-    const eli_vec2 pad = eli_make_vec2(8.0f, 6.0f);
+    const eli_vec2 pad = eli_make_vec2(CHEAT_PREVIEW_PADDING, CHEAT_PREVIEW_PADDING);
     bool track = (index >= 0 && index < CHEAT_MAX_ENTRY_SLOTS);
 
     eli_draw_list *dl = eli_get_window_draw_list();
     eli_vec2 q0 = eli_get_cursor_screen_pos();
+    q0 = eli_make_vec2(cheat_snap(q0.x), cheat_snap(q0.y));
     float body_h = (track && s_prev_h[index] > 0.0f) ? s_prev_h[index]
                                                      : eli_get_frame_height();
-    eli_vec2 q1 = eli_make_vec2(q0.x + w, q0.y + body_h + pad.y * 2.0f);
-    eli_draw_list_add_rect_filled(dl, q0, q1, cheat_preview_bg_u32(), 4.0f,
+    eli_vec2 q1 = eli_make_vec2(cheat_snap(q0.x + w), cheat_snap(q0.y + body_h + pad.y * 2.0f));
+
+    /* Raised inset via a lighter surface (elevation = lightness); no border
+     * needed — the background shift alone signifies the live area. */
+    eli_draw_list_add_rect_filled(dl, q0, q1, cheat_surface_inset_u32(), CHEAT_ROUND_INSET,
                                   ELI_DRAW_ROUND_CORNERS_ALL);
-    eli_draw_list_add_rect(dl, q0, q1, cheat_card_border_u32(), 4.0f,
-                           ELI_DRAW_ROUND_CORNERS_ALL, 1.0f);
 
     eli_set_cursor_screen_pos(eli_make_vec2(q0.x + pad.x, q0.y + pad.y));
     eli_push_item_width(w - pad.x * 2.0f);
@@ -315,19 +344,28 @@ static inline void cheat_render_preview(const cheat_entry *e, int index, float w
 /** Render the card interior (title, api, description, preview, snippet) at width `w`. */
 static inline void cheat_render_card_body(const cheat_entry *e, int index, float w)
 {
+    /* Reads top-down: title (accent, primary) -> API (secondary) -> description
+     * (muted) -> live preview -> code snippet. Hierarchy from color, not size. */
     eli_text_colored(cheat_accent_vec4(), "%s", e->title ? e->title : "(untitled)");
+
     if (e->api)
-        eli_text_disabled("%s", e->api);
+        eli_text_colored(cheat_text_med_vec4(), "%s", e->api);
+
     if (e->description) {
-        eli_spacing();
+        eli_dummy(eli_make_vec2(0.0f, CHEAT_SPACE_2));
+        eli_push_style_color_vec4(ELI_COL_TEXT, cheat_text_med_vec4());
         eli_text_wrapped("%s", e->description);
+        eli_pop_style_color(1);
     }
 
-    eli_spacing();
+    eli_dummy(eli_make_vec2(0.0f, CHEAT_SPACE_4));
     cheat_render_preview(e, index, w);
 
     if (e->snippet) {
-        eli_spacing();
+        eli_dummy(eli_make_vec2(0.0f, CHEAT_SPACE_8));
+        cheat_group_label("SNIPPET");
+        eli_dummy(eli_make_vec2(0.0f, CHEAT_SPACE_2));
+
         char buf[CHEAT_SNIPPET_CAP];
         size_t n = strlen(e->snippet);
         if (n >= sizeof(buf))
@@ -335,20 +373,22 @@ static inline void cheat_render_card_body(const cheat_entry *e, int index, float
         memcpy(buf, e->snippet, n);
         buf[n] = '\0';
 
-        eli_push_style_color_vec4(ELI_COL_FRAME_BG, cheat_code_bg_vec4());
+        /* Distinct sunken code surface (near-black), read-only. */
+        eli_push_style_color_vec4(ELI_COL_FRAME_BG, cheat_code_vec4());
         eli_vec2 box = eli_make_vec2(w, cheat_snippet_height(buf));
         eli_input_text_multiline("##snippet", buf, sizeof(buf), box,
                                  ELI_INPUT_TEXT_READ_ONLY, NULL, NULL);
         eli_pop_style_color(1);
+
         if (eli_button("Copy"))
             eli_set_clipboard_text(e->snippet);
     }
 }
 
 /**
- * Render one entry as a rounded, filled card: a panel background sits behind the
- * padded content (title, API signature, description, a framed live-widget
- * preview, and a code-styled snippet box with a Copy button).
+ * Render one entry as a rounded, filled card: a raised panel background sits
+ * behind the padded content (title, API signature, description, a framed
+ * live-widget preview, and a code-styled snippet box with a Copy button).
  *
  * The card height is measured each frame and reused on the next so the
  * background rectangle — which must be drawn before the content to sit behind it
@@ -367,14 +407,17 @@ static inline void cheat_render_card(const cheat_entry *e, int index)
 
     eli_draw_list *dl = eli_get_window_draw_list();
     eli_vec2 p0 = eli_get_cursor_screen_pos();
+    p0 = eli_make_vec2(cheat_snap(p0.x), cheat_snap(p0.y));
     float avail_w = eli_get_content_region_avail().x;
     float est = eli_get_text_line_height_with_spacing() * 9.0f;
     float card_h = (track && s_card_h[index] > 0.0f) ? s_card_h[index] : est;
-    eli_vec2 p1 = eli_make_vec2(p0.x + avail_w, p0.y + card_h);
-    eli_draw_list_add_rect_filled(dl, p0, p1, cheat_card_bg_u32(), CHEAT_CARD_ROUNDING,
+    eli_vec2 p1 = eli_make_vec2(cheat_snap(p0.x + avail_w), cheat_snap(p0.y + card_h));
+
+    /* Raised card surface + a faint hairline for figure-ground crispness. */
+    eli_draw_list_add_rect_filled(dl, p0, p1, cheat_surface_card_u32(), CHEAT_CARD_ROUNDING,
                                   ELI_DRAW_ROUND_CORNERS_ALL);
-    eli_draw_list_add_rect(dl, p0, p1, cheat_card_border_u32(), CHEAT_CARD_ROUNDING,
-                           ELI_DRAW_ROUND_CORNERS_ALL, 1.0f);
+    eli_draw_list_add_rect(dl, p0, p1, cheat_border_faint_u32(), CHEAT_CARD_ROUNDING,
+                           ELI_DRAW_ROUND_CORNERS_ALL, CHEAT_BORDER_SIZE);
 
     /* Inset the content by the padding and wrap text to the inner width. */
     float pad = CHEAT_CARD_PADDING;
@@ -395,9 +438,19 @@ static inline void cheat_render_card(const cheat_entry *e, int index)
     eli_pop_id();
 }
 
+/** Empty state: name the miss and point at the recovery (feedback-and-states.md). */
+static inline void cheat_render_empty_state(const cheat_filter *f)
+{
+    eli_dummy(eli_make_vec2(0.0f, CHEAT_SPACE_16));
+    eli_text_colored(cheat_text_hi_vec4(), "No widgets match your filter.");
+    if (f->search != NULL && f->search[0] != '\0')
+        eli_text_colored(cheat_text_med_vec4(), "No results for \"%s\".", f->search);
+    eli_text_colored(cheat_text_med_vec4(),
+                     "Try a different term, or press Clear in the sidebar.");
+}
+
 /**
- * Render the scrollable main pane, one card per matching entry, with separators
- * between cards.
+ * Render the scrollable main pane, one card per matching entry.
  *
  * @param entries Full entry array.
  * @param count   Number of entries.
@@ -406,10 +459,13 @@ static inline void cheat_render_card(const cheat_entry *e, int index)
 static inline void cheat_render_main_pane(const cheat_entry *entries, int count,
                                           const cheat_filter *f)
 {
-    eli_same_line(0.0f, -1.0f);
+    eli_same_line(0.0f, CHEAT_PANE_GUTTER);
+
+    /* Content pane is transparent (reads as the base window field); cards float
+     * on it. No border — space + surface shift do the separating. */
     eli_push_style_var_vec2(ELI_STYLE_VAR_WINDOW_PADDING,
                             eli_make_vec2(CHEAT_PANE_PADDING, CHEAT_PANE_PADDING));
-    bool open = eli_begin_child("cheat_main", eli_make_vec2(0.0f, 0.0f), ELI_CHILD_BORDERS,
+    bool open = eli_begin_child("cheat_main", eli_make_vec2(0.0f, 0.0f), ELI_CHILD_NONE,
                                 ELI_WINDOW_NONE);
     eli_pop_style_var(1);
     if (!open) {
@@ -426,7 +482,7 @@ static inline void cheat_render_main_pane(const cheat_entry *entries, int count,
     }
 
     if (shown == 0)
-        eli_text_disabled("No widgets match your search.");
+        cheat_render_empty_state(f);
 
     eli_end_child();
 }
@@ -436,21 +492,34 @@ static inline void cheat_render_main_pane(const cheat_entry *entries, int count,
  * ------------------------------------------------------------------------- */
 
 /**
- * Render the accent title, a one-line subtitle, and the live entry counts above
- * the two panes.
+ * Render the accent title, a right-aligned live count, a one-line subtitle, and
+ * a divider above the two panes. Strong hierarchy from color + spacing.
  *
  * @param total Total number of registered entries.
  * @param shown Number of entries matching the active filter.
  */
 static inline void cheat_render_header(int total, int shown)
 {
+    eli_draw_list *dl = eli_get_window_draw_list();
+    eli_vec2 hp = eli_get_cursor_screen_pos();
+    float avail = eli_get_content_region_avail().x;
+
+    /* Title (primary, accent) on the left; live "N of M" count right-aligned on
+     * the same baseline in the secondary tier. */
     eli_text_colored(cheat_accent_vec4(), "elimgui Visual Cheatsheet");
-    eli_same_line(0.0f, 10.0f);
-    eli_text_disabled("%d of %d widgets", shown, total);
-    eli_text_disabled("Live widgets paired with the exact eli_*() call and a copyable snippet.");
-    eli_spacing();
+
+    char cnt[64];
+    snprintf(cnt, sizeof(cnt), "%d of %d widgets", shown, total);
+    eli_vec2 ts = eli_calc_text_size(cnt, NULL);
+    eli_vec2 tp = eli_make_vec2(cheat_snap(hp.x + avail - ts.x), cheat_snap(hp.y));
+    eli_draw_list_add_text(dl, tp, cheat_text_med_u32(), cnt, NULL);
+
+    /* Subtitle (secondary), then a full-width hairline divider. */
+    eli_text_colored(cheat_text_med_vec4(),
+                     "Live widgets paired with the exact eli_*() call and a copyable snippet.");
+    eli_dummy(eli_make_vec2(0.0f, CHEAT_SPACE_4));
     eli_separator();
-    eli_spacing();
+    eli_dummy(eli_make_vec2(0.0f, CHEAT_SPACE_8));
 }
 
 /* ---------------------------------------------------------------------------
