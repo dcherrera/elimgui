@@ -40,6 +40,18 @@ run_tests() {
     exec "${SCRIPT_DIR}/tests/run_tests.sh" "$@"
 }
 
+# Build + run the headless cheatsheet dogfooding harness natively (host libc via
+# the ELI_TEST_HOSTED seam) — diagnoses UI behavior without a browser.
+build_dogfood() {
+    local HOST_CC="${CC_HOST:-cc}"
+    mkdir -p "${SCRIPT_DIR}/tests/build"
+    "${HOST_CC}" -std=c11 -g -DELI_TEST_HOSTED \
+        -I"${SCRIPT_DIR}/include" -I"${SCRIPT_DIR}/vendor" -I"${SCRIPT_DIR}/examples/cheatsheet" \
+        "${SCRIPT_DIR}/examples/cheatsheet/dogfood.c" \
+        -o "${SCRIPT_DIR}/tests/build/dogfood" || return 1
+    "${SCRIPT_DIR}/tests/build/dogfood"
+}
+
 build_demo() {
     echo "Building demo..."
     mkdir -p "${SCRIPT_DIR}/web"
@@ -78,6 +90,9 @@ case "${1:-help}" in
         ;;
     cheatsheet)
         build_cheatsheet
+        ;;
+    dogfood)
+        build_dogfood
         ;;
     test)
         shift || true
