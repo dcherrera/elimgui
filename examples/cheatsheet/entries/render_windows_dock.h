@@ -179,7 +179,10 @@ static void cheat_render_dock_playground(void)
 
     eli_id root = eli_get_id("cheat_dock_playground_space");
 
-    eli_text_disabled("Drag a panel's tab to dock / undock / split / tab.");
+    eli_text_disabled("Drag a tab out to float it, then drag it back over the dock.");
+    eli_text_disabled("Drop zones activate near the edges and center - aim for them:");
+    eli_bullet_text("Center or tab bar   =  add as a TAB");
+    eli_bullet_text("Left / right / bottom edge  =  SPLIT there");
     if (eli_button("Reset layout"))
         cheat_dock_pg_reset(ctx, root);
 
