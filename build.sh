@@ -17,7 +17,10 @@ else
     CC="clang"
 fi
 
-CFLAGS="--target=wasm32 -nostdlib -I${JACLIBC_PATH}/include -I${SCRIPT_DIR}/include -I${SCRIPT_DIR}/vendor -O2"
+# -Os: size-conscious default (~18% smaller wasm than -O2) with balanced runtime
+# performance — a good fit for a browser-delivered, header-only library. For the
+# smallest possible binary (~42% under -O2) at some runtime cost, use -Oz instead.
+CFLAGS="--target=wasm32 -nostdlib -I${JACLIBC_PATH}/include -I${SCRIPT_DIR}/include -I${SCRIPT_DIR}/vendor -Os"
 LDFLAGS="-Wl,--no-entry -Wl,--export-dynamic"
 
 usage() {
@@ -25,10 +28,15 @@ usage() {
     echo ""
     echo "Commands:"
     echo "  demo      Build the demo example"
+    echo "  test      Build and run native unit tests (tests/run_tests.sh)"
     echo "  clean     Remove build artifacts"
     echo "  serve     Start local dev server"
     echo "  help      Show this help"
     echo ""
+}
+
+run_tests() {
+    exec "${SCRIPT_DIR}/tests/run_tests.sh" "$@"
 }
 
 build_demo() {
@@ -44,6 +52,7 @@ clean() {
     echo "Cleaning..."
     rm -f "${SCRIPT_DIR}/web/"*.wasm
     rm -f "${SCRIPT_DIR}/"*.o
+    rm -rf "${SCRIPT_DIR}/tests/build"
     echo "Done."
 }
 
@@ -56,6 +65,10 @@ serve() {
 case "${1:-help}" in
     demo)
         build_demo
+        ;;
+    test)
+        shift || true
+        run_tests "$@"
         ;;
     clean)
         clean

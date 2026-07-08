@@ -1,42 +1,67 @@
 # Project Guidelines
 
+## Coding Standards (READ FIRST)
+
+**Before writing any code, read `coding-best-practices.md` at the repo root.** It defines
+mandatory conventions for every file: file-header doc blocks (`@file`/`@brief`/`@status`/
+`@issues`/`@todo`), function documentation on every public API, `sizeof(*ptr)`, const
+correctness, K&R braces (brace on next line for function definitions), 4-space indent,
+descriptive names, and the **hard rules below**. Those override defaults.
+
+- **Files stay under ~1000 lines of code** (comments/doc blocks don't count). Split a
+  module into multiple headers before it grows past that.
+- **Categorical nesting by domain** — group headers into subdirectories, not one flat pile.
+- **Header-only** remains the model (WASM single-TU), but each header is small, focused,
+  and library-extractable. Header guards use the `ELI_` prefix (e.g. `ELI_CORE_TYPES_H`).
+
 ## Project Structure
+
+Header-only, but organized into **categorical subdirectories** under `include/eli/`. Each
+phase populates its category. `elimgui.h` is the umbrella that includes every category header
+so `#include <eli/elimgui.h>` pulls in the whole library.
 
 ```
 elimgui/
-├── CLAUDE.md             # AI assistant guidelines
-├── build_spec.md         # Full project specification
-├── build_plan.md         # Phased task checklist
-├── build.sh              # Build script
-├── .gitignore
+├── CLAUDE.md                 # AI assistant guidelines
+├── coding-best-practices.md  # Mandatory coding conventions (read first)
+├── build_spec.md             # Full project specification
+├── build_plan.md             # Phased task checklist
+├── build.sh                  # Build script
 ├── include/
 │   └── eli/
-│       ├── elimgui.h     # Master include, core types
-│       ├── eli_draw.h    # Draw primitives
-│       ├── eli_widgets.h # All widgets
-│       ├── eli_layout.h  # Layout system
-│       ├── eli_input.h   # Input handling
-│       ├── eli_font.h    # Font system
-│       ├── eli_style.h   # Styling
-│       ├── eli_tables.h  # Table widget
-│       └── eli_docking.h # Docking system (future)
-├── docs/
-│   ├── README.md         # Documentation index/table of contents
-│   ├── core-types.md     # Phase 1: Foundation & Core Types
-│   ├── draw-system.md    # Phase 2: Draw System
-│   ├── font-system.md    # Phase 3: Font System
-│   └── ...               # Additional docs per phase
+│       ├── elimgui.h         # Umbrella include (pulls in all category headers)
+│       ├── core/             # Phase 1  — types, enums, context, IO, frame lifecycle
+│       ├── draw/             # Phase 2  — draw list, primitives, paths, channels
+│       ├── font/             # Phase 3  — atlas, glyph ranges, text render, embedded font
+│       ├── input/            # Phase 4  — mouse, keyboard, text input, backend events
+│       ├── id/               # Phase 5  — ID hashing/stack, active-hot id, storage
+│       ├── style/            # Phase 6  — style struct, themes, stacks, color utils
+│       ├── window/           # Phase 7  — window lifecycle, interaction, scrolling
+│       ├── layout/           # Phase 8  — cursor, layout helpers, groups, sizing
+│       ├── widgets/          # Phases 9-24 — one small header per widget family
+│       ├── interaction/      # Phases 21,25 — drag&drop, disabling, clipping, focus
+│       ├── util/             # Phases 26-29 — list clipper, misc, settings, logging, memory
+│       ├── demo/             # Phase 30 — demo window, debug tools
+│       └── docking/          # Phase 34 — docking system (future)
+├── docs/                     # One doc per phase (created by each phase's Documentation task)
+│   └── README.md             # Documentation index/table of contents
 ├── examples/
-│   └── demo/             # Full widget demo
-├── tests/
+│   └── demo/                 # Full widget demo
+├── tests/                    # Mirrors src structure (Phase 32)
 ├── web/
-│   ├── elimgui.js        # WASM loader
-│   └── index.html        # Demo shell
+│   ├── elimgui.js            # WASM loader
+│   └── index.html            # Demo shell
 ├── vendor/
-│   └── jaclibc/          # JAClibc submodule (git submodule)
-└── reference/            # Dear ImGui clone (gitignored)
+│   ├── jaclibc/              # JAClibc submodule (git submodule)
+│   └── stb/                  # stb_truetype.h + stb_rect_pack.h (vendored)
+└── reference/                # Dear ImGui clone (gitignored)
     └── imgui/
 ```
+
+Within a category, split by concern and keep each header small, e.g. `draw/` →
+`eli_draw_types.h`, `eli_draw_list.h`, `eli_draw_prim.h`, `eli_draw_path.h`,
+`eli_draw_channels.h`. A category may expose an aggregator header (e.g. `draw/eli_draw.h`)
+that includes its siblings; `elimgui.h` includes the aggregators.
 
 ## Terminology
 
