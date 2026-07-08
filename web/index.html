@@ -1,29 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>elimgui Demo</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #1a1a1a;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        canvas {
-            border: 1px solid #333;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>elimgui - C11 / WASM Demo</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="canvas" width="1280" height="720"></canvas>
+    <canvas id="canvas"></canvas>
     <script src="elimgui.js"></script>
     <script>
-        loadElimgui('demo.wasm').then(() => {
-            console.log('elimgui loaded');
+        loadElimgui('demo.wasm').catch((err) => {
+            console.error('Failed to load elimgui demo:', err);
+            document.body.innerHTML =
+                '<pre class="load-error">Failed to load demo.wasm\n' + err + '</pre>';
         });
     </script>
 </body>

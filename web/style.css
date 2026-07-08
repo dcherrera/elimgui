@@ -1,0 +1,35 @@
+/**
+ * @file style.css
+ * @description Full-window shell styling for the elimgui demo canvas.
+ *
+ * @status In use.
+ * @issues None
+ * @todo None
+ */
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #2d2d2d;
+    /* elimgui draws its own cursor-less UI; keep a default arrow. */
+    font-family: system-ui, sans-serif;
+}
+
+#canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    /* Crisp text: no browser smoothing of the canvas element itself. */
+    image-rendering: auto;
+    touch-action: none;
+}
+
+.load-error {
+    color: #ff6b6b;
+    padding: 24px;
+    font-size: 14px;
+    white-space: pre-wrap;
+}

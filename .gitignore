@@ -20,3 +20,6 @@ Thumbs.db
 
 # Debug
 *.dSYM/
+
+# Test build artifacts
+tests/build/

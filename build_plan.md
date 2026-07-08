@@ -6,7 +6,7 @@ Each phase ends with a documentation task to create/update API docs in the `docs
 
 ---
 
-## Phase 1: Foundation & Core Types ✓
+## Phase 1: Foundation & Core Types
 
 Core types, context management, and basic infrastructure.
 
@@ -36,6 +36,10 @@ Core types, context management, and basic infrastructure.
 - [x] Implement eli_render()
 - [x] Implement eli_get_draw_data()
 
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
+
 ### Documentation
 - [x] Create `docs/README.md` with table of contents structure
 - [x] Create `docs/core-types.md` documenting core types, context, and frame lifecycle
@@ -43,7 +47,7 @@ Core types, context management, and basic infrastructure.
 
 ---
 
-## Phase 2: Draw System ✓
+## Phase 2: Draw System
 
 Draw list, draw commands, and primitive rendering.
 
@@ -128,13 +132,17 @@ Draw list, draw commands, and primitive rendering.
 - [x] Implement eli_draw_list_add_draw_cmd()
 - [x] Implement eli_draw_list_clone_output()
 
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
+
 ### Documentation
 - [x] Create `docs/draw-system.md` documenting draw lists, primitives, paths, and channels
 - [x] Add draw-system link to docs/README.md index
 
 ---
 
-## Phase 3: Font System ✓
+## Phase 3: Font System
 
 Font loading, atlas generation, and text rendering.
 
@@ -180,13 +188,17 @@ Font loading, atlas generation, and text rendering.
 - [x] Implement eli_get_font_size()
 - [x] Implement eli_get_font_tex_uv_white_pixel()
 
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
+
 ### Documentation
 - [x] Create `docs/font-system.md` documenting font atlas, glyph ranges, and text rendering
 - [x] Add font-system link to docs/README.md index
 
 ---
 
-## Phase 4: Input System ✓
+## Phase 4: Input System
 
 Mouse, keyboard, and input handling.
 
@@ -245,6 +257,10 @@ Mouse, keyboard, and input handling.
 - [x] Implement eli_input_update_begin_frame()
 - [x] Implement eli_input_update_end_frame()
 
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
+
 ### Documentation
 - [x] Create `docs/input-system.md` documenting mouse, keyboard, text input, and shortcuts
 - [x] Add input-system link to docs/README.md index
@@ -256,36 +272,40 @@ Mouse, keyboard, and input handling.
 Widget identity, hashing, and state management.
 
 ### ID Hashing
-- [ ] Implement ID hashing algorithm (CRC32 or similar)
-- [ ] Implement `##` separator parsing for hidden IDs
-- [ ] Implement `###` separator for stable IDs
+- [x] Implement ID hashing algorithm (CRC32 or similar)
+- [x] Implement `##` separator parsing for hidden IDs
+- [x] Implement `###` separator for stable IDs
 
 ### ID Stack
-- [ ] Implement eli_push_id()
-- [ ] Implement eli_push_id_str()
-- [ ] Implement eli_push_id_ptr()
-- [ ] Implement eli_push_id_int()
-- [ ] Implement eli_pop_id()
-- [ ] Implement eli_get_id()
-- [ ] Implement eli_get_id_str()
-- [ ] Implement eli_get_id_ptr()
-- [ ] Implement eli_get_id_int()
+- [x] Implement eli_push_id()
+- [x] Implement eli_push_id_str()
+- [x] Implement eli_push_id_ptr()
+- [x] Implement eli_push_id_int()
+- [x] Implement eli_pop_id()
+- [x] Implement eli_get_id()
+- [x] Implement eli_get_id_str()
+- [x] Implement eli_get_id_ptr()
+- [x] Implement eli_get_id_int()
 
 ### Active/Hot ID
-- [ ] Implement active_id tracking
-- [ ] Implement hot_id tracking
-- [ ] Implement eli_set_active_id() (internal)
-- [ ] Implement eli_clear_active_id() (internal)
+- [x] Implement active_id tracking
+- [x] Implement hot_id tracking
+- [x] Implement eli_set_active_id() (internal)
+- [x] Implement eli_clear_active_id() (internal)
 
 ### Storage
-- [ ] Define eli_storage structure
-- [ ] Implement eli_storage operations (get/set int/float/ptr)
-- [ ] Implement eli_set_state_storage()
-- [ ] Implement eli_get_state_storage()
+- [x] Define eli_storage structure
+- [x] Implement eli_storage operations (get/set int/float/ptr)
+- [x] Implement eli_set_state_storage()
+- [x] Implement eli_get_state_storage()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/id-system.md` documenting ID hashing, ID stack, and state storage
-- [ ] Add id-system link to docs/README.md index
+- [x] Create `docs/id-system.md` documenting ID hashing, ID stack, and state storage
+- [x] Add id-system link to docs/README.md index
 
 ---
 
@@ -294,43 +314,47 @@ Widget identity, hashing, and state management.
 Colors, sizing, and theming.
 
 ### Style Structure
-- [ ] Create `eli_style.h`
-- [ ] Implement full eli_style structure (60+ properties)
-- [ ] Define all ELI_COL_* indices
-- [ ] Define all ELI_STYLE_VAR_* indices
+- [x] Create `eli_style.h`
+- [x] Implement full eli_style structure (60+ properties)
+- [x] Define all ELI_COL_* indices
+- [x] Define all ELI_STYLE_VAR_* indices
 
 ### Style Functions
-- [ ] Implement eli_get_style()
-- [ ] Implement eli_style_colors_dark()
-- [ ] Implement eli_style_colors_light()
-- [ ] Implement eli_style_colors_classic()
+- [x] Implement eli_get_style()
+- [x] Implement eli_style_colors_dark()
+- [x] Implement eli_style_colors_light()
+- [x] Implement eli_style_colors_classic()
 
 ### Style Stack
-- [ ] Implement eli_push_style_color()
-- [ ] Implement eli_push_style_color_vec4()
-- [ ] Implement eli_pop_style_color()
-- [ ] Implement eli_push_style_var()
-- [ ] Implement eli_push_style_var_vec2()
-- [ ] Implement eli_pop_style_var()
+- [x] Implement eli_push_style_color()
+- [x] Implement eli_push_style_color_vec4()
+- [x] Implement eli_pop_style_color()
+- [x] Implement eli_push_style_var()
+- [x] Implement eli_push_style_var_vec2()
+- [x] Implement eli_pop_style_var()
 
 ### Item Flags
-- [ ] Implement eli_push_item_flag()
-- [ ] Implement eli_pop_item_flag()
+- [x] Implement eli_push_item_flag()
+- [x] Implement eli_pop_item_flag()
 
 ### Color Utilities
-- [ ] Implement eli_get_color_u32()
-- [ ] Implement eli_get_color_u32_vec4()
-- [ ] Implement eli_get_color_u32_col32()
-- [ ] Implement eli_get_style_color_vec4()
-- [ ] Implement eli_get_style_color_name()
-- [ ] Implement eli_color_convert_u32_to_float4()
-- [ ] Implement eli_color_convert_float4_to_u32()
-- [ ] Implement eli_color_convert_rgb_to_hsv()
-- [ ] Implement eli_color_convert_hsv_to_rgb()
+- [x] Implement eli_get_color_u32()
+- [x] Implement eli_get_color_u32_vec4()
+- [x] Implement eli_get_color_u32_col32()
+- [x] Implement eli_get_style_color_vec4()
+- [x] Implement eli_get_style_color_name()
+- [x] Implement eli_color_convert_u32_to_float4()
+- [x] Implement eli_color_convert_float4_to_u32()
+- [x] Implement eli_color_convert_rgb_to_hsv()
+- [x] Implement eli_color_convert_hsv_to_rgb()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/style-system.md` documenting styles, colors, theming, and color utilities
-- [ ] Add style-system link to docs/README.md index
+- [x] Create `docs/style-system.md` documenting styles, colors, theming, and color utilities
+- [x] Add style-system link to docs/README.md index
 
 ---
 
@@ -339,70 +363,74 @@ Colors, sizing, and theming.
 Window management and rendering.
 
 ### Window Structure
-- [ ] Define eli_window structure
-- [ ] Implement window storage in context
-- [ ] Implement window lookup by name/ID
+- [x] Define eli_window structure
+- [x] Implement window storage in context
+- [x] Implement window lookup by name/ID
 
 ### Window Lifecycle
-- [ ] Implement eli_begin()
-- [ ] Implement eli_end()
-- [ ] Implement window creation/retrieval
-- [ ] Implement window title bar rendering
-- [ ] Implement window background
-- [ ] Implement window border
+- [x] Implement eli_begin()
+- [x] Implement eli_end()
+- [x] Implement window creation/retrieval
+- [x] Implement window title bar rendering
+- [x] Implement window background
+- [x] Implement window border
 
 ### Window Interaction
-- [ ] Implement window move (drag title bar)
-- [ ] Implement window resize (drag edges/corners)
-- [ ] Implement window focus/z-order
-- [ ] Implement window collapse
-- [ ] Implement all window flags
+- [x] Implement window move (drag title bar)
+- [x] Implement window resize (drag edges/corners)
+- [x] Implement window focus/z-order
+- [x] Implement window collapse
+- [x] Implement all window flags
 
 ### Window State Queries
-- [ ] Implement eli_is_window_appearing()
-- [ ] Implement eli_is_window_collapsed()
-- [ ] Implement eli_is_window_focused()
-- [ ] Implement eli_is_window_hovered()
-- [ ] Implement eli_get_window_draw_list()
-- [ ] Implement eli_get_window_pos()
-- [ ] Implement eli_get_window_size()
-- [ ] Implement eli_get_window_width()
-- [ ] Implement eli_get_window_height()
+- [x] Implement eli_is_window_appearing()
+- [x] Implement eli_is_window_collapsed()
+- [x] Implement eli_is_window_focused()
+- [x] Implement eli_is_window_hovered()
+- [x] Implement eli_get_window_draw_list()
+- [x] Implement eli_get_window_pos()
+- [x] Implement eli_get_window_size()
+- [x] Implement eli_get_window_width()
+- [x] Implement eli_get_window_height()
 
 ### Window Manipulation
-- [ ] Implement eli_set_next_window_pos()
-- [ ] Implement eli_set_next_window_size()
-- [ ] Implement eli_set_next_window_size_constraints()
-- [ ] Implement eli_set_next_window_content_size()
-- [ ] Implement eli_set_next_window_collapsed()
-- [ ] Implement eli_set_next_window_focus()
-- [ ] Implement eli_set_next_window_scroll()
-- [ ] Implement eli_set_next_window_bg_alpha()
-- [ ] Implement eli_set_window_pos() variants
-- [ ] Implement eli_set_window_size() variants
-- [ ] Implement eli_set_window_collapsed() variants
-- [ ] Implement eli_set_window_focus() variants
-- [ ] Implement eli_set_window_font_scale()
+- [x] Implement eli_set_next_window_pos()
+- [x] Implement eli_set_next_window_size()
+- [x] Implement eli_set_next_window_size_constraints()
+- [x] Implement eli_set_next_window_content_size()
+- [x] Implement eli_set_next_window_collapsed()
+- [x] Implement eli_set_next_window_focus()
+- [x] Implement eli_set_next_window_scroll()
+- [x] Implement eli_set_next_window_bg_alpha()
+- [x] Implement eli_set_window_pos() variants
+- [x] Implement eli_set_window_size() variants
+- [x] Implement eli_set_window_collapsed() variants
+- [x] Implement eli_set_window_focus() variants
+- [x] Implement eli_set_window_font_scale()
 
 ### Child Windows
-- [ ] Implement eli_begin_child()
-- [ ] Implement eli_begin_child_id()
-- [ ] Implement eli_end_child()
+- [x] Implement eli_begin_child()
+- [x] Implement eli_begin_child_id()
+- [x] Implement eli_end_child()
 
 ### Scrolling
-- [ ] Implement scroll state per window
-- [ ] Implement eli_get_scroll_x/y()
-- [ ] Implement eli_set_scroll_x/y()
-- [ ] Implement eli_get_scroll_max_x/y()
-- [ ] Implement eli_set_scroll_here_x/y()
-- [ ] Implement eli_set_scroll_from_pos_x/y()
-- [ ] Implement vertical scrollbar
-- [ ] Implement horizontal scrollbar
-- [ ] Implement mouse wheel scrolling
+- [x] Implement scroll state per window
+- [x] Implement eli_get_scroll_x/y()
+- [x] Implement eli_set_scroll_x/y()
+- [x] Implement eli_get_scroll_max_x/y()
+- [x] Implement eli_set_scroll_here_x/y()
+- [x] Implement eli_set_scroll_from_pos_x/y()
+- [x] Implement vertical scrollbar
+- [x] Implement horizontal scrollbar
+- [x] Implement mouse wheel scrolling
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/windows.md` documenting window lifecycle, flags, child windows, and scrolling
-- [ ] Add windows link to docs/README.md index
+- [x] Create `docs/windows.md` documenting window lifecycle, flags, child windows, and scrolling
+- [x] Add windows link to docs/README.md index
 
 ---
 
@@ -411,56 +439,60 @@ Window management and rendering.
 Positioning, sizing, and layout helpers.
 
 ### Cursor
-- [ ] Create `eli_layout.h`
-- [ ] Implement cursor position tracking
-- [ ] Implement eli_get_cursor_pos()
-- [ ] Implement eli_get_cursor_pos_x/y()
-- [ ] Implement eli_set_cursor_pos()
-- [ ] Implement eli_set_cursor_pos_x/y()
-- [ ] Implement eli_get_cursor_start_pos()
-- [ ] Implement eli_get_cursor_screen_pos()
-- [ ] Implement eli_set_cursor_screen_pos()
+- [x] Create `eli_layout.h`
+- [x] Implement cursor position tracking
+- [x] Implement eli_get_cursor_pos()
+- [x] Implement eli_get_cursor_pos_x/y()
+- [x] Implement eli_set_cursor_pos()
+- [x] Implement eli_set_cursor_pos_x/y()
+- [x] Implement eli_get_cursor_start_pos()
+- [x] Implement eli_get_cursor_screen_pos()
+- [x] Implement eli_set_cursor_screen_pos()
 
 ### Layout Helpers
-- [ ] Implement eli_separator()
-- [ ] Implement eli_same_line()
-- [ ] Implement eli_new_line()
-- [ ] Implement eli_spacing()
-- [ ] Implement eli_dummy()
-- [ ] Implement eli_indent()
-- [ ] Implement eli_unindent()
-- [ ] Implement eli_align_text_to_frame_padding()
+- [x] Implement eli_separator()
+- [x] Implement eli_same_line()
+- [x] Implement eli_new_line()
+- [x] Implement eli_spacing()
+- [x] Implement eli_dummy()
+- [x] Implement eli_indent()
+- [x] Implement eli_unindent()
+- [x] Implement eli_align_text_to_frame_padding()
 
 ### Groups
-- [ ] Implement eli_begin_group()
-- [ ] Implement eli_end_group()
+- [x] Implement eli_begin_group()
+- [x] Implement eli_end_group()
 
 ### Content Region
-- [ ] Implement eli_get_content_region_avail()
-- [ ] Implement eli_get_content_region_max()
-- [ ] Implement eli_get_window_content_region_min()
-- [ ] Implement eli_get_window_content_region_max()
+- [x] Implement eli_get_content_region_avail()
+- [x] Implement eli_get_content_region_max()
+- [x] Implement eli_get_window_content_region_min()
+- [x] Implement eli_get_window_content_region_max()
 
 ### Item Width
-- [ ] Implement item width stack
-- [ ] Implement eli_push_item_width()
-- [ ] Implement eli_pop_item_width()
-- [ ] Implement eli_set_next_item_width()
-- [ ] Implement eli_calc_item_width()
+- [x] Implement item width stack
+- [x] Implement eli_push_item_width()
+- [x] Implement eli_pop_item_width()
+- [x] Implement eli_set_next_item_width()
+- [x] Implement eli_calc_item_width()
 
 ### Text Wrap
-- [ ] Implement eli_push_text_wrap_pos()
-- [ ] Implement eli_pop_text_wrap_pos()
+- [x] Implement eli_push_text_wrap_pos()
+- [x] Implement eli_pop_text_wrap_pos()
 
 ### Sizing Helpers
-- [ ] Implement eli_get_text_line_height()
-- [ ] Implement eli_get_text_line_height_with_spacing()
-- [ ] Implement eli_get_frame_height()
-- [ ] Implement eli_get_frame_height_with_spacing()
+- [x] Implement eli_get_text_line_height()
+- [x] Implement eli_get_text_line_height_with_spacing()
+- [x] Implement eli_get_frame_height()
+- [x] Implement eli_get_frame_height_with_spacing()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/layout-system.md` documenting cursor, layout helpers, groups, and sizing
-- [ ] Add layout-system link to docs/README.md index
+- [x] Create `docs/layout-system.md` documenting cursor, layout helpers, groups, and sizing
+- [x] Add layout-system link to docs/README.md index
 
 ---
 
@@ -469,46 +501,50 @@ Positioning, sizing, and layout helpers.
 Text display and button widgets.
 
 ### Text Widgets
-- [ ] Create `eli_widgets.h`
-- [ ] Implement eli_text_unformatted()
-- [ ] Implement eli_text()
-- [ ] Implement eli_text_v()
-- [ ] Implement eli_text_colored()
-- [ ] Implement eli_text_colored_v()
-- [ ] Implement eli_text_disabled()
-- [ ] Implement eli_text_disabled_v()
-- [ ] Implement eli_text_wrapped()
-- [ ] Implement eli_text_wrapped_v()
-- [ ] Implement eli_label_text()
-- [ ] Implement eli_label_text_v()
-- [ ] Implement eli_bullet_text()
-- [ ] Implement eli_bullet_text_v()
-- [ ] Implement eli_separator_text()
-- [ ] Implement eli_bullet()
+- [x] Create `eli_widgets.h`
+- [x] Implement eli_text_unformatted()
+- [x] Implement eli_text()
+- [x] Implement eli_text_v()
+- [x] Implement eli_text_colored()
+- [x] Implement eli_text_colored_v()
+- [x] Implement eli_text_disabled()
+- [x] Implement eli_text_disabled_v()
+- [x] Implement eli_text_wrapped()
+- [x] Implement eli_text_wrapped_v()
+- [x] Implement eli_label_text()
+- [x] Implement eli_label_text_v()
+- [x] Implement eli_bullet_text()
+- [x] Implement eli_bullet_text_v()
+- [x] Implement eli_separator_text()
+- [x] Implement eli_bullet()
 
 ### Buttons
-- [ ] Implement eli_button()
-- [ ] Implement eli_button_ex()
-- [ ] Implement eli_small_button()
-- [ ] Implement eli_invisible_button()
-- [ ] Implement eli_arrow_button()
-- [ ] Implement button interaction (hover, active states)
+- [x] Implement eli_button()
+- [x] Implement eli_button_ex()
+- [x] Implement eli_small_button()
+- [x] Implement eli_invisible_button()
+- [x] Implement eli_arrow_button()
+- [x] Implement button interaction (hover, active states)
 
 ### Checkboxes & Radio
-- [ ] Implement eli_checkbox()
-- [ ] Implement eli_checkbox_flags_int()
-- [ ] Implement eli_checkbox_flags_uint()
-- [ ] Implement eli_radio_button()
-- [ ] Implement eli_radio_button_int()
+- [x] Implement eli_checkbox()
+- [x] Implement eli_checkbox_flags_int()
+- [x] Implement eli_checkbox_flags_uint()
+- [x] Implement eli_radio_button()
+- [x] Implement eli_radio_button_int()
 
 ### Progress & Links
-- [ ] Implement eli_progress_bar()
-- [ ] Implement eli_text_link()
-- [ ] Implement eli_text_link_open_url()
+- [x] Implement eli_progress_bar()
+- [x] Implement eli_text_link()
+- [x] Implement eli_text_link_open_url()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/basic-widgets.md` documenting text, buttons, checkboxes, radio, and progress
-- [ ] Add basic-widgets link to docs/README.md index
+- [x] Create `docs/basic-widgets.md` documenting text, buttons, checkboxes, radio, and progress
+- [x] Add basic-widgets link to docs/README.md index
 
 ---
 
@@ -516,27 +552,31 @@ Text display and button widgets.
 
 Widget state queries (critical for composition).
 
-- [ ] Implement eli_is_item_hovered()
-- [ ] Implement eli_is_item_active()
-- [ ] Implement eli_is_item_focused()
-- [ ] Implement eli_is_item_clicked()
-- [ ] Implement eli_is_item_visible()
-- [ ] Implement eli_is_item_edited()
-- [ ] Implement eli_is_item_activated()
-- [ ] Implement eli_is_item_deactivated()
-- [ ] Implement eli_is_item_deactivated_after_edit()
-- [ ] Implement eli_is_item_toggled_open()
-- [ ] Implement eli_is_any_item_hovered()
-- [ ] Implement eli_is_any_item_active()
-- [ ] Implement eli_is_any_item_focused()
-- [ ] Implement eli_get_item_id()
-- [ ] Implement eli_get_item_rect_min()
-- [ ] Implement eli_get_item_rect_max()
-- [ ] Implement eli_get_item_rect_size()
+- [x] Implement eli_is_item_hovered()
+- [x] Implement eli_is_item_active()
+- [x] Implement eli_is_item_focused()
+- [x] Implement eli_is_item_clicked()
+- [x] Implement eli_is_item_visible()
+- [x] Implement eli_is_item_edited()
+- [x] Implement eli_is_item_activated()
+- [x] Implement eli_is_item_deactivated()
+- [x] Implement eli_is_item_deactivated_after_edit()
+- [x] Implement eli_is_item_toggled_open()
+- [x] Implement eli_is_any_item_hovered()
+- [x] Implement eli_is_any_item_active()
+- [x] Implement eli_is_any_item_focused()
+- [x] Implement eli_get_item_id()
+- [x] Implement eli_get_item_rect_min()
+- [x] Implement eli_get_item_rect_max()
+- [x] Implement eli_get_item_rect_size()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/item-status.md` documenting item state queries and rect helpers
-- [ ] Add item-status link to docs/README.md index
+- [x] Create `docs/item-status.md` documenting item state queries and rect helpers
+- [x] Add item-status link to docs/README.md index
 
 ---
 
@@ -545,34 +585,38 @@ Widget state queries (critical for composition).
 Value adjustment widgets.
 
 ### Slider Implementation
-- [ ] Implement slider behavior (internal)
-- [ ] Implement eli_slider_float()
-- [ ] Implement eli_slider_float2/3/4()
-- [ ] Implement eli_slider_angle()
-- [ ] Implement eli_slider_int()
-- [ ] Implement eli_slider_int2/3/4()
-- [ ] Implement eli_slider_scalar()
-- [ ] Implement eli_slider_scalar_n()
+- [x] Implement slider behavior (internal)
+- [x] Implement eli_slider_float()
+- [x] Implement eli_slider_float2/3/4()
+- [x] Implement eli_slider_angle()
+- [x] Implement eli_slider_int()
+- [x] Implement eli_slider_int2/3/4()
+- [x] Implement eli_slider_scalar()
+- [x] Implement eli_slider_scalar_n()
 
 ### Vertical Sliders
-- [ ] Implement eli_v_slider_float()
-- [ ] Implement eli_v_slider_int()
-- [ ] Implement eli_v_slider_scalar()
+- [x] Implement eli_v_slider_float()
+- [x] Implement eli_v_slider_int()
+- [x] Implement eli_v_slider_scalar()
 
 ### Drag Implementation
-- [ ] Implement drag behavior (internal)
-- [ ] Implement eli_drag_float()
-- [ ] Implement eli_drag_float2/3/4()
-- [ ] Implement eli_drag_float_range2()
-- [ ] Implement eli_drag_int()
-- [ ] Implement eli_drag_int2/3/4()
-- [ ] Implement eli_drag_int_range2()
-- [ ] Implement eli_drag_scalar()
-- [ ] Implement eli_drag_scalar_n()
+- [x] Implement drag behavior (internal)
+- [x] Implement eli_drag_float()
+- [x] Implement eli_drag_float2/3/4()
+- [x] Implement eli_drag_float_range2()
+- [x] Implement eli_drag_int()
+- [x] Implement eli_drag_int2/3/4()
+- [x] Implement eli_drag_int_range2()
+- [x] Implement eli_drag_scalar()
+- [x] Implement eli_drag_scalar_n()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/sliders-drags.md` documenting slider and drag widgets
-- [ ] Add sliders-drags link to docs/README.md index
+- [x] Create `docs/sliders-drags.md` documenting slider and drag widgets
+- [x] Add sliders-drags link to docs/README.md index
 
 ---
 
@@ -581,29 +625,33 @@ Value adjustment widgets.
 Text and number input.
 
 ### Input Text Callback
-- [ ] Define eli_input_text_callback_data structure
-- [ ] Define eli_input_text_callback type
+- [x] Define eli_input_text_callback_data structure
+- [x] Define eli_input_text_callback type
 
 ### Text Input
-- [ ] Implement eli_input_text()
-- [ ] Implement text cursor rendering
-- [ ] Implement text selection
-- [ ] Implement copy/paste (via JS interop)
-- [ ] Implement eli_input_text_multiline()
-- [ ] Implement eli_input_text_with_hint()
+- [x] Implement eli_input_text()
+- [x] Implement text cursor rendering
+- [x] Implement text selection
+- [x] Implement copy/paste (via JS interop)
+- [x] Implement eli_input_text_multiline()
+- [x] Implement eli_input_text_with_hint()
 
 ### Numeric Input
-- [ ] Implement eli_input_float()
-- [ ] Implement eli_input_float2/3/4()
-- [ ] Implement eli_input_int()
-- [ ] Implement eli_input_int2/3/4()
-- [ ] Implement eli_input_double()
-- [ ] Implement eli_input_scalar()
-- [ ] Implement eli_input_scalar_n()
+- [x] Implement eli_input_float()
+- [x] Implement eli_input_float2/3/4()
+- [x] Implement eli_input_int()
+- [x] Implement eli_input_int2/3/4()
+- [x] Implement eli_input_double()
+- [x] Implement eli_input_scalar()
+- [x] Implement eli_input_scalar_n()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/input-widgets.md` documenting text and numeric input widgets
-- [ ] Add input-widgets link to docs/README.md index
+- [x] Create `docs/input-widgets.md` documenting text and numeric input widgets
+- [x] Add input-widgets link to docs/README.md index
 
 ---
 
@@ -611,20 +659,24 @@ Text and number input.
 
 Color editing and picking.
 
-- [ ] Implement eli_color_edit3()
-- [ ] Implement eli_color_edit4()
-- [ ] Implement eli_color_picker3()
-- [ ] Implement eli_color_picker4()
-- [ ] Implement eli_color_button()
-- [ ] Implement eli_set_color_edit_options()
-- [ ] Implement color preview square
-- [ ] Implement hue bar
-- [ ] Implement saturation/value square
-- [ ] Implement alpha bar
+- [x] Implement eli_color_edit3()
+- [x] Implement eli_color_edit4()
+- [x] Implement eli_color_picker3()
+- [x] Implement eli_color_picker4()
+- [x] Implement eli_color_button()
+- [x] Implement eli_set_color_edit_options()
+- [x] Implement color preview square
+- [x] Implement hue bar
+- [x] Implement saturation/value square
+- [x] Implement alpha bar
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/color-widgets.md` documenting color edit, picker, and button widgets
-- [ ] Add color-widgets link to docs/README.md index
+- [x] Create `docs/color-widgets.md` documenting color edit, picker, and button widgets
+- [x] Add color-widgets link to docs/README.md index
 
 ---
 
@@ -633,25 +685,29 @@ Color editing and picking.
 Dropdown and selection widgets.
 
 ### Combo
-- [ ] Implement eli_begin_combo()
-- [ ] Implement eli_end_combo()
-- [ ] Implement eli_combo()
-- [ ] Implement eli_combo_str()
-- [ ] Implement eli_combo_fn()
+- [x] Implement eli_begin_combo()
+- [x] Implement eli_end_combo()
+- [x] Implement eli_combo()
+- [x] Implement eli_combo_str()
+- [x] Implement eli_combo_fn()
 
 ### Selectable
-- [ ] Implement eli_selectable()
-- [ ] Implement eli_selectable_bool()
+- [x] Implement eli_selectable()
+- [x] Implement eli_selectable_bool()
 
 ### List Box
-- [ ] Implement eli_begin_list_box()
-- [ ] Implement eli_end_list_box()
-- [ ] Implement eli_list_box()
-- [ ] Implement eli_list_box_fn()
+- [x] Implement eli_begin_list_box()
+- [x] Implement eli_end_list_box()
+- [x] Implement eli_list_box()
+- [x] Implement eli_list_box_fn()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/combo-selectable.md` documenting combo, selectable, and list box widgets
-- [ ] Add combo-selectable link to docs/README.md index
+- [x] Create `docs/combo-selectable.md` documenting combo, selectable, and list box widgets
+- [x] Add combo-selectable link to docs/README.md index
 
 ---
 
@@ -659,28 +715,32 @@ Dropdown and selection widgets.
 
 Hierarchical widgets.
 
-- [ ] Implement eli_tree_node()
-- [ ] Implement eli_tree_node_str()
-- [ ] Implement eli_tree_node_ptr()
-- [ ] Implement eli_tree_node_v()
-- [ ] Implement eli_tree_node_ex()
-- [ ] Implement eli_tree_node_ex_str()
-- [ ] Implement eli_tree_node_ex_ptr()
-- [ ] Implement eli_tree_node_ex_v()
-- [ ] Implement eli_tree_push()
-- [ ] Implement eli_tree_push_ptr()
-- [ ] Implement eli_tree_pop()
-- [ ] Implement eli_get_tree_node_to_label_spacing()
-- [ ] Implement eli_collapsing_header()
-- [ ] Implement eli_collapsing_header_bool()
-- [ ] Implement eli_set_next_item_open()
-- [ ] Implement eli_set_next_item_storage_id()
-- [ ] Implement tree indentation
-- [ ] Implement tree arrow rendering
+- [x] Implement eli_tree_node()
+- [x] Implement eli_tree_node_str()
+- [x] Implement eli_tree_node_ptr()
+- [x] Implement eli_tree_node_v()
+- [x] Implement eli_tree_node_ex()
+- [x] Implement eli_tree_node_ex_str()
+- [x] Implement eli_tree_node_ex_ptr()
+- [x] Implement eli_tree_node_ex_v()
+- [x] Implement eli_tree_push()
+- [x] Implement eli_tree_push_ptr()
+- [x] Implement eli_tree_pop()
+- [x] Implement eli_get_tree_node_to_label_spacing()
+- [x] Implement eli_collapsing_header()
+- [x] Implement eli_collapsing_header_bool()
+- [x] Implement eli_set_next_item_open()
+- [x] Implement eli_set_next_item_storage_id()
+- [x] Implement tree indentation
+- [x] Implement tree arrow rendering
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/trees-collapsing.md` documenting tree nodes and collapsing headers
-- [ ] Add trees-collapsing link to docs/README.md index
+- [x] Create `docs/trees-collapsing.md` documenting tree nodes and collapsing headers
+- [x] Add trees-collapsing link to docs/README.md index
 
 ---
 
@@ -689,22 +749,26 @@ Hierarchical widgets.
 Menu bar and menu items.
 
 ### Menu Bar
-- [ ] Implement eli_begin_menu_bar()
-- [ ] Implement eli_end_menu_bar()
-- [ ] Implement eli_begin_main_menu_bar()
-- [ ] Implement eli_end_main_menu_bar()
+- [x] Implement eli_begin_menu_bar()
+- [x] Implement eli_end_menu_bar()
+- [x] Implement eli_begin_main_menu_bar()
+- [x] Implement eli_end_main_menu_bar()
 
 ### Menus
-- [ ] Implement eli_begin_menu()
-- [ ] Implement eli_end_menu()
-- [ ] Implement eli_menu_item()
-- [ ] Implement eli_menu_item_bool()
-- [ ] Implement menu item shortcut display
-- [ ] Implement submenus
+- [x] Implement eli_begin_menu()
+- [x] Implement eli_end_menu()
+- [x] Implement eli_menu_item()
+- [x] Implement eli_menu_item_bool()
+- [x] Implement menu item shortcut display
+- [x] Implement submenus
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/menus.md` documenting menu bar and menu items
-- [ ] Add menus link to docs/README.md index
+- [x] Create `docs/menus.md` documenting menu bar and menu items
+- [x] Add menus link to docs/README.md index
 
 ---
 
@@ -713,27 +777,31 @@ Menu bar and menu items.
 Popup windows and modal dialogs.
 
 ### Popup Stack
-- [ ] Implement popup stack management
-- [ ] Implement eli_open_popup()
-- [ ] Implement eli_open_popup_id()
-- [ ] Implement eli_open_popup_on_item_click()
-- [ ] Implement eli_close_current_popup()
-- [ ] Implement eli_is_popup_open()
+- [x] Implement popup stack management
+- [x] Implement eli_open_popup()
+- [x] Implement eli_open_popup_id()
+- [x] Implement eli_open_popup_on_item_click()
+- [x] Implement eli_close_current_popup()
+- [x] Implement eli_is_popup_open()
 
 ### Popup Windows
-- [ ] Implement eli_begin_popup()
-- [ ] Implement eli_end_popup()
-- [ ] Implement eli_begin_popup_context_item()
-- [ ] Implement eli_begin_popup_context_window()
-- [ ] Implement eli_begin_popup_context_void()
+- [x] Implement eli_begin_popup()
+- [x] Implement eli_end_popup()
+- [x] Implement eli_begin_popup_context_item()
+- [x] Implement eli_begin_popup_context_window()
+- [x] Implement eli_begin_popup_context_void()
 
 ### Modal Dialogs
-- [ ] Implement eli_begin_popup_modal()
-- [ ] Implement modal backdrop rendering
+- [x] Implement eli_begin_popup_modal()
+- [x] Implement modal backdrop rendering
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/popups-modals.md` documenting popups, context menus, and modals
-- [ ] Add popups-modals link to docs/README.md index
+- [x] Create `docs/popups-modals.md` documenting popups, context menus, and modals
+- [x] Add popups-modals link to docs/README.md index
 
 ---
 
@@ -741,18 +809,22 @@ Popup windows and modal dialogs.
 
 Hover tooltips.
 
-- [ ] Implement eli_begin_tooltip()
-- [ ] Implement eli_end_tooltip()
-- [ ] Implement eli_set_tooltip()
-- [ ] Implement eli_set_tooltip_v()
-- [ ] Implement eli_begin_item_tooltip()
-- [ ] Implement eli_set_item_tooltip()
-- [ ] Implement eli_set_item_tooltip_v()
-- [ ] Implement hover delay for tooltips
+- [x] Implement eli_begin_tooltip()
+- [x] Implement eli_end_tooltip()
+- [x] Implement eli_set_tooltip()
+- [x] Implement eli_set_tooltip_v()
+- [x] Implement eli_begin_item_tooltip()
+- [x] Implement eli_set_item_tooltip()
+- [x] Implement eli_set_item_tooltip_v()
+- [x] Implement hover delay for tooltips
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/tooltips.md` documenting tooltip widgets
-- [ ] Add tooltips link to docs/README.md index
+- [x] Create `docs/tooltips.md` documenting tooltip widgets
+- [x] Add tooltips link to docs/README.md index
 
 ---
 
@@ -761,47 +833,51 @@ Hover tooltips.
 Full table widget system.
 
 ### Table Structure
-- [ ] Create `eli_tables.h`
-- [ ] Define table internal structures
-- [ ] Define eli_table_sort_specs structure
-- [ ] Define eli_table_column_sort_specs structure
+- [x] Create `eli_tables.h`
+- [x] Define table internal structures
+- [x] Define eli_table_sort_specs structure
+- [x] Define eli_table_column_sort_specs structure
 
 ### Table Lifecycle
-- [ ] Implement eli_begin_table()
-- [ ] Implement eli_end_table()
-- [ ] Implement eli_table_next_row()
-- [ ] Implement eli_table_next_column()
-- [ ] Implement eli_table_set_column_index()
+- [x] Implement eli_begin_table()
+- [x] Implement eli_end_table()
+- [x] Implement eli_table_next_row()
+- [x] Implement eli_table_next_column()
+- [x] Implement eli_table_set_column_index()
 
 ### Table Setup
-- [ ] Implement eli_table_setup_column()
-- [ ] Implement eli_table_setup_scroll_freeze()
-- [ ] Implement eli_table_header()
-- [ ] Implement eli_table_headers_row()
-- [ ] Implement eli_table_angled_headers_row()
+- [x] Implement eli_table_setup_column()
+- [x] Implement eli_table_setup_scroll_freeze()
+- [x] Implement eli_table_header()
+- [x] Implement eli_table_headers_row()
+- [x] Implement eli_table_angled_headers_row()
 
 ### Table Queries
-- [ ] Implement eli_table_get_sort_specs()
-- [ ] Implement eli_table_get_column_count()
-- [ ] Implement eli_table_get_column_index()
-- [ ] Implement eli_table_get_row_index()
-- [ ] Implement eli_table_get_column_name()
-- [ ] Implement eli_table_get_column_flags()
-- [ ] Implement eli_table_set_column_enabled()
-- [ ] Implement eli_table_get_hovered_column()
-- [ ] Implement eli_table_set_bg_color()
+- [x] Implement eli_table_get_sort_specs()
+- [x] Implement eli_table_get_column_count()
+- [x] Implement eli_table_get_column_index()
+- [x] Implement eli_table_get_row_index()
+- [x] Implement eli_table_get_column_name()
+- [x] Implement eli_table_get_column_flags()
+- [x] Implement eli_table_set_column_enabled()
+- [x] Implement eli_table_get_hovered_column()
+- [x] Implement eli_table_set_bg_color()
 
 ### Table Features
-- [ ] Implement column resizing
-- [ ] Implement column reordering
-- [ ] Implement column hiding
-- [ ] Implement column sorting
-- [ ] Implement table scrolling
-- [ ] Implement row backgrounds
+- [x] Implement column resizing
+- [x] Implement column reordering
+- [x] Implement column hiding
+- [x] Implement column sorting
+- [x] Implement table scrolling
+- [x] Implement row backgrounds
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/tables.md` documenting table widget, columns, sorting, and features
-- [ ] Add tables link to docs/README.md index
+- [x] Create `docs/tables.md` documenting table widget, columns, sorting, and features
+- [x] Add tables link to docs/README.md index
 
 ---
 
@@ -809,20 +885,24 @@ Full table widget system.
 
 Tab bar widget.
 
-- [ ] Create `eli_tabs.h`
-- [ ] Implement eli_begin_tab_bar()
-- [ ] Implement eli_end_tab_bar()
-- [ ] Implement eli_begin_tab_item()
-- [ ] Implement eli_end_tab_item()
-- [ ] Implement eli_tab_item_button()
-- [ ] Implement eli_set_tab_item_closed()
-- [ ] Implement tab reordering
-- [ ] Implement tab scrolling
-- [ ] Implement tab close button
+- [x] Create `eli_tabs.h`
+- [x] Implement eli_begin_tab_bar()
+- [x] Implement eli_end_tab_bar()
+- [x] Implement eli_begin_tab_item()
+- [x] Implement eli_end_tab_item()
+- [x] Implement eli_tab_item_button()
+- [x] Implement eli_set_tab_item_closed()
+- [x] Implement tab reordering
+- [x] Implement tab scrolling
+- [x] Implement tab close button
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/tab-bars.md` documenting tab bar and tab item widgets
-- [ ] Add tab-bars link to docs/README.md index
+- [x] Create `docs/tab-bars.md` documenting tab bar and tab item widgets
+- [x] Add tab-bars link to docs/README.md index
 
 ---
 
@@ -831,27 +911,31 @@ Tab bar widget.
 Drag and drop system.
 
 ### Payload
-- [ ] Define eli_payload structure
-- [ ] Implement payload storage
+- [x] Define eli_payload structure
+- [x] Implement payload storage
 
 ### Source
-- [ ] Implement eli_begin_drag_drop_source()
-- [ ] Implement eli_set_drag_drop_payload()
-- [ ] Implement eli_end_drag_drop_source()
+- [x] Implement eli_begin_drag_drop_source()
+- [x] Implement eli_set_drag_drop_payload()
+- [x] Implement eli_end_drag_drop_source()
 
 ### Target
-- [ ] Implement eli_begin_drag_drop_target()
-- [ ] Implement eli_accept_drag_drop_payload()
-- [ ] Implement eli_end_drag_drop_target()
-- [ ] Implement eli_get_drag_drop_payload()
+- [x] Implement eli_begin_drag_drop_target()
+- [x] Implement eli_accept_drag_drop_payload()
+- [x] Implement eli_end_drag_drop_target()
+- [x] Implement eli_get_drag_drop_payload()
 
 ### Visual Feedback
-- [ ] Implement drag preview
-- [ ] Implement drop target highlight
+- [x] Implement drag preview
+- [x] Implement drop target highlight
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/drag-drop.md` documenting drag and drop system
-- [ ] Add drag-drop link to docs/README.md index
+- [x] Create `docs/drag-drop.md` documenting drag and drop system
+- [x] Add drag-drop link to docs/README.md index
 
 ---
 
@@ -859,15 +943,19 @@ Drag and drop system.
 
 Image display widgets.
 
-- [ ] Implement eli_image()
-- [ ] Implement eli_image_button()
-- [ ] Implement eli_draw_list_add_image()
-- [ ] Implement eli_draw_list_add_image_quad()
-- [ ] Implement eli_draw_list_add_image_rounded()
+- [x] Implement eli_image()
+- [x] Implement eli_image_button()
+- [x] Implement eli_draw_list_add_image()
+- [x] Implement eli_draw_list_add_image_quad()
+- [x] Implement eli_draw_list_add_image_rounded()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/images.md` documenting image display widgets
-- [ ] Add images link to docs/README.md index
+- [x] Create `docs/images.md` documenting image display widgets
+- [x] Add images link to docs/README.md index
 
 ---
 
@@ -875,14 +963,18 @@ Image display widgets.
 
 Simple plotting widgets.
 
-- [ ] Implement eli_plot_lines()
-- [ ] Implement eli_plot_lines_fn()
-- [ ] Implement eli_plot_histogram()
-- [ ] Implement eli_plot_histogram_fn()
+- [x] Implement eli_plot_lines()
+- [x] Implement eli_plot_lines_fn()
+- [x] Implement eli_plot_histogram()
+- [x] Implement eli_plot_histogram_fn()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/plotting.md` documenting plot lines and histogram widgets
-- [ ] Add plotting link to docs/README.md index
+- [x] Create `docs/plotting.md` documenting plot lines and histogram widgets
+- [x] Add plotting link to docs/README.md index
 
 ---
 
@@ -890,14 +982,18 @@ Simple plotting widgets.
 
 Simple value display widgets.
 
-- [ ] Implement eli_value_bool()
-- [ ] Implement eli_value_int()
-- [ ] Implement eli_value_uint()
-- [ ] Implement eli_value_float()
+- [x] Implement eli_value_bool()
+- [x] Implement eli_value_int()
+- [x] Implement eli_value_uint()
+- [x] Implement eli_value_float()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/value-display.md` documenting value display widgets
-- [ ] Add value-display link to docs/README.md index
+- [x] Create `docs/value-display.md` documenting value display widgets
+- [x] Add value-display link to docs/README.md index
 
 ---
 
@@ -906,20 +1002,24 @@ Simple value display widgets.
 Widget disabling and clipping.
 
 ### Disabling
-- [ ] Implement eli_begin_disabled()
-- [ ] Implement eli_end_disabled()
+- [x] Implement eli_begin_disabled()
+- [x] Implement eli_end_disabled()
 
 ### Clipping
-- [ ] Implement eli_push_clip_rect()
-- [ ] Implement eli_pop_clip_rect()
+- [x] Implement eli_push_clip_rect()
+- [x] Implement eli_pop_clip_rect()
 
 ### Focus
-- [ ] Implement eli_set_item_default_focus()
-- [ ] Implement eli_set_keyboard_focus_here()
+- [x] Implement eli_set_item_default_focus()
+- [x] Implement eli_set_keyboard_focus_here()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/disabling-clipping.md` documenting disabled state, clipping, and focus
-- [ ] Add disabling-clipping link to docs/README.md index
+- [x] Create `docs/disabling-clipping.md` documenting disabled state, clipping, and focus
+- [x] Add disabling-clipping link to docs/README.md index
 
 ---
 
@@ -927,17 +1027,21 @@ Widget disabling and clipping.
 
 Efficient list rendering.
 
-- [ ] Define eli_list_clipper structure
-- [ ] Implement eli_list_clipper_begin()
-- [ ] Implement eli_list_clipper_end()
-- [ ] Implement eli_list_clipper_step()
-- [ ] Implement eli_list_clipper_include_item_by_index()
-- [ ] Implement eli_list_clipper_include_items_by_index()
-- [ ] Implement eli_list_clipper_seek_cursor_for_item()
+- [x] Define eli_list_clipper structure
+- [x] Implement eli_list_clipper_begin()
+- [x] Implement eli_list_clipper_end()
+- [x] Implement eli_list_clipper_step()
+- [x] Implement eli_list_clipper_include_item_by_index()
+- [x] Implement eli_list_clipper_include_items_by_index()
+- [x] Implement eli_list_clipper_seek_cursor_for_item()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/list-clipper.md` documenting list clipper for efficient rendering
-- [ ] Add list-clipper link to docs/README.md index
+- [x] Create `docs/list-clipper.md` documenting list clipper for efficient rendering
+- [x] Add list-clipper link to docs/README.md index
 
 ---
 
@@ -946,24 +1050,28 @@ Efficient list rendering.
 Remaining utility functions.
 
 ### Visibility
-- [ ] Implement eli_is_rect_visible()
-- [ ] Implement eli_is_rect_visible_vec2()
+- [x] Implement eli_is_rect_visible()
+- [x] Implement eli_is_rect_visible_vec2()
 
 ### Time & Frame
-- [ ] Implement eli_get_time()
-- [ ] Implement eli_get_frame_count()
+- [x] Implement eli_get_time()
+- [x] Implement eli_get_frame_count()
 
 ### Viewports
-- [ ] Define eli_viewport structure
-- [ ] Implement eli_get_main_viewport()
+- [x] Define eli_viewport structure
+- [x] Implement eli_get_main_viewport()
 
 ### Draw Lists
-- [ ] Implement eli_get_background_draw_list()
-- [ ] Implement eli_get_foreground_draw_list()
+- [x] Implement eli_get_background_draw_list()
+- [x] Implement eli_get_foreground_draw_list()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/utilities.md` documenting visibility, time, viewports, and draw lists
-- [ ] Add utilities link to docs/README.md index
+- [x] Create `docs/utilities.md` documenting visibility, time, viewports, and draw lists
+- [x] Add utilities link to docs/README.md index
 
 ---
 
@@ -972,23 +1080,27 @@ Remaining utility functions.
 Configuration persistence and logging.
 
 ### Settings
-- [ ] Implement eli_load_ini_settings_from_disk()
-- [ ] Implement eli_load_ini_settings_from_memory()
-- [ ] Implement eli_save_ini_settings_to_disk()
-- [ ] Implement eli_save_ini_settings_to_memory()
+- [x] Implement eli_load_ini_settings_from_disk()
+- [x] Implement eli_load_ini_settings_from_memory()
+- [x] Implement eli_save_ini_settings_to_disk()
+- [x] Implement eli_save_ini_settings_to_memory()
 
 ### Logging
-- [ ] Implement eli_log_to_tty()
-- [ ] Implement eli_log_to_file()
-- [ ] Implement eli_log_to_clipboard()
-- [ ] Implement eli_log_finish()
-- [ ] Implement eli_log_buttons()
-- [ ] Implement eli_log_text()
-- [ ] Implement eli_log_text_v()
+- [x] Implement eli_log_to_tty()
+- [x] Implement eli_log_to_file()
+- [x] Implement eli_log_to_clipboard()
+- [x] Implement eli_log_finish()
+- [x] Implement eli_log_buttons()
+- [x] Implement eli_log_text()
+- [x] Implement eli_log_text_v()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/settings-logging.md` documenting INI settings and logging
-- [ ] Add settings-logging link to docs/README.md index
+- [x] Create `docs/settings-logging.md` documenting INI settings and logging
+- [x] Add settings-logging link to docs/README.md index
 
 ---
 
@@ -996,14 +1108,18 @@ Configuration persistence and logging.
 
 Custom allocators.
 
-- [ ] Implement eli_set_allocator_functions()
-- [ ] Implement eli_get_allocator_functions()
-- [ ] Implement eli_mem_alloc()
-- [ ] Implement eli_mem_free()
+- [x] Implement eli_set_allocator_functions()
+- [x] Implement eli_get_allocator_functions()
+- [x] Implement eli_mem_alloc()
+- [x] Implement eli_mem_free()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/memory.md` documenting custom allocators and memory management
-- [ ] Add memory link to docs/README.md index
+- [x] Create `docs/memory.md` documenting custom allocators and memory management
+- [x] Add memory link to docs/README.md index
 
 ---
 
@@ -1012,33 +1128,37 @@ Custom allocators.
 Demo application and debug tools.
 
 ### Demo Window
-- [ ] Implement eli_show_demo_window()
-- [ ] Demo: Basic widgets section
-- [ ] Demo: Layout section
-- [ ] Demo: Input widgets section
-- [ ] Demo: Sliders & drags section
-- [ ] Demo: Color widgets section
-- [ ] Demo: Trees and collapsing section
-- [ ] Demo: Tables section
-- [ ] Demo: Tabs section
-- [ ] Demo: Popups section
-- [ ] Demo: Drag & drop section
-- [ ] Demo: Style editor section
+- [x] Implement eli_show_demo_window()
+- [x] Demo: Basic widgets section
+- [x] Demo: Layout section
+- [x] Demo: Input widgets section
+- [x] Demo: Sliders & drags section
+- [x] Demo: Color widgets section
+- [x] Demo: Trees and collapsing section
+- [x] Demo: Tables section
+- [x] Demo: Tabs section
+- [x] Demo: Popups section
+- [x] Demo: Drag & drop section
+- [x] Demo: Style editor section
 
 ### Debug Windows
-- [ ] Implement eli_show_metrics_window()
-- [ ] Implement eli_show_debug_log_window()
-- [ ] Implement eli_show_id_stack_tool_window()
-- [ ] Implement eli_show_about_window()
-- [ ] Implement eli_show_style_editor()
-- [ ] Implement eli_show_style_selector()
-- [ ] Implement eli_show_font_selector()
-- [ ] Implement eli_show_user_guide()
-- [ ] Implement eli_get_version()
+- [x] Implement eli_show_metrics_window()
+- [x] Implement eli_show_debug_log_window()
+- [x] Implement eli_show_id_stack_tool_window()
+- [x] Implement eli_show_about_window()
+- [x] Implement eli_show_style_editor()
+- [x] Implement eli_show_style_selector()
+- [x] Implement eli_show_font_selector()
+- [x] Implement eli_show_user_guide()
+- [x] Implement eli_get_version()
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/demo-debug.md` documenting demo window and debug tools
-- [ ] Add demo-debug link to docs/README.md index
+- [x] Create `docs/demo-debug.md` documenting demo window and debug tools
+- [x] Add demo-debug link to docs/README.md index
 
 ---
 
@@ -1046,15 +1166,19 @@ Demo application and debug tools.
 
 WASM loader and browser integration.
 
-- [ ] Create web/elimgui.js WASM loader
-- [ ] Create web/index.html demo shell
-- [ ] Implement JS event handlers (mouse, keyboard)
-- [ ] Implement Canvas2D renderer backend
-- [ ] Implement WebGL renderer backend (optional)
+- [x] Create web/elimgui.js WASM loader
+- [x] Create web/index.html demo shell
+- [x] Implement JS event handlers (mouse, keyboard)
+- [x] Implement Canvas2D renderer backend
+- [x] Implement WebGL renderer backend (optional)
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/web-integration.md` documenting WASM loader, JS events, and renderers
-- [ ] Add web-integration link to docs/README.md index
+- [x] Create `docs/web-integration.md` documenting WASM loader, JS events, and renderers
+- [x] Add web-integration link to docs/README.md index
 
 ---
 
@@ -1062,19 +1186,23 @@ WASM loader and browser integration.
 
 Test coverage.
 
-- [ ] Create test framework
-- [ ] Test: Core types and math
-- [ ] Test: ID hashing
-- [ ] Test: Draw list generation
-- [ ] Test: Layout calculations
-- [ ] Test: Input state
-- [ ] Test: Window management
-- [ ] Test: Widget behavior
-- [ ] Test: Table functionality
+- [x] Create test framework
+- [x] Test: Core types and math
+- [x] Test: ID hashing
+- [x] Test: Draw list generation
+- [x] Test: Layout calculations
+- [x] Test: Input state
+- [x] Test: Window management
+- [x] Test: Widget behavior
+- [x] Test: Table functionality
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/testing.md` documenting test framework and coverage
-- [ ] Add testing link to docs/README.md index
+- [x] Create `docs/testing.md` documenting test framework and coverage
+- [x] Add testing link to docs/README.md index
 
 ---
 
@@ -1082,15 +1210,19 @@ Test coverage.
 
 Performance improvements.
 
-- [ ] Profile draw list generation
-- [ ] Optimize vertex buffer growth
-- [ ] Implement draw call batching
-- [ ] Reduce allocations per frame
-- [ ] Measure and optimize WASM size
+- [x] Profile draw list generation
+- [x] Optimize vertex buffer growth
+- [x] Implement draw call batching
+- [x] Reduce allocations per frame
+- [x] Measure and optimize WASM size
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/optimization.md` documenting performance tips and benchmarks
-- [ ] Add optimization link to docs/README.md index
+- [x] Create `docs/optimization.md` documenting performance tips and benchmarks
+- [x] Add optimization link to docs/README.md index
 
 ---
 
@@ -1098,13 +1230,17 @@ Performance improvements.
 
 Window docking system.
 
-- [ ] Create `eli_docking.h`
-- [ ] Implement dock node tree
-- [ ] Implement window docking
-- [ ] Implement dock splitting
-- [ ] Implement tab bar for docked windows
-- [ ] Implement dock space
+- [x] Create `eli_docking.h`
+- [x] Implement dock node tree
+- [x] Implement window docking
+- [x] Implement dock splitting
+- [x] Implement tab bar for docked windows
+- [x] Implement dock space
+
+### Tests
+- [x] Write native unit tests in `tests/unit/` covering this phase's logic (use `tests/eli_test.h`)
+- [x] `./build.sh test` passes green
 
 ### Documentation
-- [ ] Create `docs/docking.md` documenting docking system
-- [ ] Add docking link to docs/README.md index
+- [x] Create `docs/docking.md` documenting docking system
+- [x] Add docking link to docs/README.md index
