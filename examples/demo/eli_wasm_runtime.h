@@ -258,6 +258,54 @@ double atof(const char *s)
     return strtod(s, NULL);
 }
 
+/** strtoll — parse a signed integer (base 0/10/16/8) for the numeric-input
+ *  widgets. Base 0 auto-detects 0x (hex) / 0 (octal) prefixes. */
+long long strtoll(const char *s, char **endptr, int base)
+{
+    const char *p = s;
+    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+        p++;
+
+    int sign = 1;
+    if (*p == '+' || *p == '-') {
+        if (*p == '-')
+            sign = -1;
+        p++;
+    }
+
+    if ((base == 0 || base == 16) && p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
+        p += 2;
+        base = 16;
+    } else if (base == 0 && p[0] == '0') {
+        base = 8;
+    } else if (base == 0) {
+        base = 10;
+    }
+
+    long long value = 0;
+    int any = 0;
+    for (;;) {
+        int c = *p, digit;
+        if (c >= '0' && c <= '9')
+            digit = c - '0';
+        else if (c >= 'a' && c <= 'z')
+            digit = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'Z')
+            digit = c - 'A' + 10;
+        else
+            break;
+        if (digit >= base)
+            break;
+        value = value * base + digit;
+        any = 1;
+        p++;
+    }
+
+    if (endptr)
+        *endptr = (char *)(any ? p : s);
+    return sign < 0 ? -value : value;
+}
+
 /* ---------------------------------------------------------------------------
  * Compact vsnprintf / snprintf
  *

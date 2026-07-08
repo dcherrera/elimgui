@@ -42,6 +42,67 @@
     #include <jaclibc.h>
     #define ELI_JSIO 1
 
+    /* ----------------------------------------------------------------------
+     * Double-only pow() for the wasm build.
+     *
+     * JAClibc implements pow()/powf() with 128-bit `long double`, which needs
+     * soft-float compiler-rt builtins (__multf3, __addtf3, __floatsitf, ...)
+     * that the `-nostdlib` wasm toolchain does not provide, so any use of a
+     * logarithmic slider or font gamma fails to link. This self-contained
+     * double-precision implementation keeps the library linkable. The macros
+     * rewrite only call sites (JAClibc's inline definitions were already parsed
+     * above and become unused / dead-code-eliminated). Not applied to hosted
+     * test builds, which use the real libm.
+     * -------------------------------------------------------------------- */
+    static inline double eli__platform_log(double x) {   /* natural log, x > 0 */
+        if (x <= 0.0) return -708.0;                     /* domain guard (~log of tiny) */
+        union { double d; unsigned long long u; } v;
+        v.d = x;
+        int e = (int)((v.u >> 52) & 0x7FF) - 1023;       /* unbiased exponent */
+        v.u = (v.u & ~(0x7FFULL << 52)) | (1023ULL << 52); /* mantissa in [1,2) */
+        double m = v.d;
+        double s = (m - 1.0) / (m + 1.0);                /* atanh series arg */
+        double s2 = s * s, term = s, sum = 0.0;
+        for (int k = 1; k <= 15; k += 2) { sum += term / (double)k; term *= s2; }
+        return (double)e * 0.69314718055994530942 + 2.0 * sum;
+    }
+
+    static inline double eli__platform_exp(double x) {   /* e^x */
+        double kf = x * 1.44269504088896340736;          /* x / ln2 */
+        long k = (long)kf;
+        if ((double)k > kf) k--;                          /* floor */
+        double r = x - (double)k * 0.69314718055994530942;
+        double term = 1.0, sum = 1.0;                     /* Taylor, r in [0,ln2) */
+        for (int n = 1; n <= 16; n++) { term *= r / (double)n; sum += term; }
+        long ex = k + 1023;                               /* build 2^k */
+        if (ex <= 0) return 0.0;
+        if (ex >= 2047) ex = 2046;
+        union { double d; unsigned long long u; } v;
+        v.u = ((unsigned long long)ex) << 52;
+        return sum * v.d;
+    }
+
+    static inline double eli__platform_pow(double b, double e) {
+        if (e == 0.0) return 1.0;
+        if (b == 0.0) return 0.0;
+        double base = b;
+        int negate = 0;
+        if (b < 0.0) {                                    /* only real for integer e */
+            base = -b;
+            long ei = (long)e;
+            if ((double)ei == e && (ei & 1L)) negate = 1;
+        }
+        double r = eli__platform_exp(e * eli__platform_log(base));
+        return negate ? -r : r;
+    }
+
+    #define pow(b, e)  eli__platform_pow((double)(b), (double)(e))
+    #define powf(b, e) ((float)eli__platform_pow((double)(b), (double)(e)))
+    #define log(x)     eli__platform_log((double)(x))
+    #define logf(x)    ((float)eli__platform_log((double)(x)))
+    #define exp(x)     eli__platform_exp((double)(x))
+    #define expf(x)    ((float)eli__platform_exp((double)(x)))
+
 #endif /* ELI_TEST_HOSTED */
 
 #endif /* ELI_PLATFORM_H */
