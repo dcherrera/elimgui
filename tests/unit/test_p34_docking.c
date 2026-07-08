@@ -349,6 +349,16 @@ ELI_TEST(hit_zone_center_and_strip_tab_edges_split) {
     ELI_ASSERT_EQ(eli_dock__hit_zone(node, eli_make_vec2(center.x, r.y + r.h - 4.0f)),
                   ELI_DOCK_DIR_DOWN);
 
+    /* Just below the tab strip, and anywhere in the upper region, must TAB and
+     * never split up (the reported bug: dropping under the tabs split up). */
+    ELI_ASSERT_EQ(eli_dock__hit_zone(node,
+                      eli_make_vec2(center.x, r.y + node->tab_bar_height + 6.0f)),
+                  ELI_DOCK_DIR_CENTER);
+    ELI_ASSERT_EQ(eli_dock__hit_zone(node, eli_make_vec2(center.x, r.y + r.h * 0.20f)),
+                  ELI_DOCK_DIR_CENTER);
+    ELI_ASSERT_NE(eli_dock__hit_zone(node, eli_make_vec2(center.x, r.y + 4.0f)),
+                  ELI_DOCK_DIR_UP);
+
     /* Outside the node -> no target. */
     ELI_ASSERT_EQ(eli_dock__hit_zone(node, eli_make_vec2(r.x - 20.0f, center.y)),
                   ELI_DOCK_DIR_NONE);

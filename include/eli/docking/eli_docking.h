@@ -325,15 +325,16 @@ static inline eli_dock_dir eli_dock__hit_zone(const eli_dock_node *node, eli_vec
 
     float dist_l = p.x - r.x;
     float dist_r = (r.x + r.w) - p.x;
-    float dist_t = p.y - r.y;
     float dist_b = (r.y + r.h) - p.y;
 
-    /* Nearest in-band, splittable edge wins; otherwise the center (tab). */
+    /* No UP split: the tab bar/header lives at the top, so the whole top-and-
+     * central area re-tabs (dropping near the tabs must add a tab, never split
+     * up). Vertical splitting is offered via the bottom edge only. Nearest
+     * in-band splittable edge among LEFT/RIGHT/DOWN wins; otherwise center. */
     float nearest = 1e30f;
     eli_dock_dir dir = ELI_DOCK_DIR_CENTER;
     if (can_x && dist_l < band_x && dist_l < nearest) { nearest = dist_l; dir = ELI_DOCK_DIR_LEFT; }
     if (can_x && dist_r < band_x && dist_r < nearest) { nearest = dist_r; dir = ELI_DOCK_DIR_RIGHT; }
-    if (can_y && dist_t < band_y && dist_t < nearest) { nearest = dist_t; dir = ELI_DOCK_DIR_UP; }
     if (can_y && dist_b < band_y && dist_b < nearest) { nearest = dist_b; dir = ELI_DOCK_DIR_DOWN; }
     return dir;
 }
@@ -348,7 +349,12 @@ static inline eli_rect eli_dock__preview_region(const eli_dock_node *node, eli_d
     case ELI_DOCK_DIR_RIGHT: return eli_make_rect(r.x + hw, r.y, hw, r.h);
     case ELI_DOCK_DIR_UP:    return eli_make_rect(r.x, r.y, r.w, hh);
     case ELI_DOCK_DIR_DOWN:  return eli_make_rect(r.x, r.y + hh, r.w, hh);
-    default:                 return r;
+    default: {
+        /* Tab (center): highlight only the tab-bar strip, so it clearly reads as
+         * "drop into the tabs" rather than "take over the whole pane". */
+        float strip = (node->tab_bar_height > 22.0f) ? node->tab_bar_height : 26.0f;
+        return eli_make_rect(r.x, r.y, r.w, strip);
+    }
     }
 }
 
@@ -435,14 +441,14 @@ static inline void eli_dock__draw_preview(eli_dock_node *node, eli_dock_dir dir)
     eli_dock__draw_zone_box(fg, c, dir == ELI_DOCK_DIR_CENTER);
     eli_dock__draw_center_glyph(fg, c);
 
-    /* Edge (split) indicators — only for splittable axes (invalid arrows hidden). */
-    struct { eli_dock_dir d; float dx; float dy; eli_dock_axis ax; } edges[4] = {
+    /* Edge (split) indicators — LEFT/RIGHT/DOWN only (no UP: the top tabs), and
+     * only for splittable axes (invalid arrows hidden). */
+    struct { eli_dock_dir d; float dx; float dy; eli_dock_axis ax; } edges[3] = {
         { ELI_DOCK_DIR_LEFT,  -o,  0.0f, ELI_DOCK_AXIS_X },
         { ELI_DOCK_DIR_RIGHT,  o,  0.0f, ELI_DOCK_AXIS_X },
-        { ELI_DOCK_DIR_UP,    0.0f, -o,  ELI_DOCK_AXIS_Y },
         { ELI_DOCK_DIR_DOWN,  0.0f,  o,  ELI_DOCK_AXIS_Y },
     };
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 3; i++) {
         if (!eli_dock__can_split_axis(node, edges[i].ax))
             continue;
         eli_vec2 ec = eli_make_vec2(c.x + edges[i].dx, c.y + edges[i].dy);
