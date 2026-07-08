@@ -14,7 +14,7 @@
  * scale, dark-mode role palette, rounding), so the look stays consistent with
  * the global eli_style that cheat_theme_apply() programs. Hierarchy is built
  * from color + spacing + dividers (there is only one 13px font, so we never lean
- * on font size) per UI_UX/typography.md and layout-and-spacing.md.
+ * on font size) per typography and layout best practices.
  *
  * @status Cheatsheet app engine (stage 2, UI/UX pass). Not part of the elimgui
  *         library API.

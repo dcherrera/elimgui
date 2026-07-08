@@ -4,8 +4,8 @@
  *        rounding, and dark-mode role/token colors, plus cheat_theme_apply()
  *        which programs the shared eli_style so the whole app is consistent.
  *
- * The palette and numbers here are lifted from the project's UI/UX reference
- * (the UI_UX docs), not guessed:
+ * The palette and numbers here are lifted from established UI/UX best practices,
+ * not guessed (topic -> what it informs):
  *   - layout-and-spacing.md   -> the 4/8pt spacing scale + containment order
  *                                 (space > background > border) and paddings.
  *   - color-and-theming.md    -> dark base #121212, elevation-by-lightening

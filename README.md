@@ -66,7 +66,7 @@ include/eli/
 └── docking/         # dock nodes, split, dock space
 ```
 
-Header-only, but organized into small, focused files by category (nothing over ~1000 LOC). A single `#include <eli/elimgui.h>` pulls in everything. See [`docs/`](docs/) for per-phase API docs and [`UI_UX/`](UI_UX/) for the UI/UX best-practices reference the app is built on.
+Header-only, but organized into small, focused files by category (nothing over ~1000 LOC). A single `#include <eli/elimgui.h>` pulls in everything. See [`docs/`](docs/) for per-phase API docs.
 
 ## Design Decisions
 
