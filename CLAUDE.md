@@ -2,11 +2,11 @@
 
 ## Coding Standards (READ FIRST)
 
-**Before writing any code, read `coding-best-practices.md` at the repo root.** It defines
-mandatory conventions for every file: file-header doc blocks (`@file`/`@brief`/`@status`/
-`@issues`/`@todo`), function documentation on every public API, `sizeof(*ptr)`, const
-correctness, K&R braces (brace on next line for function definitions), 4-space indent,
-descriptive names, and the **hard rules below**. Those override defaults.
+**Mandatory conventions (they override defaults):** every file gets a header doc block
+(`@file`/`@brief`/`@status`/`@issues`/`@todo`), function documentation on every public API,
+`sizeof(*ptr)` over `sizeof(Type)`, const correctness, K&R braces (brace on next line for
+function definitions, same line for control flow), 4-space indent, descriptive names, and the
+**hard rules below**.
 
 - **Files stay under ~1000 lines of code** (comments/doc blocks don't count). Split a
   module into multiple headers before it grows past that.
@@ -23,9 +23,6 @@ so `#include <eli/elimgui.h>` pulls in the whole library.
 ```
 elimgui/
 ├── CLAUDE.md                 # AI assistant guidelines
-├── coding-best-practices.md  # Mandatory coding conventions (read first)
-├── build_spec.md             # Full project specification
-├── build_plan.md             # Phased task checklist
 ├── build.sh                  # Build script
 ├── include/
 │   └── eli/
@@ -65,8 +62,6 @@ that includes its siblings; `elimgui.h` includes the aggregators.
 
 ## Terminology
 
-- **"build spec"** or **"spec"** refers to `build_spec.md` - the full project description
-- **"build plan"** or **"plan"** refers to `build_plan.md` - the phased task checklist
 - **elimgui** - Pure C rewrite of Dear ImGui (NOT bindings)
 - **Dear ImGui** - The original C++ library we're reimplementing
 
