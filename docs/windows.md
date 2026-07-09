@@ -233,5 +233,5 @@ int main(void)
 }
 ```
 
-Build for the browser with the Homebrew LLVM clang (see `CLAUDE.md`), or run the
-native window tests with `./build.sh test window`.
+Build for the browser with `./build.sh serve` (see the top-level README), or run
+the native window tests with `./build.sh test window`.

@@ -27,3 +27,6 @@ tests/build/
 # TeamIDE session/chat DB + local editor config - never commit
 .teamide/
 .claude/
+
+# Claude Code project instructions (local only)
+CLAUDE.md

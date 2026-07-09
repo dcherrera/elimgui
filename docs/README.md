@@ -12,8 +12,8 @@ Include the umbrella header and everything is available:
 #include <eli/elimgui.h>
 ```
 
-Compile for the browser with the Homebrew LLVM clang (see `CLAUDE.md` for the full
-command), or build and run the native unit tests with `./build.sh test`.
+Build and serve it in the browser with `./build.sh serve`, or build and run the
+native unit tests with `./build.sh test` (see the top-level README for details).
 
 ## Frame Lifecycle
 
