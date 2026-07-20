@@ -150,9 +150,19 @@ static inline void eli_plot__emit_lines(eli_draw_list *dl,
     if (inner_w <= 0.0f || inner_h <= 0.0f)
         return;
 
-    eli_vec2 *pts = (eli_vec2 *)malloc((size_t)values_count * sizeof(*pts));
-    if (pts == NULL)
-        return;
+    /* Scratch line-point buffer, reused across frames and grown on demand.
+     * Per-frame malloc/free here churns the allocator every repaint (this runs
+     * on every plotted line, every frame); a persistent grown buffer avoids
+     * that churn entirely. Not freed — it lives for the program's duration. */
+    static eli_vec2 *pts = NULL;
+    static int pts_cap = 0;
+    if (values_count > pts_cap) {
+        eli_vec2 *grown = (eli_vec2 *)realloc(pts, (size_t)values_count * sizeof(*grown));
+        if (grown == NULL)
+            return;
+        pts = grown;
+        pts_cap = values_count;
+    }
 
     float x_step = inner_w / (float)(values_count - 1);
     for (int i = 0; i < values_count; i++) {
@@ -166,8 +176,6 @@ static inline void eli_plot__emit_lines(eli_draw_list *dl,
     /* Overdraw the hovered segment in the highlight colour and thicker. */
     if (idx_hovered >= 0 && idx_hovered + 1 < values_count)
         eli_draw_list_add_line(dl, pts[idx_hovered], pts[idx_hovered + 1], col_hovered, 2.0f);
-
-    free(pts);
 }
 
 /**
