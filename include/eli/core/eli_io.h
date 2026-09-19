@@ -143,6 +143,17 @@ typedef struct eli_io {
     float key_down_duration[ELI_KEY_COUNT];
     float key_down_duration_prev[ELI_KEY_COUNT];
     float keys_analog[ELI_KEY_COUNT];
+    /* True when a queued event for this key carried down=true at any point
+     * during THIS frame's drain, even if a later queued event in the same
+     * frame released it again before eli_input_update_keyboard() ever
+     * observed keys_down[k] as true. Without this, a full press-release
+     * cycle that completes between two frames (a fast tap, or any tap on a
+     * backend whose frame rate outpaces its own key-event delivery) nets
+     * keys_down[k] straight back to false and key_down_duration[k] never
+     * passes through 0.0f -- the "just pressed" edge silently never fires.
+     * Reset to false and repopulated once per frame, at the same point
+     * input_events_count is drained (eli_input_process_events()). */
+    bool key_pressed_this_frame[ELI_KEY_COUNT];
 
     /* --- Requested mouse-cursor shape for the current frame --- */
     eli_mouse_cursor mouse_cursor;

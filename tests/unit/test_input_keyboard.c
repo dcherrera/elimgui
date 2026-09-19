@@ -53,6 +53,63 @@ ELI_TEST(key_press_down_release_lifecycle) {
     eli_destroy_context(ctx);
 }
 
+/**
+ * A full press-release cycle queued for the SAME key before the frame that
+ * drains it must still register as a press, even though keys_down[key] nets
+ * straight back to false once both queued events are applied.
+ *
+ * This is the regression test for a real incident: a host whose frame rate
+ * outpaces its own key-event delivery (or simply a fast physical tap) can
+ * queue both eli_io_add_key_event() calls for one key before the next
+ * eli_input_update_begin_frame() ever runs. Before this fix, that quick tap
+ * was silently invisible to eli_is_key_pressed_ex() -- key_down_duration
+ * never passed through 0.0f, because eli_input_process_events() only ever
+ * looked at the LAST queued event's value. Backspace/Delete in a real text
+ * field is where this became visible: fast taps did nothing at all.
+ */
+ELI_TEST(key_press_and_release_within_one_frame_still_registers) {
+    eli_context *ctx = kb_setup();
+
+    eli_io_add_key_event(ELI_KEY_BACKSPACE, true);
+    eli_io_add_key_event(ELI_KEY_BACKSPACE, false);
+    eli_input_update_begin_frame();
+    /* The net resting state is correctly "not down"... */
+    ELI_ASSERT_FALSE(eli_is_key_down(ELI_KEY_BACKSPACE));
+    /* ...but the press itself must not have been lost. */
+    ELI_ASSERT_TRUE(eli_is_key_pressed_ex(ELI_KEY_BACKSPACE, true));
+    ELI_ASSERT_TRUE(eli_is_key_pressed(ELI_KEY_BACKSPACE));
+    eli_input_update_end_frame();
+
+    /* And it must not keep firing on later frames once the queue is empty --
+     * this is one tap, not a stuck key. */
+    eli_input_update_begin_frame();
+    ELI_ASSERT_FALSE(eli_is_key_pressed_ex(ELI_KEY_BACKSPACE, true));
+    eli_input_update_end_frame();
+
+    eli_destroy_context(ctx);
+}
+
+/**
+ * The reverse ordering (queued UP before DOWN, e.g. a stale release from a
+ * key that was already logically down arriving interleaved with a fresh
+ * press in the same batch) must still leave the key correctly DOWN and
+ * still register the press -- order within the frame's queue must not
+ * change the outcome for the common down-then-up case, and must not make an
+ * up-then-down net to "not pressed" either.
+ */
+ELI_TEST(key_release_and_press_within_one_frame_ends_down_and_pressed) {
+    eli_context *ctx = kb_setup();
+
+    eli_io_add_key_event(ELI_KEY_BACKSPACE, false);
+    eli_io_add_key_event(ELI_KEY_BACKSPACE, true);
+    eli_input_update_begin_frame();
+    ELI_ASSERT_TRUE(eli_is_key_down(ELI_KEY_BACKSPACE));
+    ELI_ASSERT_TRUE(eli_is_key_pressed_ex(ELI_KEY_BACKSPACE, true));
+    eli_input_update_end_frame();
+
+    eli_destroy_context(ctx);
+}
+
 ELI_TEST(modifier_tracking_from_physical_keys) {
     eli_context *ctx = kb_setup();
 

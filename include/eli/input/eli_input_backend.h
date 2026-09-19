@@ -188,9 +188,19 @@ static inline void eli_io_add_key_analog_event(eli_key key, bool down, float val
  * Per-frame update (internal helpers)
  * ------------------------------------------------------------------------- */
 
-/** Apply queued events to the live IO state, then clear the queue. */
+/**
+ * Apply queued events to the live IO state, then clear the queue.
+ *
+ * key_pressed_this_frame is reset here and repopulated from the raw queue
+ * before it gets collapsed into the single keys_down[k] boolean below --
+ * see its own doc in eli_io.h for why that collapse needs a second signal
+ * to avoid losing a full press-release cycle that lands within one frame.
+ */
 static inline void eli_input_process_events(eli_io *io)
 {
+    for (int k = 0; k < ELI_KEY_COUNT; k++)
+        io->key_pressed_this_frame[k] = false;
+
     for (int i = 0; i < io->input_events_count; i++) {
         eli_input_event *e = &io->input_events[i];
         switch (e->type) {
@@ -209,6 +219,8 @@ static inline void eli_input_process_events(eli_io *io)
             if (eli_key_is_valid(e->data.key.key)) {
                 io->keys_down[e->data.key.key] = e->data.key.down;
                 io->keys_analog[e->data.key.key] = e->data.key.analog_value;
+                if (e->data.key.down)
+                    io->key_pressed_this_frame[e->data.key.key] = true;
             }
             break;
         case ELI_INPUT_EVENT_TYPE_TEXT:

@@ -99,6 +99,18 @@ static inline bool eli_is_key_down(eli_key key)
  * Test whether a key was pressed this frame, optionally including typematic
  * repeats while held.
  *
+ * **A quick tap that both presses and releases within one frame still
+ * counts.** key_down_duration alone cannot see that: it is derived from
+ * keys_down[key]'s single resting boolean AFTER the frame's whole queued
+ * event batch has been collapsed into it, so a press immediately followed
+ * by a release in the same batch nets straight back to "not down" and
+ * duration never passes through 0.0f. key_pressed_this_frame is set
+ * directly from the raw queue before that collapse (eli_input_process_
+ * events()) specifically so this case is not silently lost -- without it, a
+ * host whose frame rate outpaces its own key-event delivery drops every tap
+ * fast enough to complete between two frames, which reads as "backspace/
+ * delete stopped working" to whoever is typing.
+ *
  * @param key     Key index.
  * @param repeat  If true, also report repeats at the IO delay/rate.
  * @return        true on the initial press frame (and repeat frames if enabled).
@@ -111,6 +123,9 @@ static inline bool eli_is_key_pressed_ex(eli_key key, bool repeat)
     const eli_io *io = eli_get_io();
     if (!io || !eli_key_is_valid(key))
         return false;
+
+    if (io->key_pressed_this_frame[key])
+        return true;
 
     float t = io->key_down_duration[key];
     if (t < 0.0f)
