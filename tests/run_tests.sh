@@ -48,6 +48,7 @@ run_suite() {
         *) echo "unknown pass ${pass}"; return 1 ;;
     esac
     mkdir -p "${build_dir}"
+    mode_flags="${mode_flags} -DELI_TEST_OUT_DIR=\"${build_dir}\""
     bin="${build_dir}/${name}"
     companion="${COMPANION_DIR}/${name}_b.c"
     local objs=()

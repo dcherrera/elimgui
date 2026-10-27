@@ -7,10 +7,9 @@
  * allocator (pool, leak-tracker, sanitizer) via eli_set_allocator_functions() and
  * restore the platform default (malloc/free) by passing NULL for either function.
  *
- * Design note: The allocator state uses file-scope statics, which is correct for
- * elimgui's single-TU WASM build model and single-TU test binaries.  Multi-TU
- * hosts that need a shared allocator should install it in every TU that includes
- * this header.
+ * Design note: The allocator state is declared with ELI_GLOBAL (core/eli_state.h):
+ * per-TU statics by default (single-TU WASM build), one shared copy across TUs
+ * under ELI_SHARED_STATE.
  *
  * @status Complete — allocator swap, query, alloc, and free implemented.
  * @issues None

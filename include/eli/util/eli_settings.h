@@ -10,17 +10,18 @@
  * a caller can re-apply an entry via eli_set_next_window_pos/_size/_collapsed
  * before eli_begin. Automatic apply-in-Begin is intentionally deferred.
  *
- * Disk I/O is browser-only and guarded by ELI_JSIO: *_from_disk/_to_disk call a
- * JS host hook. Under hosted (test) builds those hooks compile out and the disk
- * entry points become clearly-documented no-ops that report failure.
+ * Disk I/O goes through eli_host_io.h: a JS host hook in the browser, stdio under
+ * ELI_LIBC_SYSTEM. io.ini_filename defaults to NULL, so nothing is written unless
+ * the app asks.
  *
- * @status Memory round-trip + lookup implemented; disk paths are JS-hooked.
+ * @status Memory round-trip + lookup implemented; disk via eli_host_io.
  * @issues None
  * @todo Apply-in-Begin (auto-restore) is deferred to the window/frame phase.
  */
 #ifndef ELI_UTIL_SETTINGS_H
 #define ELI_UTIL_SETTINGS_H
 
+#include "eli_host_io.h"
 #include "eli_mem.h"
 
 #include "../core/eli_platform.h"
@@ -339,23 +340,15 @@ static inline bool eli_settings_get_window(const char *name, eli_vec2 *out_pos,
 }
 
 /* ---------------------------------------------------------------------------
- * Disk load / save (JS-hooked; no-op fallback under hosted builds)
+ * Disk load / save (through eli_host_io)
  * ------------------------------------------------------------------------- */
 
-#ifdef ELI_JSIO
-
-/* Host page provides these: read a file's text by path (returns a heap C string
- * the C side frees, or NULL) and write text to a path (returns 0 on success). */
-JS_IMPORT(eli_host_read_file) char *eli_host_read_file(const char *path);
-JS_IMPORT(eli_host_write_file) int   eli_host_write_file(const char *path, const char *text);
-
-#endif /* ELI_JSIO */
 
 /**
  * Load INI settings from a file path.
  *
- * Under ELI_JSIO this calls the host read-file hook and parses the result. In
- * hosted/test builds there is no disk access: the call is a no-op.
+ * Reads the file through eli_host_io (JS hook or stdio) and parses it. A missing
+ * file is not an error: nothing is loaded.
  *
  * @param ini_filename  Path to the INI file.
  *
@@ -366,24 +359,18 @@ static inline void eli_load_ini_settings_from_disk(const char *ini_filename)
 {
     if (!ini_filename)
         return;
-#ifdef ELI_JSIO
-    char *text = eli_host_read_file(ini_filename);
+    char *text = eli_host_io_read_text_file(ini_filename);
     if (text) {
         eli_load_ini_settings_from_memory(text, strlen(text));
         eli_mem_free(text);
     }
-#else
-    (void)ini_filename; /* No disk access in hosted builds. */
-#endif
 }
 
 /**
  * Save the current window states to a file path.
  *
- * Under ELI_JSIO this serializes via the memory variant and calls the host
- * write-file hook. In hosted/test builds there is no disk access: the settings
- * are serialized (to validate the emit path) and immediately freed; the call is
- * otherwise a no-op.
+ * Serializes via the memory variant and writes the text through eli_host_io
+ * (JS hook or stdio), replacing the file.
  *
  * @param ini_filename  Destination path.
  *
@@ -398,11 +385,7 @@ static inline void eli_save_ini_settings_to_disk(const char *ini_filename)
     char *text = eli_save_ini_settings_to_memory(&len);
     if (!text)
         return;
-#ifdef ELI_JSIO
-    eli_host_write_file(ini_filename, text);
-#else
-    (void)ini_filename; /* No disk access in hosted builds. */
-#endif
+    eli_host_io_write_text_file(ini_filename, text, false);
     eli_mem_free(text);
 }
 

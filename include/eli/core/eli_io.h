@@ -179,6 +179,12 @@ typedef struct eli_io {
     const char *(*get_clipboard_text_fn)(void *user_data);
     void (*set_clipboard_text_fn)(void *user_data, const char *text);
     void *clipboard_user_data;
+
+    /* --- Platform services (set by the backend; NULL = default/no-op) --- */
+    /* Open a URL in the OS browser. Return true if handled. Under ELI_JSIO a NULL
+     * callback falls back to the host page's window.open. */
+    bool (*platform_open_url_fn)(void *user_data, const char *url);
+    void *platform_user_data;
 } eli_io;
 
 #endif /* ELI_CORE_ELI_IO_H */
