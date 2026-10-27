@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_debug.h
  * @brief Debug and inspection windows (metrics, debug log, id-stack tool, about,

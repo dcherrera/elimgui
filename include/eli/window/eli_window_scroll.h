@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_window_scroll.h
  * @brief Window scrolling: current-window scroll get/set on both axes, scroll

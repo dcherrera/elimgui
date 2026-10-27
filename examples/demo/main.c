@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file main.c
  * @brief elimgui browser demo: a self-contained immediate-mode UI driven from

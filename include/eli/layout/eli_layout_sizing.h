@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_layout_sizing.h
  * @brief Standard vertical-metric helpers used to size and space rows: text line

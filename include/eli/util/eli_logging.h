@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_logging.h
  * @brief Text logging/capture for elimgui: eli_log_to_tty/_file/_clipboard start

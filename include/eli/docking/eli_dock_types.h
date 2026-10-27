@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_dock_types.h
  * @brief Docking data types (Phase 34): the split-axis / drop-zone enums, dock

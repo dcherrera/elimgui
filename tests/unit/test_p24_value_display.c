@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_p24_value_display.c
  * @brief Unit tests for Phase 24 value-display widgets: each eli_value_* function

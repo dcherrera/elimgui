@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_p33_optimization.c
  * @brief Phase 33 optimization invariants: geometric buffer growth, capacity

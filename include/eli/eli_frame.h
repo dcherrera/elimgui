@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_frame.h
  * @brief Frame-lifecycle composition: eli_frame_begin / eli_frame_end run every

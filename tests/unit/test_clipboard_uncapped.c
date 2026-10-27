@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_clipboard_uncapped.c
  * @brief Uncapped clipboard (D13, spec §12): 64 KB copy from input_text through

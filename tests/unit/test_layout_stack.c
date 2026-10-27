@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_layout_stack.c
  * @brief Unit tests for the item-width and text-wrap stacks: eli_push_item_width /

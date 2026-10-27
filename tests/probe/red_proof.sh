@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 David (Corey) Herrera
 #
 # red_proof.sh — prove a test can fail: apply a perl substitution to a source
 # file, rebuild + run the matching suites (hosted pass) from scratch, then restore

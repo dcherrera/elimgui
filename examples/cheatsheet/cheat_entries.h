@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file cheat_entries.h
  * @brief Aggregated content registry for the elimgui visual cheatsheet.

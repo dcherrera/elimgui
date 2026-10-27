@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_text_widgets.h
  * @brief Phase 9 text-display widgets: plain/formatted text, colored and disabled

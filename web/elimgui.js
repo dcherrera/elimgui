@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file elimgui.js
  * @description WASM loader + Canvas2D renderer + DOM input wiring for the

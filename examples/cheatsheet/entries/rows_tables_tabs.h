@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /* rows_tables_tabs.h — NO include guard; included as an initializer fragment.
  *
  * Field order: { category, title, api, description, snippet, render_fn }

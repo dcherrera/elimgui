@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_draw_channels.h
  * @brief Draw-list channel splitting: temporarily partition a list into ordered

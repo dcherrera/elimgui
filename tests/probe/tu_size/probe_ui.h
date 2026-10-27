@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file probe_ui.h
  * @brief Shared widget-set body for the 1-TU vs 5-TU binary-size probe (D4).

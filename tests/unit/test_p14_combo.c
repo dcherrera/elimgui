@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_p14_combo.c
  * @brief Unit tests for Phase 14 combos: eli_combo opens its dropdown popup on a

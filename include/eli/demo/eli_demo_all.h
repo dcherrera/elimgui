@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_demo_all.h
  * @brief Aggregator for the demo/debug category: pulls in the showcase demo

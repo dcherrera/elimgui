@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /* rows_dragdrop_media.h
  * Fragment — no include guard. Include inside a cheat_entry array initializer.
  * Field order: { category, title, api, description, snippet, render }.

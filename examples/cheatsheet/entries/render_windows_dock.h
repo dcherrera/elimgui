@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file render_windows_dock.h
  * @brief Live-widget renderers for the "Child Windows", "Disabling & Clipping",

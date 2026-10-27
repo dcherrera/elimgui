@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_window.h
  * @brief Window lifecycle and the window-system aggregator: eli_begin/eli_end,

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_style_scale.h
  * @brief eli_style_scale_all_sizes: multiply every size-like style field by a

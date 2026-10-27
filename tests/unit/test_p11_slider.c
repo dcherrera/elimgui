@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_p11_slider.c
  * @brief Phase 11 slider interaction tests driven across frames with backend mouse

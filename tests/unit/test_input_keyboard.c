@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_input_keyboard.c
  * @brief Unit tests for elimgui keyboard input: down/pressed/released timing,

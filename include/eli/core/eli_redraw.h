@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_redraw.h
  * @brief Idle / redraw API (spec §7, D6): tells the app's loop how long it may

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /* rows_color.h — Color category cheat_entry initializers.
  * NO include guard: this file is a raw array-initializer fragment included
  * inside a cheat_entry[] definition.  render_color.h must be included first

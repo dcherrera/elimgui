@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_wasm_runtime.h
  * @brief Minimal freestanding libc glue that lets the elimgui demo link as a

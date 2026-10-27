@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_core_types.c
  * @brief Unit tests for elimgui core value types: vector/rect helpers, color

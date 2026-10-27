@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file render_sliders_input.h
  * @brief Live widget renderers for the "Sliders & Drags" and "Input" cheatsheet

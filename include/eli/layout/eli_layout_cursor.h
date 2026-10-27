@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_layout_cursor.h
  * @brief Layout cursor queries and moves: window-relative get/set cursor position

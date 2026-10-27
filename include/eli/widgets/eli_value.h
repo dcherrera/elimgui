@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_value.h
  * @brief Phase 24 value-display widgets: labeled value output for bool, int, unsigned

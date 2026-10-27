@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_platform_modes.c
  * @brief libc-seam mode macros (D3): one mode resolves, no JS interop natively.

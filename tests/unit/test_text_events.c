@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_text_events.c
  * @brief Ordered UTF-32 text events (D12, spec §9.1): emoji survive into

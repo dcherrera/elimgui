@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_draw_idx32.c
  * @brief ELI_DRAW_IDX_32 (D5): one list holds well over 65,535 vertices with

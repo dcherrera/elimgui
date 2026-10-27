@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_p27_util.c
  * @brief Phase 27 misc-utility coverage: time/frame accessors, the main

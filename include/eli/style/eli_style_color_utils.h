@@ -1,8 +1,13 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_style_color_utils.h
  * @brief Color conversion and lookup helpers for the elimgui style system:
  *        packed<->float conversion, RGB<->HSV, style-color-to-u32 resolution
  *        (applying style.alpha), per-slot color lookup, and slot names.
+ *
+ * The RGB<->HSV conversion is ported from Dear ImGui (MIT License, Copyright (c)
+ * 2014-2026 Omar Cornut, https://github.com/ocornut/imgui); see NOTICE.
  *
  * @status Phase 6 color utilities in use.
  * @issues None

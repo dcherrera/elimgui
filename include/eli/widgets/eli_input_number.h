@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_input_number.h
  * @brief Phase 12 numeric input widgets built on the text editor: eli_input_float

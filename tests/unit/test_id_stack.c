@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_id_stack.c
  * @brief Unit tests for the elimgui ID stack: seed derivation, push/pop effects

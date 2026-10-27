@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_drag.h
  * @brief Drag widgets: eli_drag_scalar / _scalar_n and the float / int convenience

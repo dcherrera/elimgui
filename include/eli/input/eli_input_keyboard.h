@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_input_keyboard.h
  * @brief Keyboard-state queries for elimgui: key up/down/pressed/released with
