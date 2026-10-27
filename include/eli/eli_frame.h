@@ -85,7 +85,8 @@ static inline void eli_frame_begin(void)
  * eli_get_draw_data returns this frame's populated draw data.
  *
  * Order: eli_popup_end_frame -> eli_drag_drop_end_frame -> eli_window_render
- * -> eli_render -> eli_input_update_end_frame.
+ * -> eli_render -> eli_input_update_end_frame -> eli_redraw_end_frame (then
+ * eli_get_redraw_timeout() tells the loop how long it may sleep).
  *
  * Thread-safe: no
  * Reentrant: no
@@ -97,6 +98,7 @@ static inline void eli_frame_end(void)
     eli_window_render();
     eli_render();
     eli_input_update_end_frame();
+    eli_redraw_end_frame();
 }
 
 #endif /* ELI_FRAME_H */

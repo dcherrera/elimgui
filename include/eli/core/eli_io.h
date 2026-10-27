@@ -85,6 +85,10 @@ typedef struct eli_io {
     bool font_allow_user_scaling;
     eli_font *font_default;
 
+    /* Frames built after any input or eli_request_redraw before the redraw
+     * timeout may go idle (immediate-mode convergence). Default 2. */
+    int config_redraw_settle_frames;
+
     /* --- Capability / behavior flags --- */
     eli_config_flags config_flags;
     eli_backend_flags backend_flags;

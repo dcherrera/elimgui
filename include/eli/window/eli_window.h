@@ -228,6 +228,8 @@ static inline bool eli_begin_ex(const char *name, eli_id id, bool *p_open,
     win->parent_window = parent;
     win->root_window = parent ? (parent->root_window ? parent->root_window : parent) : win;
     win->appearing = first_use || (win->last_frame_active < ctx->frame_count - 1);
+    if (win->appearing)
+        eli_request_redraw(); /* auto-fit/positioning converge over the next frames */
     win->window_padding = style->window_padding;
 
     /* Docking (Phase 34): resolve this window's dock node via the hook installed

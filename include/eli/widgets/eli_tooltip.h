@@ -202,10 +202,17 @@ static inline bool eli_is_item_hovered_for_tooltip(eli_hovered_flags flags)
         g_eli_tooltip_hover_timer = 0.0f;
     g_eli_tooltip_hover_id = hover_id;
 
-    if (stationary && g_eli_tooltip_stationary_id != hover_id)
+    /* Not shown yet: wake the loop when the delay or the stationary wait can
+     * complete (the timers only advance on frames). */
+    if (stationary && g_eli_tooltip_stationary_id != hover_id) {
+        float wait = ctx->style.hover_stationary_delay - g_eli_tooltip_stationary_timer;
+        eli_request_redraw_after(eli_max_f(wait, delay - g_eli_tooltip_hover_timer));
         return false;
-    if (g_eli_tooltip_hover_timer < delay)
+    }
+    if (g_eli_tooltip_hover_timer < delay) {
+        eli_request_redraw_after(delay - g_eli_tooltip_hover_timer);
         return false;
+    }
     return true;
 }
 

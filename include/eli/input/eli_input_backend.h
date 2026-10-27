@@ -327,6 +327,11 @@ static inline void eli_input_update_begin_frame(void)
     eli_input_init_io(io);
     io->input_time += (double)io->delta_time;
 
+    /* Any queued input means visible state may change: owe settle frames (D6). */
+    eli_context *ctx = eli_get_current_context();
+    if (io->input_events_count > 0 || io->input_queue_characters_count > 0)
+        ctx->redraw_input_seen = true;
+
     eli_input_process_events(io);
     io->mouse_cursor = ELI_MOUSE_CURSOR_ARROW;
 
@@ -344,8 +349,28 @@ static inline void eli_input_update_begin_frame(void)
 }
 
 /**
- * End-of-frame input update: rolls the previous mouse position, clears the
- * per-frame wheel accumulators, and empties the text-input queue for next frame.
+ * Request a redraw at the next typematic-repeat edge of any held non-modifier key,
+ * so key repeat keeps working while the app's loop sleeps between frames.
+ */
+static inline void eli_input__request_repeat_redraw(const eli_io *io)
+{
+    float next = -1.0f;
+    for (int k = ELI_KEY_NONE + 1; k < ELI_KEY_MOD_CTRL; k++) {
+        if (!io->keys_down[k] || (k >= ELI_KEY_LEFT_CTRL && k <= ELI_KEY_RIGHT_SUPER))
+            continue;
+        float t = eli_redraw_next_repeat_in(io->key_down_duration[k], io->key_repeat_delay,
+                                            io->key_repeat_rate);
+        if (t >= 0.0f && (next < 0.0f || t < next))
+            next = t;
+    }
+    if (next >= 0.0f)
+        eli_request_redraw_after(next);
+}
+
+/**
+ * End-of-frame input update: requests key-repeat redraws, rolls the previous
+ * mouse position, clears the per-frame wheel accumulators, and empties the
+ * text-input queue for next frame.
  *
  * Thread-safe: no
  * Reentrant: no
@@ -356,6 +381,7 @@ static inline void eli_input_update_end_frame(void)
     if (!io)
         return;
 
+    eli_input__request_repeat_redraw(io);
     io->mouse_pos_prev = io->mouse_pos;
     io->mouse_wheel = 0.0f;
     io->mouse_wheel_h = 0.0f;

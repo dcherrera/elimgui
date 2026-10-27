@@ -550,7 +550,10 @@ static inline void eli_input_text__render(const eli_input_text_state *st, eli_re
 
     if (is_active) {
         double elapsed = ctx->time - st->cursor_anim_base;
-        bool blink = fmod(elapsed, 1.20) <= 0.80;
+        double phase = fmod(elapsed, 1.20);
+        bool blink = phase <= 0.80;
+        /* Wake the loop at the next blink edge (on at [0, 0.8), off at [0.8, 1.2)). */
+        eli_request_redraw_after((float)((blink ? 0.80 : 1.20) - phase) + 0.001f);
         if (blink) {
             int line_start = st->cursor;
             while (line_start > 0 && buf[line_start - 1] != '\n')

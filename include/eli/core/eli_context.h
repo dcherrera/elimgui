@@ -209,6 +209,16 @@ typedef struct eli_context {
     eli_draw_list *background_draw_list;
     eli_draw_list *foreground_draw_list;
     void (*util_shutdown_fn)(struct eli_context *ctx); /* frees util (bg/fg) state on destroy */
+
+    /* --- Idle / redraw (core/eli_redraw.h) ---
+     * Resolved into redraw_timeout by eli_redraw_end_frame: -1 = sleep until input,
+     * 0 = build another frame now, > 0 = seconds until a timed change. */
+    bool  redraw_collecting;    /* between eli_new_frame and eli_redraw_end_frame */
+    bool  redraw_requested;     /* eli_request_redraw since the last frame end */
+    bool  redraw_input_seen;    /* input events/characters were processed this frame */
+    int   redraw_settle_left;   /* settle frames still owed (timeout 0) */
+    float redraw_after_min;     /* earliest eli_request_redraw_after this frame; < 0 none */
+    float redraw_timeout;       /* result of the last frame end */
 } eli_context;
 
 /* Single global "current" context. Header-only builds are a single translation
@@ -318,6 +328,9 @@ static inline eli_context *eli_create_context(void)
 
     eli_style_set_defaults(&ctx->style);
 
+    ctx->io.config_redraw_settle_frames = 2;
+    ctx->redraw_after_min = -1.0f;
+    ctx->redraw_timeout = 0.0f;  /* build the first frame */
     ctx->initialized = true;
     ctx->serial = g_eli_context_serial_next++;
 
@@ -440,6 +453,7 @@ static inline void eli_new_frame(void)
 
     ctx->frame_count++;
     ctx->within_frame_scope = true;
+    ctx->redraw_collecting = true;
     ctx->time += (double)ctx->io.delta_time;
     ctx->io.framerate = (ctx->io.delta_time > 0.0f) ? (1.0f / ctx->io.delta_time) : 0.0f;
 
