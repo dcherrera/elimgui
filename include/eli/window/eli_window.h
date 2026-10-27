@@ -103,7 +103,10 @@ static inline void eli_window_render_decorations(eli_context *ctx, eli_window *w
                                       ELI_DRAW_ROUND_CORNERS_ALL);
     }
 
-    if (eli_window_has_title_bar(win) && !win->collapsed) {
+    /* A docked window keeps its flags but has no title bar (height 0): the shared
+     * tab strip replaces it, so draw nothing here. */
+    bool title_visible = eli_window_has_title_bar(win) && win->title_bar_height > 0.0f;
+    if (title_visible && !win->collapsed) {
         bool focused = (ctx->nav_window == win ||
                         (ctx->nav_window && ctx->nav_window->root_window == win));
         eli_col title_slot = focused ? ELI_COL_TITLE_BG_ACTIVE : ELI_COL_TITLE_BG;
@@ -116,7 +119,7 @@ static inline void eli_window_render_decorations(eli_context *ctx, eli_window *w
                                     win->title_bar_rect.y + style->frame_padding.y);
         size_t vlen = eli_window_visible_label_len(win->name);
         eli_draw_list_add_text(dl, tp, text_col, win->name, win->name + vlen);
-    } else if (eli_window_has_title_bar(win) && win->collapsed) {
+    } else if (title_visible && win->collapsed) {
         eli_col32 tc = eli_get_color_u32(ELI_COL_TITLE_BG_COLLAPSED, 1.0f);
         eli_draw_list_add_rect_filled(dl, eli_rect_min(win->title_bar_rect),
                                       eli_rect_max(win->title_bar_rect), tc, rounding,

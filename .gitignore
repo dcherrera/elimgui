@@ -30,3 +30,6 @@ tests/build/
 
 # Claude Code project instructions (local only)
 CLAUDE.md
+
+# SDL3 example build output and SDL3 source/static deps
+examples/sdl3/build/
