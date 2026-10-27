@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 David (Corey) Herrera
 #
 # jaclibc_native_probe.sh — spec §4.3 probe: can the unit tests build and pass
 # natively against JAClibc (-DELI_LIBC_JACLIBC) instead of the system libc?

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_p32_integration.c
  * @brief Phase 32 cross-subsystem integration tests. Verifies invariants that

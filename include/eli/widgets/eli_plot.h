@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_plot.h
  * @brief Phase 23 data-plotting widgets: eli_plot_lines, eli_plot_lines_fn,

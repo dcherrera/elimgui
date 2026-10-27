@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_combo.h
  * @brief Phase 14 combo boxes: eli_begin_combo / eli_end_combo (a preview button

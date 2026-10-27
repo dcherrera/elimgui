@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_id_hash.h
  * @brief CRC32-based identity hashing for elimgui, matching Dear ImGui's

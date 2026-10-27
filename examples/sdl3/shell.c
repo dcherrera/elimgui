@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file shell.c
  * @brief SDL3 example, second TU: a viewport dockspace split into a left and a

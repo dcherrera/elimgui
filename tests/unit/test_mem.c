@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_mem.c
  * @brief Unit tests for the eli_mem.h memory management API (Phase 29).

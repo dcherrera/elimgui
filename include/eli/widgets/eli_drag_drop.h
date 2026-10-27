@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_drag_drop.h
  * @brief Phase 21 drag & drop: payload storage plus the source/target API pair

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_popup.h
  * @brief Phase 17 popups and modals: the open-popup stack and begin-popup stack,

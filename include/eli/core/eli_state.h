@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_state.h
  * @brief Storage-class macros for elimgui's file-scope state (single- or multi-TU).

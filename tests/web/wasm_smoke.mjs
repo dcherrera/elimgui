@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file wasm_smoke.mjs
  * @brief Headless smoke test for the WASM builds (web/demo.wasm, web/cheatsheet.wasm).

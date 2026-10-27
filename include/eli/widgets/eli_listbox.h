@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_listbox.h
  * @brief Phase 14 list boxes: eli_begin_list_box / eli_end_list_box (a framed,

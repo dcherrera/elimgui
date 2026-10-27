@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file bench_draw.c
  * @brief Host benchmark for elimgui draw-list generation (Phase 33).

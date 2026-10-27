@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_widget_buttons.c
  * @brief Unit tests for Phase 9 widgets: button click semantics, checkbox toggle +

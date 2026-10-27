@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_layout_sizing.c
  * @brief Unit tests for the vertical sizing helpers: text line height (with/without

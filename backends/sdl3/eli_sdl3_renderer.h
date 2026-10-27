@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_sdl3_renderer.h
  * @brief SDL3 renderer backend: eli_draw_data -> SDL_RenderGeometryRaw, plus

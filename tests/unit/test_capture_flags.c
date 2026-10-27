@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_capture_flags.c
  * @brief io.want_capture_mouse / want_capture_keyboard / want_text_input (D15,

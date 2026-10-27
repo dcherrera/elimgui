@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_draw_idx.c
  * @brief 16-bit index guard (D5): crossing 65,536 vertices drops and counts the

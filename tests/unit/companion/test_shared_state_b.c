@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_shared_state_b.c
  * @brief Second translation unit for test_shared_state.c (multi-TU state, D4).

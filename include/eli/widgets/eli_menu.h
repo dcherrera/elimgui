@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_menu.h
  * @brief Phase 16 menus: window menu bars (eli_begin_menu_bar / eli_end_menu_bar),

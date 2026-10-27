@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_redraw.c
  * @brief Idle / redraw API (D6, spec §7): settle frames after input, app requests,

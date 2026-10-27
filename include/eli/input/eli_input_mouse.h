@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_input_mouse.h
  * @brief Mouse-state queries for elimgui: button up/down/clicked/released/

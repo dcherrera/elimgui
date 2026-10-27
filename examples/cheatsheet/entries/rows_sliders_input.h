@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /* rows_sliders_input.h — fragment #included inside a cheat_entry array initializer.
  * No include guard. Field order: category, title, api, description, snippet, render. */
 

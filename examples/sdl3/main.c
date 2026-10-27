@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file main.c
  * @brief SDL3 desktop example: window, renderer, fonts at the window's pixel

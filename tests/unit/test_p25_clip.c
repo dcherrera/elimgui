@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_p25_clip.c
  * @brief Phase 25 clipping tests: eli_push_clip_rect (intersect) shrinks the

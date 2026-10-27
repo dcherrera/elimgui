@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_id_storage.c
  * @brief Unit tests for eli_storage: int/float/ptr/bool round-trips, defaults

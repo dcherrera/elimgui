@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file render_tables_tabs.h
  * @brief Live widget render functions for the "Tables" and "Tab Bars"

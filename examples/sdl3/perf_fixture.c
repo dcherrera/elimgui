@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file perf_fixture.c
  * @brief SDL3 example, third TU: the text-heavy perf fixture window (120 x 48

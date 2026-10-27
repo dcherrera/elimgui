@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_font_proggy.h
  * @brief Embedded default font (ProggyClean.ttf) and the stb-format
@@ -6,6 +8,9 @@
  * ProggyClean.ttf (c) 2004, 2005 Tristan Grimmer, MIT license. The bytes below
  * are the stb "binary_to_compressed_c -u8" form (9583 bytes) that expands to a
  * 41208-byte TTF. This is the big-data exception to the per-file size target.
+ *
+ * The decompressor below is a port of stb_decompress from stb (Sean Barrett,
+ * public domain). See NOTICE.
  *
  * @status Phase 3 embedded font in use.
  * @issues None

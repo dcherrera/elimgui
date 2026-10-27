@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_focus.h
  * @brief Focus requests: eli_set_item_default_focus and eli_set_keyboard_focus_here.

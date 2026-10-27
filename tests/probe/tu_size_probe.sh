@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 David (Corey) Herrera
 #
 # tu_size_probe.sh — D4 measurement: binary size of the same app built as one
 # translation unit vs five (ELI_SHARED_STATE, header-only static inline code is

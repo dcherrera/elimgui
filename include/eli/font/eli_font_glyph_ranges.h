@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_font_glyph_ranges.h
  * @brief Predefined glyph-range tables (codepoint [lo, hi] pairs, zero

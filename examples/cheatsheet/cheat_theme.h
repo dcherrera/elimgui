@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file cheat_theme.h
  * @brief Small design system for the elimgui visual cheatsheet: named spacing,

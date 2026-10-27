@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_window_interaction.h
  * @brief Window interaction behaviors: dragging the title bar to move a window,

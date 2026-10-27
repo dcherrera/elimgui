@@ -1,8 +1,13 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_style_colors.h
  * @brief Built-in color themes for elimgui: dark, light, and classic. Each
  *        setter fills a style's colors[] table with the exact Dear ImGui RGBA
  *        values (including the ImLerp-derived tab colors).
+ *
+ * The color values are Dear ImGui's (MIT License, Copyright (c) 2014-2026 Omar
+ * Cornut, https://github.com/ocornut/imgui); see NOTICE.
  *
  * @status Phase 6 theming in use.
  * @issues None

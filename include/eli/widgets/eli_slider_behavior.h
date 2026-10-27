@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_slider_behavior.h
  * @brief Shared interaction core for the slider and drag widgets: the scalar

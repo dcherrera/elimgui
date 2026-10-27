@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_input.h
  * @brief Aggregator for the elimgui input category: mouse, keyboard, text queue,

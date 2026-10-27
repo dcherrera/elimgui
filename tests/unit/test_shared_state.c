@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_shared_state.c
  * @brief Multi-TU state test (D4): context, clipboard and allocator across two TUs.

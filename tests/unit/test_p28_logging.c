@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_p28_logging.c
  * @brief Unit tests for Phase 28 logging: clipboard capture round-trip, buffer

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_p23_plot.c
  * @brief Unit tests for Phase 23 data-plotting widgets: eli_plot_lines,

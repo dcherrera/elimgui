@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /* rows_text_buttons.h — fragment: no include guard.
  * #include'd inside a cheat_entry array initializer.
  * Field order: { category, title, api, description, snippet, render_fn }

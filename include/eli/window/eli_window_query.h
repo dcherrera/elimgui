@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_window_query.h
  * @brief Window state queries: appearing/collapsed/focused/hovered tests and the

@@ -149,4 +149,6 @@ Feature-complete: the full Dear ImGui feature set is implemented, covered by a n
 
 ## License
 
-MIT-T
+**AGPL-3.0-or-later** — see [`LICENSE`](LICENSE). Third-party components and their
+licenses are listed in [`NOTICE`](NOTICE). Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+and the CLA in [`CLA.md`](CLA.md).

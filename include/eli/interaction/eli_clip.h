@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_clip.h
  * @brief Widget-level clip-rect scope: eli_push_clip_rect / eli_pop_clip_rect.

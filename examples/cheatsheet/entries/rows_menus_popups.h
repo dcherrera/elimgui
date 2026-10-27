@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /* rows_menus_popups.h — cheat_entry initializers for Menus, Popups, Tooltips.
  * NO include guard: this file is a fragment #included inside an array literal.
  * Every row ends with a comma. Render functions are defined in

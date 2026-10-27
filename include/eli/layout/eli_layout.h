@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_layout.h
  * @brief Layout-system aggregator (Phase 8). Including this header pulls in the

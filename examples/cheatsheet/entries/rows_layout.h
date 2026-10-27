@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /* rows_layout.h — "Layout" cheatsheet entries (fragment, no include guard).
  *
  * Included inside a `static const cheat_entry[]` initializer by cheat_entries.h

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_selectable.h
  * @brief Phase 14 selectable rows: eli_selectable (caller-owned selected flag) and

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_p25_focus.c
  * @brief Phase 25 focus tests: eli_set_item_default_focus lands nav_id on the

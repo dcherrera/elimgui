@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file test_shortcut_routing.c
  * @brief Shortcut routing and Cmd/Ctrl chords (D14, D15, spec §9.2-9.3):
