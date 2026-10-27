@@ -56,13 +56,13 @@ typedef void (*eli_free_func)(void *ptr, void *user_data);
  * unused-parameter warnings since the default wrappers have no user context.
  * ---------------------------------------------------------------------- */
 
-static void *eli_default_alloc(size_t sz, void *user_data)
+static inline void *eli_default_alloc(size_t sz, void *user_data)
 {
     (void)user_data;
     return malloc(sz);
 }
 
-static void eli_default_free(void *ptr, void *user_data)
+static inline void eli_default_free(void *ptr, void *user_data)
 {
     (void)user_data;
     free(ptr);
@@ -72,9 +72,9 @@ static void eli_default_free(void *ptr, void *user_data)
  * Module-private allocator state
  * ---------------------------------------------------------------------- */
 
-static eli_alloc_func eli_s_alloc_func     = eli_default_alloc;
-static eli_free_func  eli_s_free_func      = eli_default_free;
-static void          *eli_s_alloc_userdata = NULL;
+ELI_GLOBAL(eli_alloc_func, eli_s_alloc_func, eli_default_alloc);
+ELI_GLOBAL(eli_free_func, eli_s_free_func, eli_default_free);
+ELI_GLOBAL(void *, eli_s_alloc_userdata, NULL);
 
 /* -------------------------------------------------------------------------
  * Public API

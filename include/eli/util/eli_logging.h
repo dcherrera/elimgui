@@ -57,22 +57,22 @@ typedef enum eli_log_target {
 } eli_log_target;
 
 /* Active-session flag and destination. */
-static bool           eli_log_active = false;
-static eli_log_target eli_log_active_target = ELI_LOG_TARGET_NONE;
+ELI_GLOBAL(bool, eli_log_active, false);
+ELI_GLOBAL(eli_log_target, eli_log_active_target, ELI_LOG_TARGET_NONE);
 
 /* Depth to which tree nodes are auto-opened while logging (-1 = unlimited). */
-static int eli_log_auto_open_depth = -1;
+ELI_GLOBAL(int, eli_log_auto_open_depth, -1);
 
 /* Default depth exposed by the eli_log_buttons() slider. */
-static int eli_log_depth_default = 2;
+ELI_GLOBAL(int, eli_log_depth_default, 2);
 
 /* Destination path captured by eli_log_to_file. */
-static char eli_log_filename[ELI_LOG_FILENAME_MAX];
+ELI_GLOBAL_ARRAY(char, eli_log_filename, ELI_LOG_FILENAME_MAX);
 
 /* Growable capture buffer (single-TU header-only build). */
-static char  *eli_log_buffer = NULL;
-static size_t eli_log_buffer_len = 0;
-static size_t eli_log_buffer_capacity = 0;
+ELI_GLOBAL(char *, eli_log_buffer, NULL);
+ELI_GLOBAL(size_t, eli_log_buffer_len, 0);
+ELI_GLOBAL(size_t, eli_log_buffer_capacity, 0);
 
 /* ---------------------------------------------------------------------------
  * JS host hooks (browser only)

@@ -310,12 +310,12 @@ typedef struct eli_table {
  * Module-private pool + current-table stack (file-static, heap-backed)
  * ------------------------------------------------------------------------- */
 
-static eli_table **g_eli_table_pool = NULL;
-static int         g_eli_table_pool_count = 0;
-static int         g_eli_table_pool_capacity = 0;
+ELI_GLOBAL(eli_table **, g_eli_table_pool, NULL);
+ELI_GLOBAL(int, g_eli_table_pool_count, 0);
+ELI_GLOBAL(int, g_eli_table_pool_capacity, 0);
 
-static eli_table  *g_eli_table_stack[ELI_TABLE_STACK_MAX];
-static int         g_eli_table_stack_size = 0;
+ELI_GLOBAL_ARRAY(eli_table *, g_eli_table_stack, ELI_TABLE_STACK_MAX);
+ELI_GLOBAL(int, g_eli_table_stack_size, 0);
 
 /** @return the table currently being built (top of the stack), or NULL. */
 static inline eli_table *eli_table_get_current(void)

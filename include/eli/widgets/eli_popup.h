@@ -85,12 +85,12 @@ typedef struct eli_popup_data {
 } eli_popup_data;
 
 /* The currently-open popups, outer-to-inner. */
-static eli_popup_data g_eli_open_popup_stack[ELI_POPUP_STACK_MAX];
-static int            g_eli_open_popup_count = 0;
+ELI_GLOBAL_ARRAY(eli_popup_data, g_eli_open_popup_stack, ELI_POPUP_STACK_MAX);
+ELI_GLOBAL(int, g_eli_open_popup_count, 0);
 
 /* The popups being emitted this frame (pushed by begin, popped by end). */
-static eli_popup_data g_eli_begin_popup_stack[ELI_POPUP_STACK_MAX];
-static int            g_eli_begin_popup_count = 0;
+ELI_GLOBAL_ARRAY(eli_popup_data, g_eli_begin_popup_stack, ELI_POPUP_STACK_MAX);
+ELI_GLOBAL(int, g_eli_begin_popup_count, 0);
 
 /* ---------------------------------------------------------------------------
  * Queries

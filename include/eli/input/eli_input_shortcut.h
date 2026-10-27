@@ -61,7 +61,7 @@ static inline bool eli_shortcut(eli_key_chord key_chord)
 #endif
 
 /* Fallback clipboard storage (single-TU header-only build). */
-static char eli_clipboard_fallback_buffer[ELI_CLIPBOARD_BUFFER_SIZE];
+ELI_GLOBAL_ARRAY(char, eli_clipboard_fallback_buffer, ELI_CLIPBOARD_BUFFER_SIZE);
 
 /** Copy text into the fallback buffer, truncating to its capacity. */
 static inline void eli_clipboard_store_fallback(const char *text)

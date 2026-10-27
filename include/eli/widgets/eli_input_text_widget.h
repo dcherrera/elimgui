@@ -111,10 +111,10 @@ typedef struct eli_input_text_state {
     bool has_undo;
 } eli_input_text_state;
 
-static eli_input_text_state g_eli_input_text_state;
+ELI_GLOBAL(eli_input_text_state, g_eli_input_text_state, {0});
 
 /* Scratch buffer for the password/display render pass. */
-static char g_eli_input_text_display[ELI_INPUT_TEXT_SNAPSHOT_MAX];
+ELI_GLOBAL_ARRAY(char, g_eli_input_text_display, ELI_INPUT_TEXT_SNAPSHOT_MAX);
 
 /* ---------------------------------------------------------------------------
  * Byte/codepoint + buffer helpers

@@ -24,8 +24,8 @@
 
 /* Pending keyboard-focus request. Lives file-static rather than on the context so
  * no core struct field is added; the next matching item consumes it. */
-static bool eli_focus__request_active = false;
-static int eli_focus__request_countdown = 0;
+ELI_GLOBAL(bool, eli_focus__request_active, false);
+ELI_GLOBAL(int, eli_focus__request_countdown, 0);
 
 /**
  * Make the just-submitted item the default navigation focus for its window, but

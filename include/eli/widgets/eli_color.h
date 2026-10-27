@@ -81,14 +81,14 @@ enum eli_color_edit_flags_ {
  * ------------------------------------------------------------------------- */
 
 /** User-configurable default option bits, merged into every color widget's flags. */
-static eli_color_edit_flags g_eli_color_edit_options =
+ELI_GLOBAL(eli_color_edit_flags, g_eli_color_edit_options,
     ELI_COLOR_EDIT_UINT8 | ELI_COLOR_EDIT_DISPLAY_RGB | ELI_COLOR_EDIT_INPUT_RGB |
-    ELI_COLOR_EDIT_PICKER_HUE_BAR;
+    ELI_COLOR_EDIT_PICKER_HUE_BAR);
 
 /* One-slot cache so a picker keeps its hue while dragging through a gray column
  * (where RGB->HSV cannot recover the hue). Keyed by the active picker's id. */
-static eli_id g_eli_color_picker_hue_id = 0u;
-static float g_eli_color_picker_hue = 0.0f;
+ELI_GLOBAL(eli_id, g_eli_color_picker_hue_id, 0u);
+ELI_GLOBAL(float, g_eli_color_picker_hue, 0.0f);
 
 /**
  * Override the default color-edit option bits (display mode, data type, picker
@@ -243,7 +243,7 @@ static inline bool eli_color_button(const char *desc_id, eli_vec4 col, eli_color
  * ------------------------------------------------------------------------- */
 
 /** Persistent hex-edit buffer (single active field at a time). */
-static char g_eli_color_hex_buf[16] = "#000000";
+ELI_GLOBAL_ARRAY_INIT(char, g_eli_color_hex_buf, 16, "#000000");
 
 /** Parse a hex character to its 0..15 value, or -1 if not a hex digit. */
 static inline int eli_color__hex_digit(char c)

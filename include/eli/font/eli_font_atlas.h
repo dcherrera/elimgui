@@ -44,11 +44,23 @@
 #define STBRP_SORT      qsort
 #define STBRP_ASSERT(x) ((void)0)
 
-/* stb_rect_pack must precede stb_truetype so the latter binds the real packer. */
-#define STB_RECT_PACK_IMPLEMENTATION
+/* stb_rect_pack must precede stb_truetype so the latter binds the real packer.
+ * Linkage follows eli_state.h: under ELI_SHARED_STATE only the ELI_IMPLEMENTATION
+ * TU compiles the stb bodies (external linkage) and other TUs see declarations;
+ * by default every TU gets its own static copy, so static-mode TUs still link. */
+#if !defined(ELI_SHARED_STATE) || defined(ELI_IMPLEMENTATION)
+    #define STB_RECT_PACK_IMPLEMENTATION
+    #define STB_TRUETYPE_IMPLEMENTATION
+#endif
+#if !defined(ELI_SHARED_STATE)
+    #define STBRP_STATIC
+    #define STBTT_STATIC
+#endif
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
 #include <stb/stb_rect_pack.h>
-#define STB_TRUETYPE_IMPLEMENTATION
 #include <stb/stb_truetype.h>
+#pragma GCC diagnostic pop
 
 /** Default spacing (in texels) left between packed glyphs. */
 #define ELI_FONT_ATLAS_DEFAULT_PADDING 1

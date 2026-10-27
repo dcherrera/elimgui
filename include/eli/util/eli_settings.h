@@ -56,9 +56,9 @@ typedef struct eli_window_settings {
 } eli_window_settings;
 
 /* Growable settings store (single-TU header-only build). */
-static eli_window_settings *eli_settings_store = NULL;
-static size_t               eli_settings_store_count = 0;
-static size_t               eli_settings_store_capacity = 0;
+ELI_GLOBAL(eli_window_settings *, eli_settings_store, NULL);
+ELI_GLOBAL(size_t, eli_settings_store_count, 0);
+ELI_GLOBAL(size_t, eli_settings_store_capacity, 0);
 
 /* ---------------------------------------------------------------------------
  * Store management (internal)

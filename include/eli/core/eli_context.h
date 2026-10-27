@@ -212,7 +212,7 @@ typedef struct eli_context {
 
 /* Single global "current" context. Header-only builds are a single translation
  * unit (the app includes elimgui.h once), so file-static storage is correct. */
-static eli_context *g_eli_context = NULL;
+ELI_GLOBAL(eli_context *, g_eli_context, NULL);
 
 /* ---------------------------------------------------------------------------
  * Default style
