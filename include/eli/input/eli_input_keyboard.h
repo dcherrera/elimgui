@@ -20,7 +20,12 @@
 
 /* ---------------------------------------------------------------------------
  * Key chords: an eli_key optionally OR'd with modifier bit flags. Named key
- * values are all well below 1<<12, so key and modifier bits never collide.
+ * values are all well below 1<<11, so key and modifier bits never collide.
+ *
+ * ELI_MOD_SHORTCUT is the platform's command modifier, resolved when a chord is
+ * tested: Super (Cmd) when io.config_mac_os_behaviors, else Ctrl. Use it for
+ * app-level shortcuts so Cmd+S on macOS and Ctrl+S elsewhere are one chord, and
+ * keep ELI_MOD_CTRL for chords that must be a real Ctrl (a terminal's Ctrl+C).
  * ------------------------------------------------------------------------- */
 
 /** A key plus optional modifier flags (see ELI_MOD_*). */
@@ -31,7 +36,8 @@ typedef int eli_key_chord;
 #define ELI_MOD_SHIFT (1 << 13)
 #define ELI_MOD_ALT   (1 << 14)
 #define ELI_MOD_SUPER (1 << 15)
-#define ELI_MOD_MASK  0xF000
+#define ELI_MOD_SHORTCUT (1 << 11)
+#define ELI_MOD_MASK  0xF800
 
 /* ---------------------------------------------------------------------------
  * Internal helpers
@@ -76,6 +82,27 @@ static inline int eli_get_key_mods(const eli_io *io)
     if (io->key_alt)   mods |= ELI_MOD_ALT;
     if (io->key_super) mods |= ELI_MOD_SUPER;
     return mods;
+}
+
+/**
+ * Resolve ELI_MOD_SHORTCUT in a modifier mask to Super (macOS behaviors) or Ctrl.
+ *
+ * @param io    IO holding config_mac_os_behaviors.
+ * @param mods  ELI_MOD_* bits.
+ * @return      The same bits with SHORTCUT replaced by SUPER or CTRL.
+ */
+static inline int eli_resolve_key_mods(const eli_io *io, int mods)
+{
+    if (!(mods & ELI_MOD_SHORTCUT))
+        return mods;
+    mods &= ~ELI_MOD_SHORTCUT;
+    return mods | (io->config_mac_os_behaviors ? ELI_MOD_SUPER : ELI_MOD_CTRL);
+}
+
+/** @return true while the platform's shortcut modifier (Cmd on macOS, else Ctrl) is held. */
+static inline bool eli_is_shortcut_mod_down(const eli_io *io)
+{
+    return io->config_mac_os_behaviors ? io->key_super : io->key_ctrl;
 }
 
 /* ---------------------------------------------------------------------------
@@ -169,8 +196,8 @@ static inline bool eli_is_key_released(eli_key key)
 
 /**
  * Test whether a modifier chord (mods + key) was pressed this frame. The current
- * modifier state must match the chord's modifiers exactly and the base key must
- * be pressed this frame.
+ * modifier state must match the chord's modifiers exactly (ELI_MOD_SHORTCUT is
+ * resolved first) and the base key must be pressed this frame.
  *
  * @param key_chord  ELI_MOD_* flags OR'd with an eli_key (e.g. ELI_SHORTCUT_COPY).
  * @return           true if the chord fired this frame.
@@ -184,7 +211,7 @@ static inline bool eli_is_key_chord_pressed(eli_key_chord key_chord)
     if (!io)
         return false;
 
-    int mods = key_chord & ELI_MOD_MASK;
+    int mods = eli_resolve_key_mods(io, key_chord & ELI_MOD_MASK);
     if (eli_get_key_mods(io) != mods)
         return false;
 

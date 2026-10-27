@@ -18,6 +18,7 @@
 
 #include "eli_input_mouse.h"
 #include "eli_input_keyboard.h"
+#include "eli_input_queue.h"
 #include "eli_input_text.h"
 
 /* Default input tunables (mirror Dear ImGui's ImGuiIO defaults). */
@@ -65,16 +66,6 @@ static inline void eli_input_init_io(eli_io *io)
 /* ---------------------------------------------------------------------------
  * Event adders (called by the host backend)
  * ------------------------------------------------------------------------- */
-
-/** Append one event to the queue if capacity remains; returns the slot or NULL. */
-static inline eli_input_event *eli_input_push_event(eli_io *io, eli_input_event_type type)
-{
-    if (io->input_events_count >= ELI_INPUT_EVENT_QUEUE_SIZE)
-        return NULL;
-    eli_input_event *e = &io->input_events[io->input_events_count++];
-    e->type = type;
-    return e;
-}
 
 /**
  * Queue a mouse-position update.
@@ -188,50 +179,75 @@ static inline void eli_io_add_key_analog_event(eli_key key, bool down, float val
  * Per-frame update (internal helpers)
  * ------------------------------------------------------------------------- */
 
+/** Apply one queued event to the live IO state. */
+static inline void eli_input__apply_event(eli_io *io, const eli_input_event *e)
+{
+    switch (e->type) {
+    case ELI_INPUT_EVENT_TYPE_MOUSE_POS:
+        io->mouse_pos = eli_make_vec2(e->data.mouse_pos.x, e->data.mouse_pos.y);
+        break;
+    case ELI_INPUT_EVENT_TYPE_MOUSE_BUTTON:
+        if (eli_mouse_button_is_valid(e->data.mouse_button.button))
+            io->mouse_down[e->data.mouse_button.button] = e->data.mouse_button.down;
+        break;
+    case ELI_INPUT_EVENT_TYPE_MOUSE_WHEEL:
+        io->mouse_wheel_h += e->data.mouse_wheel.x;
+        io->mouse_wheel += e->data.mouse_wheel.y;
+        break;
+    case ELI_INPUT_EVENT_TYPE_KEY:
+        if (eli_key_is_valid(e->data.key.key)) {
+            io->keys_down[e->data.key.key] = e->data.key.down;
+            io->keys_analog[e->data.key.key] = e->data.key.analog_value;
+            if (e->data.key.down)
+                io->key_pressed_this_frame[e->data.key.key] = true;
+        }
+        break;
+    case ELI_INPUT_EVENT_TYPE_TEXT:
+        eli_io_push_input_char(io, e->data.text.c);
+        break;
+    case ELI_INPUT_EVENT_TYPE_NONE:
+    default:
+        break;
+    }
+}
+
 /**
- * Apply queued events to the live IO state, then clear the queue.
+ * Apply queued events to the live IO state in arrival order, then remove them.
  *
  * key_pressed_this_frame is reset here and repopulated from the raw queue
- * before it gets collapsed into the single keys_down[k] boolean below --
- * see its own doc in eli_io.h for why that collapse needs a second signal
- * to avoid losing a full press-release cycle that lands within one frame.
+ * before it gets collapsed into the single keys_down[k] boolean -- see its own
+ * doc in eli_io.h for why that collapse needs a second signal to avoid losing a
+ * full press-release cycle that lands within one frame.
+ *
+ * Trickle rule (io.config_input_trickle_event_queue, default on): text and key
+ * events are not mixed within one frame. Widgets read this frame's characters and
+ * key presses as two separate sets, so "a", Backspace, "b" in one frame would
+ * otherwise apply out of order; the first text-after-key or key-after-text event
+ * and everything after it stay queued for the next frame (which is requested).
  */
 static inline void eli_input_process_events(eli_io *io)
 {
     for (int k = 0; k < ELI_KEY_COUNT; k++)
         io->key_pressed_this_frame[k] = false;
 
-    for (int i = 0; i < io->input_events_count; i++) {
-        eli_input_event *e = &io->input_events[i];
-        switch (e->type) {
-        case ELI_INPUT_EVENT_TYPE_MOUSE_POS:
-            io->mouse_pos = eli_make_vec2(e->data.mouse_pos.x, e->data.mouse_pos.y);
+    bool trickle = !io->config_input_trickle_disabled;
+    bool key_seen = false, text_seen = false;
+    int i = 0;
+    for (; i < io->input_events_count; i++) {
+        const eli_input_event *e = &io->input_events[i];
+        if (trickle && ((e->type == ELI_INPUT_EVENT_TYPE_KEY && text_seen) ||
+                        (e->type == ELI_INPUT_EVENT_TYPE_TEXT && key_seen)))
             break;
-        case ELI_INPUT_EVENT_TYPE_MOUSE_BUTTON:
-            if (eli_mouse_button_is_valid(e->data.mouse_button.button))
-                io->mouse_down[e->data.mouse_button.button] = e->data.mouse_button.down;
-            break;
-        case ELI_INPUT_EVENT_TYPE_MOUSE_WHEEL:
-            io->mouse_wheel_h += e->data.mouse_wheel.x;
-            io->mouse_wheel += e->data.mouse_wheel.y;
-            break;
-        case ELI_INPUT_EVENT_TYPE_KEY:
-            if (eli_key_is_valid(e->data.key.key)) {
-                io->keys_down[e->data.key.key] = e->data.key.down;
-                io->keys_analog[e->data.key.key] = e->data.key.analog_value;
-                if (e->data.key.down)
-                    io->key_pressed_this_frame[e->data.key.key] = true;
-            }
-            break;
-        case ELI_INPUT_EVENT_TYPE_TEXT:
-            eli_io_push_input_char_u16(io, e->data.text.c);
-            break;
-        case ELI_INPUT_EVENT_TYPE_NONE:
-        default:
-            break;
-        }
+        key_seen = key_seen || e->type == ELI_INPUT_EVENT_TYPE_KEY;
+        text_seen = text_seen || e->type == ELI_INPUT_EVENT_TYPE_TEXT;
+        eli_input__apply_event(io, e);
     }
-    io->input_events_count = 0;
+    int left = io->input_events_count - i;
+    if (left > 0) {
+        memmove(io->input_events, io->input_events + i, (size_t)left * sizeof(*io->input_events));
+        eli_request_redraw();  /* deferred events need another frame */
+    }
+    io->input_events_count = left;
 }
 
 /** Derive per-frame mouse state (delta, clicked/released, counts, durations). */

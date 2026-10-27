@@ -25,6 +25,7 @@
 #include "widgets/eli_widgets.h"
 #include "util/eli_util.h"
 #include "docking/eli_dock.h"
+#include "interaction/eli_interaction.h"
 
 /**
  * Release all widget-subsystem heap state (table pool, tab-bar pool, and the
@@ -43,6 +44,7 @@ static inline void eli_frame__shutdown_widgets(struct eli_context *ctx)
     eli_table_shutdown();
     eli_tab_shutdown();
     eli_clear_drag_drop();
+    eli_clipboard_shutdown();
 }
 
 /**
@@ -70,6 +72,7 @@ static inline void eli_frame_begin(void)
     eli_util_new_frame();
 
     eli_input_update_begin_frame();
+    eli_input_routing_new_frame();
     eli_window_new_frame();
     eli_dock_new_frame();
     eli_popup_new_frame();
@@ -97,6 +100,7 @@ static inline void eli_frame_end(void)
     eli_drag_drop_end_frame();
     eli_window_render();
     eli_render();
+    eli_input_update_capture_flags();
     eli_input_update_end_frame();
     eli_redraw_end_frame();
 }

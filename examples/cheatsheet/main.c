@@ -262,6 +262,15 @@ void eli_on_key(int key, int down)
     eli_io_add_key_event(key, down != 0);
 }
 
+/** Set macOS conventions (Cmd = shortcut modifier) from the browser's platform. */
+JS_EXPORT(eli_set_mac_os_behaviors)
+void eli_set_mac_os_behaviors(int enabled)
+{
+    eli_io *io = eli_get_io();
+    if (io)
+        io->config_mac_os_behaviors = enabled != 0;
+}
+
 /** Feed a typed Unicode codepoint for text-input widgets. */
 JS_EXPORT(eli_on_char)
 void eli_on_char(int codepoint)

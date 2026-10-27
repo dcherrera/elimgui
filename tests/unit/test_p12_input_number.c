@@ -97,9 +97,9 @@ ELI_TEST(input_int_parses_typed_value) {
 
     /* Type "42" replacing the selection; parses back into v. */
     eli_io_add_mouse_button_event(ELI_MOUSE_BUTTON_LEFT, false);
+    type_string("42");
     frame_begin();
     open_win();
-    type_string("42");
     eli_input_int("", &v, 0, 0, 0);
     eli_end();
     frame_end();
@@ -164,9 +164,9 @@ ELI_TEST(input_scalar_clamps_to_type_range) {
 
     /* Type 300 -> parsed as 300 -> clamped into the uint8 range (255). */
     eli_io_add_mouse_button_event(ELI_MOUSE_BUTTON_LEFT, false);
+    type_string("300");
     frame_begin();
     open_win();
-    type_string("300");
     eli_input_scalar("", ELI_DATA_TYPE_U8, &v, NULL, NULL, NULL, 0);
     eli_end();
     frame_end();
@@ -196,9 +196,9 @@ ELI_TEST(input_float_round_trips_typed_number) {
     frame_end();
 
     eli_io_add_mouse_button_event(ELI_MOUSE_BUTTON_LEFT, false);
+    type_string("3.14");
     frame_begin();
     open_win();
-    type_string("3.14");
     eli_input_float("", &v, 0.0f, 0.0f, "%.3f", 0);
     eli_end();
     frame_end();

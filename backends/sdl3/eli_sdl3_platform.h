@@ -106,6 +106,11 @@ static inline bool eli_sdl3_platform_init(SDL_Window *window)
     io->clipboard_user_data = NULL;
     io->platform_open_url_fn = eli_sdl3__open_url;
     io->backend_flags |= ELI_BACKEND_FLAGS_HAS_MOUSE_CURSORS | ELI_BACKEND_FLAGS_HAS_SET_MOUSE_POS;
+#if defined(SDL_PLATFORM_APPLE)
+    io->config_mac_os_behaviors = true;       /* Cmd = shortcut modifier */
+#else
+    io->config_mac_os_behaviors = false;
+#endif
     if (!SDL_StartTextInput(window))
         SDL_Log("eli_sdl3: SDL_StartTextInput failed: %s", SDL_GetError());
     return true;

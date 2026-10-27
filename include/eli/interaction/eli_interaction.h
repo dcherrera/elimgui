@@ -16,5 +16,6 @@
 #include "eli_disabled.h"
 #include "eli_clip.h"
 #include "eli_focus.h"
+#include "eli_input_routing.h"
 
 #endif /* ELI_INTERACTION_ELI_INTERACTION_H */

@@ -323,6 +323,11 @@ async function loadElimgui(wasmPath) {
   const exports = instance.exports;
 
   exports.js_start();
+  // Cmd is the shortcut modifier on Apple platforms (copy/paste/undo in fields).
+  if (exports.eli_set_mac_os_behaviors) {
+    const plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+    exports.eli_set_mac_os_behaviors(/Mac|iPhone|iPad|iPod/i.test(plat) ? 1 : 0);
+  }
 
   const atlas = new FontAtlas(exports);
   const renderer = new Renderer(exports, ctx, atlas);

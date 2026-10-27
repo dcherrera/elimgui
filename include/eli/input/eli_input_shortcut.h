@@ -1,13 +1,12 @@
 /**
  * @file eli_input_shortcut.h
- * @brief Keyboard shortcuts and clipboard access for elimgui: eli_shortcut() and
- *        the predefined edit chords (copy/cut/paste/undo/redo/select-all), plus
+ * @brief Predefined edit chords (copy/cut/paste/undo/redo/select-all, on
+ *        ELI_MOD_SHORTCUT) and clipboard access for elimgui, plus
  *        clipboard get/set with a pluggable callback, a browser JS-interop path
  *        (ELI_JSIO), and an internal static-buffer fallback for hosted builds.
  *
- * @status Phase 4 shortcuts + clipboard in use. Shortcut routing/focus (which
- *         needs the window/focus system) is deferred; eli_shortcut currently
- *         reports the raw chord state.
+ * @status In use. eli_shortcut / eli_shortcut_ex (routing, key ownership) live in
+ *         interaction/eli_input_routing.h, above the window system they need.
  * @issues None
  * @todo None
  */
@@ -15,63 +14,72 @@
 #define ELI_INPUT_ELI_INPUT_SHORTCUT_H
 
 #include "eli_input_keyboard.h"
+#include "../util/eli_mem.h"
 
 /* ---------------------------------------------------------------------------
- * Predefined edit shortcuts (Ctrl-based; a macOS-aware backend may remap Ctrl
- * to Super before dispatch).
+ * Predefined edit shortcuts: ELI_MOD_SHORTCUT = Cmd on macOS, Ctrl elsewhere.
+ * Redo is Shortcut+Shift+Z everywhere, plus Ctrl+Y off macOS (both accepted by
+ * eli_is_redo_chord_pressed).
  * ------------------------------------------------------------------------- */
 
-#define ELI_SHORTCUT_COPY       (ELI_MOD_CTRL | ELI_KEY_C)
-#define ELI_SHORTCUT_CUT        (ELI_MOD_CTRL | ELI_KEY_X)
-#define ELI_SHORTCUT_PASTE      (ELI_MOD_CTRL | ELI_KEY_V)
-#define ELI_SHORTCUT_UNDO       (ELI_MOD_CTRL | ELI_KEY_Z)
-#define ELI_SHORTCUT_REDO       (ELI_MOD_CTRL | ELI_KEY_Y)
-#define ELI_SHORTCUT_SELECT_ALL (ELI_MOD_CTRL | ELI_KEY_A)
+#define ELI_SHORTCUT_COPY       (ELI_MOD_SHORTCUT | ELI_KEY_C)
+#define ELI_SHORTCUT_CUT        (ELI_MOD_SHORTCUT | ELI_KEY_X)
+#define ELI_SHORTCUT_PASTE      (ELI_MOD_SHORTCUT | ELI_KEY_V)
+#define ELI_SHORTCUT_UNDO       (ELI_MOD_SHORTCUT | ELI_KEY_Z)
+#define ELI_SHORTCUT_REDO       (ELI_MOD_SHORTCUT | ELI_MOD_SHIFT | ELI_KEY_Z)
+#define ELI_SHORTCUT_REDO_ALT   (ELI_MOD_CTRL | ELI_KEY_Y)
+#define ELI_SHORTCUT_SELECT_ALL (ELI_MOD_SHORTCUT | ELI_KEY_A)
 
-/**
- * Test whether a shortcut chord fired this frame.
- *
- * Routing and focus arbitration (which require the window/focus system) are not
- * implemented yet, so this is currently equivalent to eli_is_key_chord_pressed:
- * it reports the raw chord state without ownership checks.
- *
- * @param key_chord  ELI_MOD_* flags OR'd with an eli_key (e.g. ELI_SHORTCUT_COPY).
- * @return           true if the chord is active this frame.
- *
- * Thread-safe: no
- * Reentrant: yes
- */
-static inline bool eli_shortcut(eli_key_chord key_chord)
+/** @return true if a redo chord fired (Shortcut+Shift+Z, or Ctrl+Y off macOS). */
+static inline bool eli_is_redo_chord_pressed(void)
 {
-    return eli_is_key_chord_pressed(key_chord);
+    const eli_io *io = eli_get_io();
+    if (!io)
+        return false;
+    return eli_is_key_chord_pressed(ELI_SHORTCUT_REDO) ||
+           (!io->config_mac_os_behaviors && eli_is_key_chord_pressed(ELI_SHORTCUT_REDO_ALT));
 }
+
 
 /* ---------------------------------------------------------------------------
  * Clipboard
  *
  * Resolution order for both get and set:
  *   1. If the IO clipboard callbacks are set, they are used.
- *   2. Otherwise an internal static buffer holds the text. Under ELI_JSIO the
+ *   2. Otherwise an internal heap buffer (eli_mem, grows to fit, no cap) holds the
+ *      text. Under ELI_JSIO the
  *      set path also forwards to the host page (eli_host_set_clipboard) and the
  *      host page delivers OS clipboard text back via eli_host_provide_clipboard.
  * ------------------------------------------------------------------------- */
 
-#ifndef ELI_CLIPBOARD_BUFFER_SIZE
-#define ELI_CLIPBOARD_BUFFER_SIZE 1024
-#endif
+/* Fallback clipboard storage: heap (eli_mem), grown to fit, never truncated. */
+ELI_GLOBAL(char *, eli_clipboard_fallback_buffer, NULL);
+ELI_GLOBAL(size_t, eli_clipboard_fallback_capacity, 0);
 
-/* Fallback clipboard storage (single-TU header-only build). */
-ELI_GLOBAL_ARRAY(char, eli_clipboard_fallback_buffer, ELI_CLIPBOARD_BUFFER_SIZE);
-
-/** Copy text into the fallback buffer, truncating to its capacity. */
+/** Copy text into the fallback buffer, growing it to fit (no cap). On OOM the
+ *  previous text is kept. */
 static inline void eli_clipboard_store_fallback(const char *text)
 {
     size_t n = text ? strlen(text) : 0;
-    if (n >= ELI_CLIPBOARD_BUFFER_SIZE)
-        n = ELI_CLIPBOARD_BUFFER_SIZE - 1;
+    if (n + 1 > eli_clipboard_fallback_capacity) {
+        char *grown = (char *)eli_mem_alloc(n + 1);
+        if (!grown)
+            return;
+        eli_mem_free(eli_clipboard_fallback_buffer);
+        eli_clipboard_fallback_buffer = grown;
+        eli_clipboard_fallback_capacity = n + 1;
+    }
     if (n > 0)
         memcpy(eli_clipboard_fallback_buffer, text, n);
     eli_clipboard_fallback_buffer[n] = '\0';
+}
+
+/** Free the fallback clipboard buffer (called on context destroy via eli_frame.h). */
+static inline void eli_clipboard_shutdown(void)
+{
+    eli_mem_free(eli_clipboard_fallback_buffer);
+    eli_clipboard_fallback_buffer = NULL;
+    eli_clipboard_fallback_capacity = 0;
 }
 
 #ifdef ELI_JSIO
@@ -100,9 +108,11 @@ void eli_host_provide_clipboard(const char *text)
 static inline const char *eli_get_clipboard_text(void)
 {
     eli_io *io = eli_get_io();
-    if (io && io->get_clipboard_text_fn)
-        return io->get_clipboard_text_fn(io->clipboard_user_data);
-    return eli_clipboard_fallback_buffer;
+    if (io && io->get_clipboard_text_fn) {
+        const char *t = io->get_clipboard_text_fn(io->clipboard_user_data);
+        return t ? t : "";
+    }
+    return eli_clipboard_fallback_buffer ? eli_clipboard_fallback_buffer : "";
 }
 
 /**
@@ -122,7 +132,7 @@ static inline void eli_set_clipboard_text(const char *text)
     }
     eli_clipboard_store_fallback(text);
 #ifdef ELI_JSIO
-    eli_host_set_clipboard(eli_clipboard_fallback_buffer);
+    eli_host_set_clipboard(eli_get_clipboard_text());
 #endif
 }
 

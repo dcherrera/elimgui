@@ -20,6 +20,7 @@
 #include "eli_enums.h"
 #include "eli_io.h"
 #include "eli_style_types.h"
+#include "../util/eli_mem.h"
 
 /* Draw data is produced by the draw phase; the context only holds a pointer.
  * eli_draw_list is likewise forward-declared: windows own one and the context
@@ -210,6 +211,15 @@ typedef struct eli_context {
     eli_draw_list *foreground_draw_list;
     void (*util_shutdown_fn)(struct eli_context *ctx); /* frees util (bg/fg) state on destroy */
 
+    /* --- Input routing + capture (interaction/eli_input_routing.h) ---
+     * Key owners claimed during a frame (key_owner_next) take effect the next
+     * frame (key_owner), so a claim made by a widget late in the frame still
+     * blocks app shortcuts tested early in the following frame. */
+    eli_id key_owner[ELI_KEY_COUNT];
+    eli_id key_owner_next[ELI_KEY_COUNT];
+    bool   mouse_down_owned[ELI_MOUSE_BUTTON_COUNT]; /* press started over an elimgui window */
+    bool   want_text_input_next;                     /* a text widget is active this frame */
+
     /* --- Idle / redraw (core/eli_redraw.h) ---
      * Resolved into redraw_timeout by eli_redraw_end_frame: -1 = sleep until input,
      * 0 = build another frame now, > 0 = seconds until a timed change. */
@@ -329,6 +339,9 @@ static inline eli_context *eli_create_context(void)
     eli_style_set_defaults(&ctx->style);
 
     ctx->io.config_redraw_settle_frames = 2;
+#if defined(__APPLE__)
+    ctx->io.config_mac_os_behaviors = true;
+#endif
     ctx->redraw_after_min = -1.0f;
     ctx->redraw_timeout = 0.0f;  /* build the first frame */
     ctx->initialized = true;
@@ -384,6 +397,10 @@ static inline void eli_destroy_context(eli_context *ctx)
      * docked. */
     if (ctx->dock_shutdown_fn)
         ctx->dock_shutdown_fn(ctx);
+
+    /* Input queues grow on the heap (eli_input_backend.h / eli_input_text.h). */
+    eli_mem_free(ctx->io.input_events);
+    eli_mem_free(ctx->io.input_queue_characters);
 
     free(ctx);
 }

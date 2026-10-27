@@ -19,13 +19,15 @@
 typedef struct eli_font eli_font;
 typedef struct eli_font_atlas eli_font_atlas;
 
-/* Capacity of the per-frame buffered input-event queue. Backends append events
- * with the eli_io_add_*_event helpers; they are drained at begin-frame. */
+/* Initial capacity of the buffered input-event queue (it grows on the heap via
+ * eli_mem). Backends append events with the eli_io_add_*_event helpers; they are
+ * drained at begin-frame. */
 #ifndef ELI_INPUT_EVENT_QUEUE_SIZE
 #define ELI_INPUT_EVENT_QUEUE_SIZE 256
 #endif
 
-/* Capacity of the per-frame text-input character queue (UTF-16 code units). */
+/* Initial capacity of the per-frame text character queue (UTF-32 code points; it
+ * grows on the heap, so a large paste or dictation arrives whole). */
 #ifndef ELI_INPUT_QUEUE_CHAR_SIZE
 #define ELI_INPUT_QUEUE_CHAR_SIZE 64
 #endif
@@ -58,7 +60,7 @@ typedef struct eli_input_event {
         struct { int button; bool down; } mouse_button;
         struct { float x, y; } mouse_wheel;
         struct { int key; bool down; float analog_value; } key;
-        struct { uint16_t c; } text;
+        struct { uint32_t c; } text;   /* one UTF-32 code point */
     } data;
 } eli_input_event;
 
@@ -89,6 +91,11 @@ typedef struct eli_io {
      * timeout may go idle (immediate-mode convergence). Default 2. */
     int config_redraw_settle_frames;
 
+    /* macOS conventions: ELI_MOD_SHORTCUT = Cmd, Cmd/Alt text navigation. Default
+     * true when built for __APPLE__; the SDL3 backend sets it per platform and the
+     * web glue sets it from the browser's platform. */
+    bool config_mac_os_behaviors;
+
     /* --- Capability / behavior flags --- */
     eli_config_flags config_flags;
     eli_backend_flags backend_flags;
@@ -107,9 +114,12 @@ typedef struct eli_io {
     bool key_super;
     bool keys_down[ELI_KEY_COUNT];
 
-    /* --- Text input queue (UTF-16 code units) --- */
-    uint16_t input_queue_characters[ELI_INPUT_QUEUE_CHAR_SIZE];
+    /* --- Text input queue: this frame's typed code points (UTF-32, heap via
+     * eli_mem, grows as needed; filled from TEXT events at begin-frame) --- */
+    uint32_t *input_queue_characters;
     int input_queue_characters_count;
+    int input_queue_characters_capacity;
+    uint16_t input_queue_surrogate;     /* pending UTF-16 high surrogate, or 0 */
 
     /* --- Output (written by elimgui each frame) --- */
     bool want_capture_mouse;
@@ -176,9 +186,15 @@ typedef struct eli_io {
     float key_repeat_delay;
     float key_repeat_rate;
 
-    /* --- Buffered input-event queue (drained at begin-frame) --- */
-    eli_input_event input_events[ELI_INPUT_EVENT_QUEUE_SIZE];
+    /* Default false (= trickle on): see eli_input_process_events. Set true to
+     * apply every queued event in one frame regardless of key/text order. */
+    bool config_input_trickle_disabled;
+
+    /* --- Buffered input-event queue (heap via eli_mem, grows; drained at
+     * begin-frame, except events deferred by the key/text trickle rule) --- */
+    eli_input_event *input_events;
     int input_events_count;
+    int input_events_capacity;
 
     /* --- Clipboard platform callbacks --- */
     const char *(*get_clipboard_text_fn)(void *user_data);
