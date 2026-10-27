@@ -53,7 +53,7 @@ static inline void eli_frame__shutdown_widgets(struct eli_context *ctx)
  * eli_begin/eli_end or widget calls.
  *
  * Order: eli_new_frame -> eli_util_new_frame -> eli_input_update_begin_frame ->
- * eli_window_new_frame -> eli_dock_new_frame -> eli_popup_new_frame ->
+ * eli_input_routing_new_frame -> eli_window_new_frame -> eli_dock_new_frame -> eli_popup_new_frame ->
  * eli_drag_drop_new_frame -> eli_table_new_frame -> eli_tab_new_frame.
  *
  * Thread-safe: no
@@ -88,7 +88,8 @@ static inline void eli_frame_begin(void)
  * eli_get_draw_data returns this frame's populated draw data.
  *
  * Order: eli_popup_end_frame -> eli_drag_drop_end_frame -> eli_window_render
- * -> eli_render -> eli_input_update_end_frame -> eli_redraw_end_frame (then
+ * -> eli_render -> eli_input_update_capture_flags -> eli_input_update_end_frame
+ * -> eli_redraw_end_frame (then
  * eli_get_redraw_timeout() tells the loop how long it may sleep).
  *
  * Thread-safe: no

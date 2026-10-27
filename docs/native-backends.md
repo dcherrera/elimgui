@@ -265,6 +265,26 @@ run logged 211 mouse-motion and 67 wheel events in the window and built 429 fram
 
 ---
 
+## Input checklist (Phase E)
+
+`examples/sdl3/build/elimgui_sdl3 --input-selftest` drives the real backend with
+synthetic SDL events and the system clipboard (restored afterwards) and exits with the
+number of failures:
+
+| Check | macOS (Cmd) | Linux (Ctrl, offscreen) |
+|---|---|---|
+| Emoji via `SDL_EVENT_TEXT_INPUT` stored as 4-byte UTF-8 | PASS | PASS |
+| Shortcut+A/C copies to the SDL clipboard | PASS | PASS |
+| App's GLOBAL Shortcut+C does not fire while the field is active, fires after | PASS | PASS |
+| 2 KB paste from the SDL clipboard into the field | PASS | PASS |
+| 64 KB elimgui -> SDL and SDL -> elimgui | PASS | PASS |
+
+Also clean under ASan + UBSan (`elimgui_sdl3_debug --input-selftest`) on both. Linux ran
+on SDL's `offscreen` driver, whose clipboard is SDL-internal: X11/Wayland selections and
+real CJK IMEs are unverified.
+
+---
+
 ## JAClibc on native targets (probe)
 
 `tests/probe/jaclibc_native_probe.sh` builds every unit suite with `-DELI_LIBC_JACLIBC`

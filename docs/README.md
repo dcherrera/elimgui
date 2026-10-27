@@ -38,15 +38,17 @@ eli_draw_data *dd = eli_get_draw_data();   /* non-NULL, populated after frame_en
 ```
 
 - **`eli_frame_begin()`** runs, in order:
-  `eli_new_frame` -> `eli_input_update_begin_frame` -> `eli_window_new_frame` ->
+  `eli_new_frame` -> `eli_util_new_frame` -> `eli_input_update_begin_frame` ->
+  `eli_input_routing_new_frame` -> `eli_window_new_frame` -> `eli_dock_new_frame` ->
   `eli_popup_new_frame` -> `eli_drag_drop_new_frame` -> `eli_table_new_frame` ->
   `eli_tab_new_frame`. On first call it also registers a widget-shutdown hook on the
   context so `eli_destroy_context` releases the table/tab pools and any pending
   drag-drop payload.
 - **`eli_frame_end()`** runs, in order:
   `eli_popup_end_frame` -> `eli_drag_drop_end_frame` -> `eli_window_render` ->
-  `eli_render` -> `eli_input_update_end_frame`. Afterwards `eli_get_draw_data()`
-  returns this frame's assembled, valid draw data.
+  `eli_render` -> `eli_input_update_capture_flags` -> `eli_input_update_end_frame` ->
+  `eli_redraw_end_frame`. Afterwards `eli_get_draw_data()` returns this frame's draw
+  data and `eli_get_redraw_timeout()` how long the app may sleep.
 
 Each `eli_begin`/`eli_begin_child` seeds the id stack with the window id (mirroring Dear
 ImGui's `PushOverrideID`) and `eli_end`/`eli_end_child` pops it, so identical widget labels
