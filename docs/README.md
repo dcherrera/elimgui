@@ -13,7 +13,9 @@ Include the umbrella header and everything is available:
 ```
 
 Build and serve it in the browser with `./build.sh serve`, or build and run the
-native unit tests with `./build.sh test` (see the top-level README for details).
+native unit tests with `./build.sh test` (see the top-level README for details). For a
+native desktop app (SDL3), see [Native Backends](native-backends.md) and
+`./build.sh sdl3-example`.
 
 ## Frame Lifecycle
 
@@ -89,5 +91,6 @@ need finer control; `eli_frame_begin`/`eli_frame_end` are the recommended compos
 | 32 | [Testing](testing.md) | Test framework, hosted-libc seam, per-subsystem coverage map |
 | 33 | [Optimization](optimization.md) | Draw-gen profiling, buffer reuse, batching, per-frame allocations, wasm size |
 | 34 | [Docking](docking.md) | Dock-node tree, drag-to-dock, edge splitting, tabbed docking, dock space |
+| 35 | [Native Backends](native-backends.md) | libc/state build modes, SDL3 platform + renderer backend, desktop example, DPI/fonts, static linking |
 
 _Additional phase documents are added here as each phase lands._

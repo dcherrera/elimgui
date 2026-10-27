@@ -59,29 +59,12 @@ test failed.
 
 ---
 
-## The `ELI_TEST_HOSTED` Seam
+## The libc seam in tests
 
-The library never includes `<jaclibc.h>` directly. Instead, every header routes its
-libc dependency through `include/eli/core/eli_platform.h`:
-
-```c
-/* include/eli/core/eli_platform.h */
-#ifdef ELI_TEST_HOSTED
-#  include <stddef.h>
-#  include <stdint.h>
-#  include <stdbool.h>
-#  include <string.h>
-#  include <math.h>
-#  include <stdlib.h>
-#else
-#  include <jaclibc.h>
-#endif
-```
-
-When the test runner compiles with `-DELI_TEST_HOSTED`, the seam substitutes the host
-system libc so the library builds and runs as a normal native binary — no WASM runtime,
-no Docker, no browser. The WASM-only `JS_EXPORT`/`JS_CODE` blocks are guarded with
-`#ifdef ELI_JSIO` and compile out automatically.
+Every header routes its libc dependency through `include/eli/core/eli_platform.h`
+(see [Native Backends](native-backends.md#build-modes)). Native builds default to
+`ELI_LIBC_SYSTEM` (host libc); `ELI_TEST_HOSTED` is kept as an alias. The WASM-only
+`JS_EXPORT`/`JS_IMPORT` blocks are guarded with `#ifdef ELI_JSIO` and compile out.
 
 ---
 
@@ -93,20 +76,29 @@ no Docker, no browser. The WASM-only `JS_EXPORT`/`JS_CODE` blocks are guarded wi
 ./build.sh test
 ```
 
-Compiles every `tests/unit/*.c` with:
+Runs every `tests/unit/*.c` in two passes:
 
-```
-cc -std=c11 -Wall -Wextra -Werror -g -DELI_TEST_HOSTED \
-   -Iinclude -Ivendor -Itests
-```
+| Pass | Flags | Build dir |
+|---|---|---|
+| `hosted` | `-DELI_TEST_HOSTED` (static per-TU state) | `tests/build/` |
+| `shared` | `-DELI_LIBC_SYSTEM -DELI_SHARED_STATE`, test TU defines `ELI_IMPLEMENTATION` | `tests/build/shared/` |
 
-Warnings are errors (`-Werror`). Each test binary is run and its exit code is checked.
-The runner prints a per-suite summary, then a totals line:
+Both use `cc -std=c11 -Wall -Wextra -Werror -g -Iinclude -Ivendor -Itests ... -lm`.
+A suite may have a second TU at `tests/unit/companion/<name>_b.c` (built without
+`ELI_IMPLEMENTATION` and linked in; `test_shared_state` uses it). Tests that write files
+use `ELI_TEST_OUT_DIR` (the pass's build dir).
 
-```
-Suites: 62/62 passed
-ALL GREEN
-```
+Environment:
+
+- `ELI_TEST_PASSES="hosted"` runs one pass.
+- `ELI_TEST_SANITIZE=1` builds with ASan + UBSan into `tests/build/sanitize/` (on macOS
+  it uses Homebrew LLVM; Apple clang 17's ASan hangs at startup on macOS 26).
+
+Other checks:
+
+- `./build.sh wasm-smoke` builds both wasm apps and walks their draw data in Node
+  (`tests/web/wasm_smoke.mjs`) the way `web/elimgui.js` does.
+- `tests/probe/` holds measurement scripts (JAClibc native probe, 1-TU vs 5-TU size).
 
 ### Filtered run
 
