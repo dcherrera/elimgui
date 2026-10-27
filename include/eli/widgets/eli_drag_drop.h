@@ -97,25 +97,25 @@ typedef struct {
  * Module-private state
  * ------------------------------------------------------------------------- */
 
-static bool                s_dd_active                    = false;
-static eli_drag_drop_flags s_dd_source_flags              = ELI_DRAG_DROP_NONE;
-static eli_mouse_button    s_dd_mouse_button              = ELI_MOUSE_BUTTON_LEFT;
-static int                 s_dd_source_frame_count        = -1;
-static eli_payload         s_dd_payload                   = {0};
+ELI_GLOBAL(bool, g_eli_dd_active, false);
+ELI_GLOBAL(eli_drag_drop_flags, g_eli_dd_source_flags, ELI_DRAG_DROP_NONE);
+ELI_GLOBAL(eli_mouse_button, g_eli_dd_mouse_button, ELI_MOUSE_BUTTON_LEFT);
+ELI_GLOBAL(int, g_eli_dd_source_frame_count, -1);
+ELI_GLOBAL(eli_payload, g_eli_dd_payload, {0});
 
-static eli_rect            s_dd_target_rect               = {0.0f, 0.0f, 0.0f, 0.0f};
-static eli_id              s_dd_target_id                 = 0;
-static bool                s_dd_within_source             = false;
-static bool                s_dd_within_target             = false;
+ELI_GLOBAL(eli_rect, g_eli_dd_target_rect, {0.0f, 0.0f, 0.0f, 0.0f});
+ELI_GLOBAL(eli_id, g_eli_dd_target_id, 0);
+ELI_GLOBAL(bool, g_eli_dd_within_source, false);
+ELI_GLOBAL(bool, g_eli_dd_within_target, false);
 
-static eli_drag_drop_flags s_dd_accept_flags              = ELI_DRAG_DROP_NONE;
-static eli_id              s_dd_accept_id_curr            = 0;
-static eli_id              s_dd_accept_id_prev            = 0;
-static float              s_dd_accept_id_curr_rect_surface = 0.0f;
-static int                 s_dd_accept_frame_count        = -1;
+ELI_GLOBAL(eli_drag_drop_flags, g_eli_dd_accept_flags, ELI_DRAG_DROP_NONE);
+ELI_GLOBAL(eli_id, g_eli_dd_accept_id_curr, 0);
+ELI_GLOBAL(eli_id, g_eli_dd_accept_id_prev, 0);
+ELI_GLOBAL(float, g_eli_dd_accept_id_curr_rect_surface, 0.0f);
+ELI_GLOBAL(int, g_eli_dd_accept_frame_count, -1);
 
-static void               *s_dd_payload_buf               = NULL;
-static size_t              s_dd_payload_buf_capacity       = 0;
+ELI_GLOBAL(void *, g_eli_dd_payload_buf, NULL);
+ELI_GLOBAL(size_t, g_eli_dd_payload_buf_capacity, 0);
 
 /* ---------------------------------------------------------------------------
  * Internal helpers
@@ -124,14 +124,14 @@ static size_t              s_dd_payload_buf_capacity       = 0;
 /** Ensure the payload heap buffer holds at least `size` bytes. */
 static inline bool eli_drag_drop__reserve(size_t size)
 {
-    if (s_dd_payload_buf != NULL && size <= s_dd_payload_buf_capacity)
+    if (g_eli_dd_payload_buf != NULL && size <= g_eli_dd_payload_buf_capacity)
         return true;
     void *fresh = eli_mem_alloc(size);
     if (fresh == NULL)
         return false;
-    eli_mem_free(s_dd_payload_buf);
-    s_dd_payload_buf = fresh;
-    s_dd_payload_buf_capacity = size;
+    eli_mem_free(g_eli_dd_payload_buf);
+    g_eli_dd_payload_buf = fresh;
+    g_eli_dd_payload_buf_capacity = size;
     return true;
 }
 
@@ -140,21 +140,21 @@ static inline bool eli_drag_drop__is_data_type(const char *type)
 {
     if (type == NULL)
         return false;
-    return s_dd_payload.data_frame_count != -1 &&
-           strncmp(s_dd_payload.data_type, type, ELI_DRAG_DROP_TYPE_MAX + 1) == 0;
+    return g_eli_dd_payload.data_frame_count != -1 &&
+           strncmp(g_eli_dd_payload.data_type, type, ELI_DRAG_DROP_TYPE_MAX + 1) == 0;
 }
 
 /** Reset the payload record to its empty state (does not touch the heap buffer). */
 static inline void eli_drag_drop__reset_payload(void)
 {
-    s_dd_payload.data = NULL;
-    s_dd_payload.data_size = 0;
-    s_dd_payload.source_id = 0;
-    s_dd_payload.source_parent_id = 0;
-    s_dd_payload.data_frame_count = -1;
-    s_dd_payload.data_type[0] = '\0';
-    s_dd_payload.preview = false;
-    s_dd_payload.delivery = false;
+    g_eli_dd_payload.data = NULL;
+    g_eli_dd_payload.data_size = 0;
+    g_eli_dd_payload.source_id = 0;
+    g_eli_dd_payload.source_parent_id = 0;
+    g_eli_dd_payload.data_frame_count = -1;
+    g_eli_dd_payload.data_type[0] = '\0';
+    g_eli_dd_payload.preview = false;
+    g_eli_dd_payload.delivery = false;
 }
 
 /** Draw the drag preview near the mouse using the source window's draw list. */
@@ -164,7 +164,7 @@ static inline void eli_drag_drop__render_preview(eli_context *ctx)
     if (dl == NULL)
         return;
 
-    const char *label = s_dd_payload.data_type[0] != '\0' ? s_dd_payload.data_type : "...";
+    const char *label = g_eli_dd_payload.data_type[0] != '\0' ? g_eli_dd_payload.data_type : "...";
     float font_size = ctx->font_size > 0.0f ? ctx->font_size : 13.0f;
     eli_vec2 mouse = eli_get_mouse_pos();
     eli_vec2 pad = eli_make_vec2(4.0f, 2.0f);
@@ -186,9 +186,9 @@ static inline void eli_drag_drop__render_target_rect(void)
     eli_draw_list *dl = eli_get_window_draw_list();
     if (dl == NULL)
         return;
-    eli_vec2 mn = eli_make_vec2(s_dd_target_rect.x - 3.5f, s_dd_target_rect.y - 3.5f);
-    eli_vec2 mx = eli_make_vec2(s_dd_target_rect.x + s_dd_target_rect.w + 3.5f,
-                                s_dd_target_rect.y + s_dd_target_rect.h + 3.5f);
+    eli_vec2 mn = eli_make_vec2(g_eli_dd_target_rect.x - 3.5f, g_eli_dd_target_rect.y - 3.5f);
+    eli_vec2 mx = eli_make_vec2(g_eli_dd_target_rect.x + g_eli_dd_target_rect.w + 3.5f,
+                                g_eli_dd_target_rect.y + g_eli_dd_target_rect.h + 3.5f);
     eli_draw_list_add_rect(dl, mn, mx, eli_get_color_u32(ELI_COL_DRAG_DROP_TARGET, 1.0f),
                            0.0f, ELI_DRAW_ROUND_CORNERS_ALL, 2.0f);
 }
@@ -206,22 +206,22 @@ static inline void eli_drag_drop__render_target_rect(void)
  */
 static inline void eli_clear_drag_drop(void)
 {
-    s_dd_active = false;
-    s_dd_source_flags = ELI_DRAG_DROP_NONE;
-    s_dd_source_frame_count = -1;
-    s_dd_within_source = false;
-    s_dd_within_target = false;
-    s_dd_target_id = 0;
-    s_dd_target_rect = eli_make_rect(0.0f, 0.0f, 0.0f, 0.0f);
-    s_dd_accept_flags = ELI_DRAG_DROP_NONE;
-    s_dd_accept_id_curr = 0;
-    s_dd_accept_id_prev = 0;
-    s_dd_accept_id_curr_rect_surface = 0.0f;
-    s_dd_accept_frame_count = -1;
+    g_eli_dd_active = false;
+    g_eli_dd_source_flags = ELI_DRAG_DROP_NONE;
+    g_eli_dd_source_frame_count = -1;
+    g_eli_dd_within_source = false;
+    g_eli_dd_within_target = false;
+    g_eli_dd_target_id = 0;
+    g_eli_dd_target_rect = eli_make_rect(0.0f, 0.0f, 0.0f, 0.0f);
+    g_eli_dd_accept_flags = ELI_DRAG_DROP_NONE;
+    g_eli_dd_accept_id_curr = 0;
+    g_eli_dd_accept_id_prev = 0;
+    g_eli_dd_accept_id_curr_rect_surface = 0.0f;
+    g_eli_dd_accept_frame_count = -1;
     eli_drag_drop__reset_payload();
-    eli_mem_free(s_dd_payload_buf);
-    s_dd_payload_buf = NULL;
-    s_dd_payload_buf_capacity = 0;
+    eli_mem_free(g_eli_dd_payload_buf);
+    g_eli_dd_payload_buf = NULL;
+    g_eli_dd_payload_buf_capacity = 0;
 }
 
 /**
@@ -234,11 +234,11 @@ static inline void eli_clear_drag_drop(void)
  */
 static inline void eli_drag_drop_new_frame(void)
 {
-    s_dd_accept_id_prev = s_dd_accept_id_curr;
-    s_dd_accept_id_curr = 0;
-    s_dd_accept_id_curr_rect_surface = FLT_MAX;
-    s_dd_within_source = false;
-    s_dd_within_target = false;
+    g_eli_dd_accept_id_prev = g_eli_dd_accept_id_curr;
+    g_eli_dd_accept_id_curr = 0;
+    g_eli_dd_accept_id_curr_rect_surface = FLT_MAX;
+    g_eli_dd_within_source = false;
+    g_eli_dd_within_target = false;
 }
 
 /**
@@ -253,13 +253,13 @@ static inline void eli_drag_drop_new_frame(void)
 static inline void eli_drag_drop_end_frame(void)
 {
     eli_context *ctx = eli_get_current_context();
-    if (!s_dd_active || ctx == NULL)
+    if (!g_eli_dd_active || ctx == NULL)
         return;
 
-    bool is_delivered = s_dd_payload.delivery;
-    bool is_elapsed = (s_dd_payload.data_frame_count + 1 < ctx->frame_count) &&
-                      ((s_dd_source_flags & ELI_DRAG_DROP_SOURCE_AUTO_EXPIRE_PAYLOAD) ||
-                       !eli_is_mouse_down(s_dd_mouse_button));
+    bool is_delivered = g_eli_dd_payload.delivery;
+    bool is_elapsed = (g_eli_dd_payload.data_frame_count + 1 < ctx->frame_count) &&
+                      ((g_eli_dd_source_flags & ELI_DRAG_DROP_SOURCE_AUTO_EXPIRE_PAYLOAD) ||
+                       !eli_is_mouse_down(g_eli_dd_mouse_button));
     if (is_delivered || is_elapsed)
         eli_clear_drag_drop();
 }
@@ -313,16 +313,16 @@ static inline bool eli_begin_drag_drop_source(eli_drag_drop_flags flags)
     if (!source_drag_active)
         return false;
 
-    if (!s_dd_active) {
+    if (!g_eli_dd_active) {
         eli_drag_drop__reset_payload();
-        s_dd_payload.source_id = source_id;
-        s_dd_payload.source_parent_id = source_parent_id;
-        s_dd_active = true;
-        s_dd_source_flags = flags;
-        s_dd_mouse_button = mouse_button;
+        g_eli_dd_payload.source_id = source_id;
+        g_eli_dd_payload.source_parent_id = source_parent_id;
+        g_eli_dd_active = true;
+        g_eli_dd_source_flags = flags;
+        g_eli_dd_mouse_button = mouse_button;
     }
-    s_dd_source_frame_count = ctx->frame_count;
-    s_dd_within_source = true;
+    g_eli_dd_source_frame_count = ctx->frame_count;
+    g_eli_dd_within_source = true;
 
     if (!(flags & ELI_DRAG_DROP_SOURCE_NO_PREVIEW_TOOLTIP))
         eli_drag_drop__render_preview(ctx);
@@ -355,27 +355,27 @@ static inline bool eli_set_drag_drop_payload(const char *type, const void *data,
     if (cond == ELI_COND_NONE)
         cond = ELI_COND_ALWAYS;
 
-    bool type_changed = strncmp(s_dd_payload.data_type, type, ELI_DRAG_DROP_TYPE_MAX + 1) != 0;
-    strncpy(s_dd_payload.data_type, type, ELI_DRAG_DROP_TYPE_MAX);
-    s_dd_payload.data_type[ELI_DRAG_DROP_TYPE_MAX] = '\0';
+    bool type_changed = strncmp(g_eli_dd_payload.data_type, type, ELI_DRAG_DROP_TYPE_MAX + 1) != 0;
+    strncpy(g_eli_dd_payload.data_type, type, ELI_DRAG_DROP_TYPE_MAX);
+    g_eli_dd_payload.data_type[ELI_DRAG_DROP_TYPE_MAX] = '\0';
 
-    bool should_copy = (cond & ELI_COND_ALWAYS) || s_dd_payload.data_frame_count == -1 ||
+    bool should_copy = (cond & ELI_COND_ALWAYS) || g_eli_dd_payload.data_frame_count == -1 ||
                        type_changed;
     if (should_copy) {
         if (sz > 0) {
             if (!eli_drag_drop__reserve(sz))
                 return false;
-            memcpy(s_dd_payload_buf, data, sz);
-            s_dd_payload.data = s_dd_payload_buf;
+            memcpy(g_eli_dd_payload_buf, data, sz);
+            g_eli_dd_payload.data = g_eli_dd_payload_buf;
         } else {
-            s_dd_payload.data = NULL;
+            g_eli_dd_payload.data = NULL;
         }
-        s_dd_payload.data_size = (int)sz;
+        g_eli_dd_payload.data_size = (int)sz;
     }
-    s_dd_payload.data_frame_count = ctx->frame_count;
+    g_eli_dd_payload.data_frame_count = ctx->frame_count;
 
-    return s_dd_accept_frame_count == ctx->frame_count ||
-           s_dd_accept_frame_count == ctx->frame_count - 1;
+    return g_eli_dd_accept_frame_count == ctx->frame_count ||
+           g_eli_dd_accept_frame_count == ctx->frame_count - 1;
 }
 
 /**
@@ -386,7 +386,7 @@ static inline bool eli_set_drag_drop_payload(const char *type, const void *data,
  */
 static inline void eli_end_drag_drop_source(void)
 {
-    s_dd_within_source = false;
+    g_eli_dd_within_source = false;
 }
 
 /* ---------------------------------------------------------------------------
@@ -406,7 +406,7 @@ static inline void eli_end_drag_drop_source(void)
 static inline bool eli_begin_drag_drop_target(void)
 {
     eli_context *ctx = eli_get_current_context();
-    if (ctx == NULL || !s_dd_active)
+    if (ctx == NULL || !g_eli_dd_active)
         return false;
 
     eli_window *window = ctx->current_window;
@@ -429,12 +429,12 @@ static inline bool eli_begin_drag_drop_target(void)
         float coords[4] = { r.x, r.y, r.w, r.h };
         id = eli_hash_data(coords, sizeof(coords), window->id);
     }
-    if (s_dd_payload.source_id == id)
+    if (g_eli_dd_payload.source_id == id)
         return false;
 
-    s_dd_target_rect = ctx->last_item_rect;
-    s_dd_target_id = id;
-    s_dd_within_target = true;
+    g_eli_dd_target_rect = ctx->last_item_rect;
+    g_eli_dd_target_id = id;
+    g_eli_dd_within_target = true;
     return true;
 }
 
@@ -456,31 +456,31 @@ static inline const eli_payload *eli_accept_drag_drop_payload(const char *type,
                                                               eli_drag_drop_flags flags)
 {
     eli_context *ctx = eli_get_current_context();
-    if (ctx == NULL || !s_dd_active || s_dd_target_id == 0)
+    if (ctx == NULL || !g_eli_dd_active || g_eli_dd_target_id == 0)
         return NULL;
     if (type != NULL && !eli_drag_drop__is_data_type(type))
         return NULL;
 
-    bool was_accepted_previously = (s_dd_accept_id_prev == s_dd_target_id);
-    float r_surface = s_dd_target_rect.w * s_dd_target_rect.h;
-    if (r_surface > s_dd_accept_id_curr_rect_surface)
+    bool was_accepted_previously = (g_eli_dd_accept_id_prev == g_eli_dd_target_id);
+    float r_surface = g_eli_dd_target_rect.w * g_eli_dd_target_rect.h;
+    if (r_surface > g_eli_dd_accept_id_curr_rect_surface)
         return NULL;
 
-    s_dd_accept_flags = flags;
-    s_dd_accept_id_curr = s_dd_target_id;
-    s_dd_accept_id_curr_rect_surface = r_surface;
+    g_eli_dd_accept_flags = flags;
+    g_eli_dd_accept_id_curr = g_eli_dd_target_id;
+    g_eli_dd_accept_id_curr_rect_surface = r_surface;
 
-    s_dd_payload.preview = was_accepted_previously;
-    flags |= (s_dd_source_flags & ELI_DRAG_DROP_ACCEPT_NO_DRAW_DEFAULT_RECT);
-    if (!(flags & ELI_DRAG_DROP_ACCEPT_NO_DRAW_DEFAULT_RECT) && s_dd_payload.preview)
+    g_eli_dd_payload.preview = was_accepted_previously;
+    flags |= (g_eli_dd_source_flags & ELI_DRAG_DROP_ACCEPT_NO_DRAW_DEFAULT_RECT);
+    if (!(flags & ELI_DRAG_DROP_ACCEPT_NO_DRAW_DEFAULT_RECT) && g_eli_dd_payload.preview)
         eli_drag_drop__render_target_rect();
 
-    s_dd_accept_frame_count = ctx->frame_count;
-    s_dd_payload.delivery = was_accepted_previously && !eli_is_mouse_down(s_dd_mouse_button);
-    if (!s_dd_payload.delivery && !(flags & ELI_DRAG_DROP_ACCEPT_BEFORE_DELIVERY))
+    g_eli_dd_accept_frame_count = ctx->frame_count;
+    g_eli_dd_payload.delivery = was_accepted_previously && !eli_is_mouse_down(g_eli_dd_mouse_button);
+    if (!g_eli_dd_payload.delivery && !(flags & ELI_DRAG_DROP_ACCEPT_BEFORE_DELIVERY))
         return NULL;
 
-    return &s_dd_payload;
+    return &g_eli_dd_payload;
 }
 
 /**
@@ -491,7 +491,7 @@ static inline const eli_payload *eli_accept_drag_drop_payload(const char *type,
  */
 static inline void eli_end_drag_drop_target(void)
 {
-    s_dd_within_target = false;
+    g_eli_dd_within_target = false;
 }
 
 /**
@@ -503,7 +503,7 @@ static inline void eli_end_drag_drop_target(void)
  */
 static inline const eli_payload *eli_get_drag_drop_payload(void)
 {
-    return s_dd_active ? &s_dd_payload : NULL;
+    return g_eli_dd_active ? &g_eli_dd_payload : NULL;
 }
 
 #endif /* ELI_WIDGETS_ELI_DRAG_DROP_H */

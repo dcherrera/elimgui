@@ -44,11 +44,23 @@
 #define STBRP_SORT      qsort
 #define STBRP_ASSERT(x) ((void)0)
 
-/* stb_rect_pack must precede stb_truetype so the latter binds the real packer. */
-#define STB_RECT_PACK_IMPLEMENTATION
+/* stb_rect_pack must precede stb_truetype so the latter binds the real packer.
+ * Linkage follows eli_state.h: under ELI_SHARED_STATE only the ELI_IMPLEMENTATION
+ * TU compiles the stb bodies (external linkage) and other TUs see declarations;
+ * by default every TU gets its own static copy, so static-mode TUs still link. */
+#if !defined(ELI_SHARED_STATE) || defined(ELI_IMPLEMENTATION)
+    #define STB_RECT_PACK_IMPLEMENTATION
+    #define STB_TRUETYPE_IMPLEMENTATION
+#endif
+#if !defined(ELI_SHARED_STATE)
+    #define STBRP_STATIC
+    #define STBTT_STATIC
+#endif
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
 #include <stb/stb_rect_pack.h>
-#define STB_TRUETYPE_IMPLEMENTATION
 #include <stb/stb_truetype.h>
+#pragma GCC diagnostic pop
 
 /** Default spacing (in texels) left between packed glyphs. */
 #define ELI_FONT_ATLAS_DEFAULT_PADDING 1
@@ -207,6 +219,32 @@ static inline void eli_font_atlas_clear_tex_data(eli_font_atlas *atlas)
     atlas->built = false;
 }
 
+/**
+ * Free the atlas's CPU-side pixel buffers (alpha8 and rgba32) after the texture
+ * has been uploaded to the GPU, WITHOUT marking the atlas unbuilt: fonts, glyphs
+ * and UVs stay valid. get_tex_data_* then returns NULL pixels until the next
+ * eli_font_atlas_build (needed again after a density change).
+ *
+ * @param atlas  Target atlas (NULL is ignored).
+ *
+ * Thread-safe: no  Reentrant: no
+ */
+static inline void eli_font_atlas_release_cpu_pixels(eli_font_atlas *atlas)
+{
+    if (!atlas)
+        return;
+    free(atlas->tex_pixels_alpha8);
+    free(atlas->tex_pixels_rgba32);
+    atlas->tex_pixels_alpha8 = NULL;
+    atlas->tex_pixels_rgba32 = NULL;
+}
+
+/** @return a config's rasterizer density, treating <= 0 as 1. */
+static inline float eli_font__density(const eli_font_config *cfg)
+{
+    return (cfg->rasterizer_density > 0.0f) ? cfg->rasterizer_density : 1.0f;
+}
+
 /** Free any TTF source memory the atlas owns (decompressed/embedded blobs). */
 static inline void eli_font_atlas_clear_input_data(eli_font_atlas *atlas)
 {
@@ -260,14 +298,17 @@ static inline void eli_font_atlas_destroy(eli_font_atlas *atlas)
     free(atlas);
 }
 
-/** @return true once the atlas texture has been baked. */
+/**
+ * @return true once the atlas has been baked (fonts and UVs valid). Stays true
+ *         after eli_font_atlas_release_cpu_pixels; clear_tex_data/clear reset it.
+ */
 static inline bool eli_font_atlas_is_built(const eli_font_atlas *atlas)
 {
-    return atlas && atlas->built && atlas->tex_pixels_alpha8 != NULL;
+    return atlas && atlas->built;
 }
 
 /** Assign the backend texture identifier the renderer will bind. */
-static inline void eli_font_atlas_set_tex_id(eli_font_atlas *atlas, uint32_t id)
+static inline void eli_font_atlas_set_tex_id(eli_font_atlas *atlas, eli_texture_id id)
 {
     if (atlas)
         atlas->tex_id = id;
@@ -286,6 +327,7 @@ static inline eli_font_config eli_font_config_default(void)
     cfg.oversample_h = 1;
     cfg.oversample_v = 1;
     cfg.pixel_snap_h = true;
+    cfg.rasterizer_density = 1.0f;
     return cfg;
 }
 
@@ -516,11 +558,12 @@ static inline void eli_font__emit_font_glyphs(eli_font_atlas *atlas, stbtt_fonti
     for (int i = 0; i < atlas->configs_count; i++) {
         eli_font_config *cfg = &atlas->configs[i];
         eli_font *font = cfg->dst_font;
+        float pt_scale = scales[i] / eli_font__density(cfg); /* font units -> points */
         eli_font__reset(font);
         font->container_atlas = atlas;
         font->font_size = cfg->size_pixels;
-        font->ascent = (float)((int)(ascents[i] * scales[i] + 0.5f));
-        font->descent = (float)((int)(descents[i] * scales[i] - 0.5f));
+        font->ascent = (float)((int)(ascents[i] * pt_scale + 0.5f));
+        font->descent = (float)((int)(descents[i] * pt_scale - 0.5f));
         font->line_height = cfg->size_pixels;
         font->fallback_char = ELI_FONT_FALLBACK_CHAR;
         font->tex_uv_white_pixel = atlas->tex_uv_white_pixel;
@@ -529,9 +572,10 @@ static inline void eli_font__emit_font_glyphs(eli_font_atlas *atlas, stbtt_fonti
         const eli_font__build_glyph *b = &bg[k];
         eli_font_config *cfg = &atlas->configs[b->cfg_index];
         eli_font *font = cfg->dst_font;
+        float density = eli_font__density(cfg);
         int adv, lsb;
         stbtt_GetGlyphHMetrics(&finfo[b->cfg_index], b->glyph_index, &adv, &lsb);
-        float advance = adv * scales[b->cfg_index];
+        float advance = adv * scales[b->cfg_index] / density;
         if (cfg->pixel_snap_h)
             advance = (float)((int)(advance + 0.5f));
         if (cfg->glyph_min_advance_x > 0.0f && advance < cfg->glyph_min_advance_x)
@@ -545,10 +589,11 @@ static inline void eli_font__emit_font_glyphs(eli_font_atlas *atlas, stbtt_fonti
         gl.advance_x = advance;
         if (rects[k].was_packed && b->w > 0 && b->h > 0) {
             gl.visible = true;
-            gl.x0 = (float)b->box_x0 + cfg->glyph_offset_x;
-            gl.y0 = font->ascent + (float)b->box_y0 + cfg->glyph_offset_y;
-            gl.x1 = gl.x0 + (float)b->w;
-            gl.y1 = gl.y0 + (float)b->h;
+            /* Bitmap boxes are in texels; quads are in points (texels / density). */
+            gl.x0 = (float)b->box_x0 / density + cfg->glyph_offset_x;
+            gl.y0 = font->ascent + (float)b->box_y0 / density + cfg->glyph_offset_y;
+            gl.x1 = gl.x0 + (float)b->w / density;
+            gl.y1 = gl.y0 + (float)b->h / density;
             gl.u0 = rects[k].x * atlas->tex_uv_scale.x;
             gl.v0 = rects[k].y * atlas->tex_uv_scale.y;
             gl.u1 = (rects[k].x + b->w) * atlas->tex_uv_scale.x;
@@ -599,7 +644,7 @@ static inline bool eli_font_atlas_build(eli_font_atlas *atlas)
         int off = stbtt_GetFontOffsetForIndex((const unsigned char *)cfg->font_data, cfg->font_no);
         if (off < 0 || !stbtt_InitFont(&finfo[i], (const unsigned char *)cfg->font_data, off))
             goto cleanup;
-        scales[i] = stbtt_ScaleForPixelHeight(&finfo[i], cfg->size_pixels);
+        scales[i] = stbtt_ScaleForPixelHeight(&finfo[i], cfg->size_pixels * eli_font__density(cfg));
         int gap;
         stbtt_GetFontVMetrics(&finfo[i], &ascents[i], &descents[i], &gap);
         const uint16_t *ranges =

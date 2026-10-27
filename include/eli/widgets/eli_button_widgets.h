@@ -20,7 +20,7 @@
 #include <stdio.h>
 
 #ifdef ELI_JSIO
-/* Host page opens the URL in a new browser tab (browser-only; no-op under tests). */
+/* Host page opens the URL in a new browser tab (fallback when no io callback). */
 JS_IMPORT(eli_host_open_url) void eli_host_open_url(const char *url);
 #endif
 
@@ -456,8 +456,32 @@ static inline bool eli_text_link(const char *label)
 }
 
 /**
- * A text link that opens a URL in the browser when clicked (browser-only; the
- * open is a no-op in hosted/test builds).
+ * Open a URL with the platform's handler: io.platform_open_url_fn when set (the
+ * SDL3 backend sets it to SDL_OpenURL), else the host page under ELI_JSIO, else
+ * nothing.
+ *
+ * @param url  URL to open (NULL is ignored).
+ * @return     true if a handler accepted it.
+ *
+ * Thread-safe: no  Reentrant: no
+ */
+static inline bool eli_platform_open_url(const char *url)
+{
+    if (url == NULL)
+        return false;
+    eli_io *io = eli_get_io();
+    if (io && io->platform_open_url_fn)
+        return io->platform_open_url_fn(io->platform_user_data, url);
+#ifdef ELI_JSIO
+    eli_host_open_url(url);
+    return true;
+#else
+    return false;
+#endif
+}
+
+/**
+ * A text link that opens a URL when clicked (via eli_platform_open_url).
  *
  * @param label  Link label.
  * @param url    URL to open on click.
@@ -466,13 +490,8 @@ static inline bool eli_text_link(const char *label)
  */
 static inline void eli_text_link_open_url(const char *label, const char *url)
 {
-    (void)url;
-    if (eli_text_link(label)) {
-#ifdef ELI_JSIO
-        if (url != NULL)
-            eli_host_open_url(url);
-#endif
-    }
+    if (eli_text_link(label))
+        eli_platform_open_url(url);
 }
 
 #endif /* ELI_WIDGETS_ELI_BUTTON_WIDGETS_H */

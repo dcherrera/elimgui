@@ -16,5 +16,6 @@
 #include "eli_io.h"
 #include "eli_style_types.h"
 #include "eli_context.h"
+#include "eli_redraw.h"
 
 #endif /* ELI_CORE_ELI_CORE_H */

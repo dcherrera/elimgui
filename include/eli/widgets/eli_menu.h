@@ -45,22 +45,22 @@ typedef struct eli_menu_bar_scratch {
     bool        is_main;     /* the top-of-screen main menu bar */
 } eli_menu_bar_scratch;
 
-static eli_menu_bar_scratch g_eli_menu_bar = {0};
+ELI_GLOBAL(eli_menu_bar_scratch, g_eli_menu_bar, {0});
 
 /* Identity of the bar menu whose dropdown is currently shown, so clicking the same
  * bar button toggles it closed instead of immediately reopening it (the popup
  * click-outside pass closes it before the button behavior runs). */
-static eli_id g_eli_menu_open_root_id = 0u;
+ELI_GLOBAL(eli_id, g_eli_menu_open_root_id, 0u);
 
 /* Number of eli_begin_menu dropdowns currently on the begin-popup stack, and the
  * open-popup level of the outermost one, so choosing a menu item closes the whole
  * menu chain rather than only the innermost submenu. */
-static int g_eli_menu_depth = 0;
-static int g_eli_menu_root_level = 0;
+ELI_GLOBAL(int, g_eli_menu_depth, 0);
+ELI_GLOBAL(int, g_eli_menu_root_level, 0);
 
 /* Height of the last main menu bar, published for a host that reserves screen
  * space for it (the core window system does not consume this yet). */
-static float g_eli_main_menu_bar_height = 0.0f;
+ELI_GLOBAL(float, g_eli_main_menu_bar_height, 0.0f);
 
 /* ---------------------------------------------------------------------------
  * Geometry helpers

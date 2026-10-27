@@ -69,8 +69,30 @@ enum eli_draw_list_flags_ {
  * Vertex and index
  * ------------------------------------------------------------------------- */
 
-/** One index into a draw list's vertex buffer (16-bit, 64K vertices per list). */
+/**
+ * One index into a draw list's vertex buffer. 16-bit by default (65,536 vertices
+ * per list; more is refused, not wrapped). Define ELI_DRAW_IDX_32 in every TU for
+ * 32-bit indices (recommended for native apps; renderers read sizeof(eli_draw_idx)).
+ */
+#ifdef ELI_DRAW_IDX_32
+typedef uint32_t eli_draw_idx;
+#else
 typedef uint16_t eli_draw_idx;
+#endif
+
+/** Vertices one list may hold with 16-bit indices (indices 0..65535). */
+#define ELI_DRAW_IDX_16_VTX_LIMIT 65536u
+
+/**
+ * Backend texture handle carried by draw commands and image APIs. uintptr_t by
+ * default so a native backend can store a pointer (e.g. SDL_Texture *); on wasm32
+ * it is 4 bytes, so the JS command layout is unchanged. Override with
+ * ELI_TEXTURE_ID_TYPE (must be an integer type).
+ */
+#ifndef ELI_TEXTURE_ID_TYPE
+#define ELI_TEXTURE_ID_TYPE uintptr_t
+#endif
+typedef ELI_TEXTURE_ID_TYPE eli_texture_id;
 
 /** A single renderable vertex: screen position, texture UV, and packed color. */
 typedef struct eli_draw_vert {
@@ -102,7 +124,7 @@ typedef void (*eli_draw_callback)(const eli_draw_list *parent_list,
  */
 typedef struct eli_draw_cmd {
     eli_rect clip_rect;
-    uint32_t texture_id;
+    eli_texture_id texture_id;
     uint32_t vtx_offset;
     uint32_t idx_offset;
     uint32_t elem_count;
@@ -165,7 +187,7 @@ struct eli_draw_list {
     int clip_rect_stack_capacity;
 
     /* Texture id stack. */
-    uint32_t *texture_stack;
+    eli_texture_id *texture_stack;
     int texture_stack_count;
     int texture_stack_capacity;
 
@@ -178,11 +200,12 @@ struct eli_draw_list {
     /* Working state / shared config. */
     uint32_t vtx_current_idx;      /* base index for the next vertex written */
     eli_vec4 cmd_clip_rect;        /* current header clip (min.x,min.y,max.x,max.y) */
-    uint32_t cmd_texture_id;       /* current header texture id */
+    eli_texture_id cmd_texture_id; /* current header texture id */
     eli_vec4 clip_rect_fullscreen; /* default/fullscreen clip bounds */
     eli_vec2 tex_uv_white_pixel;   /* UV of an opaque white texel */
     float fringe_scale;            /* 1.0 at 1x scale */
     float circle_segment_max_error;/* tessellation error for auto segment counts */
+    uint32_t dropped_vtx_count;    /* vertices refused by the 16-bit index guard */
 };
 
 /* ---------------------------------------------------------------------------

@@ -6,8 +6,8 @@
  *
  * Mirrors Dear ImGui's logging model. While a session is active, widget/user
  * text is appended to a growable file-static buffer. On finish the buffer is
- * flushed: TTY -> a JS/print host hook (ELI_JSIO) else no-op, FILE -> a JS host
- * hook, CLIPBOARD -> eli_set_clipboard_text (which uses the hosted fallback
+ * flushed through eli_host_io.h: TTY -> console/stdout, FILE -> append to the
+ * file (JS hook or stdio), CLIPBOARD -> eli_set_clipboard_text (which uses the hosted fallback
  * buffer in tests). The auto-open depth is accepted and stored for callers that
  * want to expand tree nodes while logging; expansion itself is applied by the
  * tree widgets and is out of scope here.
@@ -22,6 +22,7 @@
 #ifndef ELI_UTIL_LOGGING_H
 #define ELI_UTIL_LOGGING_H
 
+#include "eli_host_io.h"
 #include "eli_mem.h"
 
 #include "../core/eli_platform.h"
@@ -57,36 +58,23 @@ typedef enum eli_log_target {
 } eli_log_target;
 
 /* Active-session flag and destination. */
-static bool           eli_log_active = false;
-static eli_log_target eli_log_active_target = ELI_LOG_TARGET_NONE;
+ELI_GLOBAL(bool, eli_log_active, false);
+ELI_GLOBAL(eli_log_target, eli_log_active_target, ELI_LOG_TARGET_NONE);
 
 /* Depth to which tree nodes are auto-opened while logging (-1 = unlimited). */
-static int eli_log_auto_open_depth = -1;
+ELI_GLOBAL(int, eli_log_auto_open_depth, -1);
 
 /* Default depth exposed by the eli_log_buttons() slider. */
-static int eli_log_depth_default = 2;
+ELI_GLOBAL(int, eli_log_depth_default, 2);
 
 /* Destination path captured by eli_log_to_file. */
-static char eli_log_filename[ELI_LOG_FILENAME_MAX];
+ELI_GLOBAL_ARRAY(char, eli_log_filename, ELI_LOG_FILENAME_MAX);
 
 /* Growable capture buffer (single-TU header-only build). */
-static char  *eli_log_buffer = NULL;
-static size_t eli_log_buffer_len = 0;
-static size_t eli_log_buffer_capacity = 0;
+ELI_GLOBAL(char *, eli_log_buffer, NULL);
+ELI_GLOBAL(size_t, eli_log_buffer_len, 0);
+ELI_GLOBAL(size_t, eli_log_buffer_capacity, 0);
 
-/* ---------------------------------------------------------------------------
- * JS host hooks (browser only)
- * ------------------------------------------------------------------------- */
-
-#ifdef ELI_JSIO
-
-/* Host page provides these: print a string to the developer console/TTY, and
- * append a string to a file at the given path (returns 0 on success). */
-JS_IMPORT(eli_host_log_print) void eli_host_log_print(const char *text);
-JS_IMPORT(eli_host_log_write_file) int eli_host_log_write_file(const char *path,
-                                                               const char *text);
-
-#endif /* ELI_JSIO */
 
 /* ---------------------------------------------------------------------------
  * Buffer management (internal)
@@ -137,7 +125,7 @@ static inline void eli_log_begin(eli_log_target target, int auto_open_depth)
  * ------------------------------------------------------------------------- */
 
 /**
- * Start logging to the TTY (developer console under ELI_JSIO).
+ * Start logging to the TTY (browser console or stdout).
  *
  * @param auto_open_depth  Tree depth to auto-expand while logging (-1 = all).
  *
@@ -239,7 +227,7 @@ static inline void eli_log_text(const char *fmt, ...)
 
 /**
  * End the active logging session and flush the captured text to its target:
- * TTY -> host print hook (ELI_JSIO) else no-op, FILE -> host write hook,
+ * TTY -> eli_host_io_print, FILE -> eli_host_io append (JS hook or stdio),
  * CLIPBOARD -> eli_set_clipboard_text (hosted fallback buffer in tests).
  * No-op when no session is active.
  *
@@ -257,14 +245,10 @@ static inline void eli_log_finish(void)
         eli_set_clipboard_text(text);
         break;
     case ELI_LOG_TARGET_TTY:
-#ifdef ELI_JSIO
-        eli_host_log_print(text);
-#endif
+        eli_host_io_print(text);
         break;
     case ELI_LOG_TARGET_FILE:
-#ifdef ELI_JSIO
-        eli_host_log_write_file(eli_log_filename, text);
-#endif
+        eli_host_io_write_text_file(eli_log_filename, text, true);
         break;
     case ELI_LOG_TARGET_NONE:
     default:

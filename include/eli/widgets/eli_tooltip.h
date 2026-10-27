@@ -64,18 +64,18 @@
  * distinct index, so a set_tooltip that follows a begin_tooltip uses a fresh
  * window (no stale content), while equal indices reuse the same persistent
  * windows across frames (their draw list is rebuilt each Begin). */
-static int g_eli_tooltip_frame = -1;
-static int g_eli_tooltip_count = 0;
+ELI_GLOBAL(int, g_eli_tooltip_frame, -1);
+ELI_GLOBAL(int, g_eli_tooltip_count, 0);
 
 /* Hover-delay accumulator (mirrors Dear ImGui's HoverItemDelay* fields). Lives
  * file-static because eli_context has no slot for it. */
-static eli_id g_eli_tooltip_hover_id = 0;             /* item requesting delay this frame */
-static eli_id g_eli_tooltip_hover_id_prev = 0;        /* id requested last frame */
-static float  g_eli_tooltip_hover_timer = 0.0f;       /* time the current item has been hovered */
-static float  g_eli_tooltip_hover_clear_timer = 0.0f; /* grace time before the timer resets */
-static eli_id g_eli_tooltip_stationary_id = 0;        /* item unlocked by a stationary mouse */
-static float  g_eli_tooltip_stationary_timer = 0.0f;  /* time the mouse has been stationary */
-static int    g_eli_tooltip_tick_frame = -1;          /* last frame the accumulator advanced */
+ELI_GLOBAL(eli_id, g_eli_tooltip_hover_id, 0); /* item requesting delay this frame */
+ELI_GLOBAL(eli_id, g_eli_tooltip_hover_id_prev, 0); /* id requested last frame */
+ELI_GLOBAL(float, g_eli_tooltip_hover_timer, 0.0f); /* time the current item has been hovered */
+ELI_GLOBAL(float, g_eli_tooltip_hover_clear_timer, 0.0f); /* grace time before the timer resets */
+ELI_GLOBAL(eli_id, g_eli_tooltip_stationary_id, 0); /* item unlocked by a stationary mouse */
+ELI_GLOBAL(float, g_eli_tooltip_stationary_timer, 0.0f); /* time the mouse has been stationary */
+ELI_GLOBAL(int, g_eli_tooltip_tick_frame, -1); /* last frame the accumulator advanced */
 
 /* ---------------------------------------------------------------------------
  * Hover-delay logic
@@ -202,10 +202,17 @@ static inline bool eli_is_item_hovered_for_tooltip(eli_hovered_flags flags)
         g_eli_tooltip_hover_timer = 0.0f;
     g_eli_tooltip_hover_id = hover_id;
 
-    if (stationary && g_eli_tooltip_stationary_id != hover_id)
+    /* Not shown yet: wake the loop when the delay or the stationary wait can
+     * complete (the timers only advance on frames). */
+    if (stationary && g_eli_tooltip_stationary_id != hover_id) {
+        float wait = ctx->style.hover_stationary_delay - g_eli_tooltip_stationary_timer;
+        eli_request_redraw_after(eli_max_f(wait, delay - g_eli_tooltip_hover_timer));
         return false;
-    if (g_eli_tooltip_hover_timer < delay)
+    }
+    if (g_eli_tooltip_hover_timer < delay) {
+        eli_request_redraw_after(delay - g_eli_tooltip_hover_timer);
         return false;
+    }
     return true;
 }
 

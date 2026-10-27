@@ -61,10 +61,10 @@ ELI_TEST(logging_auto_open_depth_accepted) {
     ELI_ASSERT_EQ(eli_log_auto_open_depth, 7);
     eli_log_finish();
 
-    eli_log_to_file(3, "session.log");
+    eli_log_to_file(3, ELI_TEST_OUT_DIR "/session.log");
     ELI_ASSERT_EQ(eli_log_active_target, ELI_LOG_TARGET_FILE);
     ELI_ASSERT_EQ(eli_log_auto_open_depth, 3);
-    ELI_ASSERT_STR_EQ(eli_log_filename, "session.log");
+    ELI_ASSERT_STR_EQ(eli_log_filename, ELI_TEST_OUT_DIR "/session.log");
     eli_log_finish();
     ELI_ASSERT_FALSE(eli_log_active);
 }

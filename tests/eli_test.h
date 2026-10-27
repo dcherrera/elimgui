@@ -22,6 +22,12 @@
 #include <string.h>
 #include <math.h>
 
+/* Directory tests may write files into (set by run_tests.sh to the gitignored
+ * build dir of the current pass). */
+#ifndef ELI_TEST_OUT_DIR
+#define ELI_TEST_OUT_DIR "."
+#endif
+
 #ifndef ELI_TEST_MAX
 #define ELI_TEST_MAX 4096
 #endif

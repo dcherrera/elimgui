@@ -61,9 +61,9 @@ enum eli_slider_flags_private_ {
  * without touching eli_context.
  * ------------------------------------------------------------------------- */
 
-static float eli_g_slider_drag_accum = 0.0f;
-static bool  eli_g_slider_drag_accum_dirty = false;
-static eli_id eli_g_slider_drag_accum_id = 0u;
+ELI_GLOBAL(float, eli_g_slider_drag_accum, 0.0f);
+ELI_GLOBAL(bool, eli_g_slider_drag_accum_dirty, false);
+ELI_GLOBAL(eli_id, eli_g_slider_drag_accum_id, 0u);
 
 /* ---------------------------------------------------------------------------
  * Scalar data-type abstraction

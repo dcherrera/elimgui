@@ -74,6 +74,8 @@ static inline void eli_draw_path_push(eli_draw_list *list, eli_vec2 p)
 {
     list->path = (eli_vec2 *)eli_draw_buf_grow(list->path, &list->path_capacity,
                                                list->path_count + 1, sizeof(*list->path));
+    if (list->path_capacity < list->path_count + 1)
+        return; /* OOM: the point is dropped */
     list->path[list->path_count++] = p;
 }
 

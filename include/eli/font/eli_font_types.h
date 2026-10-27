@@ -18,6 +18,7 @@
 
 #include "../core/eli_platform.h"
 #include "../core/eli_types.h"
+#include "../draw/eli_draw_types.h"
 
 /* Forward typedefs. `eli_font` is also forward-declared by the core context;
  * C11 permits the identical typedef to be repeated here where it is defined. */
@@ -90,7 +91,9 @@ struct eli_font {
  * Parameters describing one font source added to an atlas. `glyph_ranges` is a
  * zero-terminated list of inclusive [lo, hi] codepoint pairs (NULL selects the
  * atlas default range). `font_data_owned_by_atlas` marks TTF memory the atlas
- * must free on clear (used for decompressed/embedded data).
+ * must free on clear (used for decompressed/embedded data). `rasterizer_density`
+ * bakes glyphs at size_pixels x density texels while every metric stays in points,
+ * so text is sharp on a HiDPI framebuffer and layout does not change (<= 0 means 1).
  */
 struct eli_font_config {
     void *font_data;
@@ -106,6 +109,7 @@ struct eli_font_config {
     float glyph_offset_y;
     float glyph_min_advance_x;
     float glyph_max_advance_x;
+    float rasterizer_density;         /* texels per point (1 = default; 2 on Retina) */
     eli_font *dst_font;               /* font this config bakes into */
     char  name[ELI_FONT_NAME_MAX];
 };
@@ -130,7 +134,7 @@ enum eli_font_atlas_flags_ {
  */
 struct eli_font_atlas {
     eli_font_atlas_flags flags;
-    uint32_t tex_id;
+    eli_texture_id tex_id;
 
     int tex_width;
     int tex_height;

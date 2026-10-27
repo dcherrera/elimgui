@@ -157,7 +157,8 @@ static inline void eli_draw_list_add_text_ex(eli_draw_list *list, const eli_font
      * exact index total is charged to the command once at the end, so elem_count
      * and the vtx/idx counts land exactly where the per-glyph path would have. */
     int byte_count = (int)(text_end - text_begin);
-    eli_draw_list_prim_reserve_capacity(list, byte_count * 6, byte_count * 4);
+    if (!eli_draw_list_prim_reserve_capacity(list, byte_count * 6, byte_count * 4))
+        return;
     int idx_written = 0;
 
     const char *s = text_begin;

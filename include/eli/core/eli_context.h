@@ -20,6 +20,7 @@
 #include "eli_enums.h"
 #include "eli_io.h"
 #include "eli_style_types.h"
+#include "../util/eli_mem.h"
 
 /* Draw data is produced by the draw phase; the context only holds a pointer.
  * eli_draw_list is likewise forward-declared: windows own one and the context
@@ -95,6 +96,7 @@ typedef struct eli_context {
     bool within_frame_scope;   /* true between eli_new_frame and end_frame/render */
     int frame_count;
     double time;
+    uint32_t serial;           /* unique per created context (never reused) */
     eli_io io;
     eli_style style;
     eli_draw_data *draw_data;  /* NULL until the draw phase produces output */
@@ -208,11 +210,34 @@ typedef struct eli_context {
     eli_draw_list *background_draw_list;
     eli_draw_list *foreground_draw_list;
     void (*util_shutdown_fn)(struct eli_context *ctx); /* frees util (bg/fg) state on destroy */
+
+    /* --- Input routing + capture (interaction/eli_input_routing.h) ---
+     * Key owners claimed during a frame (key_owner_next) take effect the next
+     * frame (key_owner), so a claim made by a widget late in the frame still
+     * blocks app shortcuts tested early in the following frame. */
+    eli_id key_owner[ELI_KEY_COUNT];
+    eli_id key_owner_next[ELI_KEY_COUNT];
+    bool   mouse_down_owned[ELI_MOUSE_BUTTON_COUNT]; /* press started over an elimgui window */
+    bool   want_text_input_next;                     /* a text widget is active this frame */
+
+    /* --- Idle / redraw (core/eli_redraw.h) ---
+     * Resolved into redraw_timeout by eli_redraw_end_frame: -1 = sleep until input,
+     * 0 = build another frame now, > 0 = seconds until a timed change. */
+    bool  redraw_collecting;    /* between eli_new_frame and eli_redraw_end_frame */
+    bool  redraw_requested;     /* eli_request_redraw since the last frame end */
+    bool  redraw_input_seen;    /* input events/characters were processed this frame */
+    int   redraw_settle_left;   /* settle frames still owed (timeout 0) */
+    float redraw_after_min;     /* earliest eli_request_redraw_after this frame; < 0 none */
+    float redraw_timeout;       /* result of the last frame end */
 } eli_context;
 
 /* Single global "current" context. Header-only builds are a single translation
  * unit (the app includes elimgui.h once), so file-static storage is correct. */
-static eli_context *g_eli_context = NULL;
+ELI_GLOBAL(eli_context *, g_eli_context, NULL);
+
+/* Next value for eli_context.serial; lets module-global state detect that the
+ * context it belongs to was destroyed even if a new one reuses the address. */
+ELI_GLOBAL(uint32_t, g_eli_context_serial_next, 1);
 
 /* ---------------------------------------------------------------------------
  * Default style
@@ -313,7 +338,14 @@ static inline eli_context *eli_create_context(void)
 
     eli_style_set_defaults(&ctx->style);
 
+    ctx->io.config_redraw_settle_frames = 2;
+#if defined(__APPLE__)
+    ctx->io.config_mac_os_behaviors = true;
+#endif
+    ctx->redraw_after_min = -1.0f;
+    ctx->redraw_timeout = 0.0f;  /* build the first frame */
     ctx->initialized = true;
+    ctx->serial = g_eli_context_serial_next++;
 
     if (g_eli_context == NULL)
         g_eli_context = ctx;
@@ -365,6 +397,10 @@ static inline void eli_destroy_context(eli_context *ctx)
      * docked. */
     if (ctx->dock_shutdown_fn)
         ctx->dock_shutdown_fn(ctx);
+
+    /* Input queues grow on the heap (eli_input_backend.h / eli_input_text.h). */
+    eli_mem_free(ctx->io.input_events);
+    eli_mem_free(ctx->io.input_queue_characters);
 
     free(ctx);
 }
@@ -434,6 +470,7 @@ static inline void eli_new_frame(void)
 
     ctx->frame_count++;
     ctx->within_frame_scope = true;
+    ctx->redraw_collecting = true;
     ctx->time += (double)ctx->io.delta_time;
     ctx->io.framerate = (ctx->io.delta_time > 0.0f) ? (1.0f / ctx->io.delta_time) : 0.0f;
 

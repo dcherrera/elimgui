@@ -250,7 +250,7 @@ int eli_atlas_height(void)
  * Vertex layout  (stride 20): float x,y,u,v; uint32 col   (RGBA byte order).
  * Command layout (stride 40): float clip.x,y,w,h; uint32 texture_id,
  *                             vtx_offset, idx_offset, elem_count; two pointers.
- * Index type: uint16.
+ * Index type: uint16, or uint32 with ELI_DRAW_IDX_32 (see eli_dd_idx_size).
  * ------------------------------------------------------------------------- */
 
 /** Resolve draw list `li`, or NULL if out of range / no draw data. */
@@ -260,6 +260,13 @@ static eli_draw_list *demo_list(int li)
     if (!dd || li < 0 || li >= dd->cmd_lists_count)
         return NULL;
     return dd->cmd_lists[li];
+}
+
+/** @return Size in bytes of one draw index (2 = uint16, 4 = ELI_DRAW_IDX_32). */
+JS_EXPORT(eli_dd_idx_size)
+int eli_dd_idx_size(void)
+{
+    return (int)sizeof(eli_draw_idx);
 }
 
 /** @return Number of draw lists in the current frame's draw data. */
@@ -348,6 +355,15 @@ JS_EXPORT(eli_on_key)
 void eli_on_key(int key, int down)
 {
     eli_io_add_key_event(key, down != 0);
+}
+
+/** Set macOS conventions (Cmd = shortcut modifier) from the browser's platform. */
+JS_EXPORT(eli_set_mac_os_behaviors)
+void eli_set_mac_os_behaviors(int enabled)
+{
+    eli_io *io = eli_get_io();
+    if (io)
+        io->config_mac_os_behaviors = enabled != 0;
 }
 
 /** Feed a typed Unicode codepoint for text-input widgets. */

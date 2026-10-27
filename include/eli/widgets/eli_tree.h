@@ -75,6 +75,9 @@ enum eli_tree_node_flags_ {
  * Persistent open-state storage + next-item scratch
  * ------------------------------------------------------------------------- */
 
+/** Process-lifetime fallback storage for trees when no state storage is set. */
+ELI_GLOBAL(eli_storage, g_eli_tree_fallback_storage, {0});
+
 /**
  * @return the storage used for tree open/closed state: the current context storage
  *         if the caller set one, else a process-lifetime fallback so trees persist
@@ -85,8 +88,7 @@ static inline eli_storage *eli_tree__storage(void)
     eli_storage *st = eli_get_state_storage();
     if (st != NULL)
         return st;
-    static eli_storage fallback = {0};
-    return &fallback;
+    return &g_eli_tree_fallback_storage;
 }
 
 /** One-shot "next item" overrides consumed by the following tree node. */
@@ -98,11 +100,13 @@ typedef struct eli_tree_next_item_state {
     eli_id   storage_id;      /* override key for the open-state storage */
 } eli_tree_next_item_state;
 
-/** @return the shared one-shot next-item override record (file-static scratch). */
+/** Shared one-shot next-item override record. */
+ELI_GLOBAL(eli_tree_next_item_state, g_eli_tree_next_item, {0});
+
+/** @return the shared one-shot next-item override record. */
 static inline eli_tree_next_item_state *eli_tree__next_item(void)
 {
-    static eli_tree_next_item_state s = {0};
-    return &s;
+    return &g_eli_tree_next_item;
 }
 
 /** Clear the one-shot next-item overrides once a tree node has consumed them. */

@@ -27,439 +27,7 @@
 
 #include "../core/eli_platform.h"
 
-/* ---------------------------------------------------------------------------
- * Flags + callback contract
- * ------------------------------------------------------------------------- */
-
-/** Behavior flags for the input-text family (mirrors Dear ImGui's set). */
-typedef int eli_input_text_flags;
-enum eli_input_text_flags_ {
-    ELI_INPUT_TEXT_NONE                   = 0,
-    ELI_INPUT_TEXT_CHARS_DECIMAL          = 1 << 0,   /* allow 0-9 . + - * / */
-    ELI_INPUT_TEXT_CHARS_HEXADECIMAL      = 1 << 1,   /* allow 0-9 a-f A-F */
-    ELI_INPUT_TEXT_CHARS_SCIENTIFIC       = 1 << 2,   /* decimal plus e E */
-    ELI_INPUT_TEXT_CHARS_UPPERCASE        = 1 << 3,   /* map a-z to A-Z */
-    ELI_INPUT_TEXT_CHARS_NO_BLANK         = 1 << 4,   /* filter spaces/tabs */
-    ELI_INPUT_TEXT_ALLOW_TAB_INPUT        = 1 << 5,   /* insert a tab character */
-    ELI_INPUT_TEXT_ENTER_RETURNS_TRUE     = 1 << 6,   /* return true only on Enter */
-    ELI_INPUT_TEXT_ESCAPE_CLEARS_ALL      = 1 << 7,   /* Escape empties instead of revert */
-    ELI_INPUT_TEXT_CTRL_ENTER_FOR_NEWLINE = 1 << 8,   /* swap Enter/Ctrl+Enter roles */
-    ELI_INPUT_TEXT_READ_ONLY              = 1 << 9,   /* no editing */
-    ELI_INPUT_TEXT_PASSWORD               = 1 << 10,  /* render glyphs as '*' */
-    ELI_INPUT_TEXT_ALWAYS_OVERWRITE       = 1 << 11,
-    ELI_INPUT_TEXT_AUTO_SELECT_ALL        = 1 << 12,  /* select all on activation */
-    ELI_INPUT_TEXT_PARSE_EMPTY_REF_VAL    = 1 << 13,
-    ELI_INPUT_TEXT_DISPLAY_EMPTY_REF_VAL  = 1 << 14,
-    ELI_INPUT_TEXT_NO_HORIZONTAL_SCROLL   = 1 << 15,
-    ELI_INPUT_TEXT_NO_UNDO_REDO           = 1 << 16,
-    ELI_INPUT_TEXT_ELIDE_LEFT             = 1 << 17,
-    ELI_INPUT_TEXT_CALLBACK_COMPLETION    = 1 << 18,
-    ELI_INPUT_TEXT_CALLBACK_HISTORY       = 1 << 19,
-    ELI_INPUT_TEXT_CALLBACK_ALWAYS        = 1 << 20,
-    ELI_INPUT_TEXT_CALLBACK_CHAR_FILTER   = 1 << 21,
-    ELI_INPUT_TEXT_CALLBACK_RESIZE        = 1 << 22,
-    ELI_INPUT_TEXT_CALLBACK_EDIT          = 1 << 23
-};
-
-struct eli_context;
-
-/** Callback data passed to an eli_input_text_callback for a filter/edit event. */
-typedef struct eli_input_text_callback_data {
-    struct eli_context *ctx;
-    eli_input_text_flags event_flag;   /* which callback event this is */
-    eli_input_text_flags flags;        /* flags passed to the widget */
-    void *user_data;
-
-    uint16_t event_char;               /* CharFilter: rewrite (or 0 to drop) */
-
-    eli_key event_key;                 /* Completion/History key */
-    char *buf;                         /* live edit buffer */
-    int buf_text_len;                  /* current length in bytes */
-    int buf_size;                      /* buffer capacity */
-    bool buf_dirty;                    /* set true if the callback edited buf */
-    int cursor_pos;                    /* caret byte offset */
-    int selection_start;               /* selection anchor byte offset */
-    int selection_end;                 /* selection end byte offset */
-} eli_input_text_callback_data;
-
-/** User callback for filter/completion/history/edit events; returns 0. */
-typedef int (*eli_input_text_callback)(eli_input_text_callback_data *data);
-
-/* ---------------------------------------------------------------------------
- * Module-private editing state (single active field at a time)
- * ------------------------------------------------------------------------- */
-
-/* Cap on snapshot/display work buffers. Longer buffers still edit, but undo,
- * escape-revert, and password display beyond this cap are truncated. */
-#ifndef ELI_INPUT_TEXT_SNAPSHOT_MAX
-#define ELI_INPUT_TEXT_SNAPSHOT_MAX 256
-#endif
-
-typedef struct eli_input_text_state {
-    eli_id id;               /* active field id (0 = none active) */
-    int cursor;              /* caret byte offset */
-    int selection_anchor;    /* selection anchor byte offset */
-    float scroll_x;          /* horizontal display scroll in pixels */
-    double cursor_anim_base; /* time base for caret blink (reset on activity) */
-
-    char initial[ELI_INPUT_TEXT_SNAPSHOT_MAX];  /* buffer at activation */
-    int initial_len;
-
-    char undo[ELI_INPUT_TEXT_SNAPSHOT_MAX];     /* one-level undo snapshot */
-    int undo_len;
-    int undo_cursor;
-    bool has_undo;
-} eli_input_text_state;
-
-static eli_input_text_state g_eli_input_text_state;
-
-/* Scratch buffer for the password/display render pass. */
-static char g_eli_input_text_display[ELI_INPUT_TEXT_SNAPSHOT_MAX];
-
-/* ---------------------------------------------------------------------------
- * Byte/codepoint + buffer helpers
- * ------------------------------------------------------------------------- */
-
-/** Bounded strlen: length of buf up to at most cap-1 bytes. */
-static inline int eli_input_text__strnlen(const char *buf, int cap)
-{
-    int n = 0;
-    while (n < cap - 1 && buf[n] != '\0')
-        n++;
-    return n;
-}
-
-/** @return true if the byte at pos is a UTF-8 continuation byte. */
-static inline bool eli_input_text__is_cont(const char *buf, int pos)
-{
-    return ((unsigned char)buf[pos] & 0xC0u) == 0x80u;
-}
-
-/** @return the byte offset of the codepoint before pos (clamped to 0). */
-static inline int eli_input_text__prev_cp(const char *buf, int pos)
-{
-    if (pos <= 0)
-        return 0;
-    pos--;
-    while (pos > 0 && eli_input_text__is_cont(buf, pos))
-        pos--;
-    return pos;
-}
-
-/** @return the byte offset of the codepoint after pos (clamped to len). */
-static inline int eli_input_text__next_cp(const char *buf, int len, int pos)
-{
-    if (pos >= len)
-        return len;
-    pos++;
-    while (pos < len && eli_input_text__is_cont(buf, pos))
-        pos++;
-    return pos;
-}
-
-/** Encode a BMP code point as UTF-8 into out[0..2]; @return bytes written (1-3). */
-static inline int eli_input_text__encode_utf8(uint32_t cp, char out[3])
-{
-    if (cp < 0x80u) {
-        out[0] = (char)cp;
-        return 1;
-    }
-    if (cp < 0x800u) {
-        out[0] = (char)(0xC0u | (cp >> 6));
-        out[1] = (char)(0x80u | (cp & 0x3Fu));
-        return 2;
-    }
-    out[0] = (char)(0xE0u | (cp >> 12));
-    out[1] = (char)(0x80u | ((cp >> 6) & 0x3Fu));
-    out[2] = (char)(0x80u | (cp & 0x3Fu));
-    return 3;
-}
-
-/** @return the low selection bound (min of caret and anchor). */
-static inline int eli_input_text__sel_min(const eli_input_text_state *st)
-{
-    return st->cursor < st->selection_anchor ? st->cursor : st->selection_anchor;
-}
-
-/** @return the high selection bound (max of caret and anchor). */
-static inline int eli_input_text__sel_max(const eli_input_text_state *st)
-{
-    return st->cursor > st->selection_anchor ? st->cursor : st->selection_anchor;
-}
-
-/** @return true if a non-empty selection is active. */
-static inline bool eli_input_text__has_selection(const eli_input_text_state *st)
-{
-    return st->cursor != st->selection_anchor;
-}
-
-/** Save a one-level undo snapshot of the current buffer/caret. */
-static inline void eli_input_text__save_undo(eli_input_text_state *st, const char *buf, int len)
-{
-    if (len >= ELI_INPUT_TEXT_SNAPSHOT_MAX)
-        return;
-    memcpy(st->undo, buf, (size_t)len);
-    st->undo[len] = '\0';
-    st->undo_len = len;
-    st->undo_cursor = st->cursor;
-    st->has_undo = true;
-}
-
-/** Delete bytes [a,b) from buf, keeping it NUL-terminated. */
-static inline void eli_input_text__delete_range(char *buf, int *len, int a, int b)
-{
-    if (a > b) {
-        int t = a;
-        a = b;
-        b = t;
-    }
-    if (a < 0)
-        a = 0;
-    if (b > *len)
-        b = *len;
-    if (a >= b)
-        return;
-    memmove(buf + a, buf + b, (size_t)(*len - b));
-    *len -= (b - a);
-    buf[*len] = '\0';
-}
-
-/** Insert n bytes of s at offset at (truncating to capacity). @return bytes added. */
-static inline int eli_input_text__insert(char *buf, int *len, int cap, int at, const char *s, int n)
-{
-    if (*len + n >= cap)
-        n = cap - 1 - *len;
-    if (n <= 0)
-        return 0;
-    memmove(buf + at + n, buf + at, (size_t)(*len - at));
-    memcpy(buf + at, s, (size_t)n);
-    *len += n;
-    buf[*len] = '\0';
-    return n;
-}
-
-/** Delete the current selection if any; @return true if something was removed. */
-static inline bool eli_input_text__delete_selection(eli_input_text_state *st, char *buf, int *len)
-{
-    if (!eli_input_text__has_selection(st))
-        return false;
-    int a = eli_input_text__sel_min(st);
-    int b = eli_input_text__sel_max(st);
-    eli_input_text__delete_range(buf, len, a, b);
-    st->cursor = a;
-    st->selection_anchor = a;
-    return true;
-}
-
-/** Move the caret to pos, collapsing the selection unless shift is held. */
-static inline void eli_input_text__move_caret(eli_input_text_state *st, int pos, bool keep_sel)
-{
-    st->cursor = pos;
-    if (!keep_sel)
-        st->selection_anchor = pos;
-}
-
-/* ---------------------------------------------------------------------------
- * Character filtering
- * ------------------------------------------------------------------------- */
-
-/**
- * Apply the char-filter flags to one typed code unit.
- *
- * @param c      Typed UTF-16 code unit.
- * @param flags  Active input-text flags.
- * @return       The (possibly rewritten) code unit, or 0 to reject it.
- */
-static inline uint16_t eli_input_text__filter(uint16_t c, eli_input_text_flags flags)
-{
-    if (c == '\t')
-        return (flags & ELI_INPUT_TEXT_ALLOW_TAB_INPUT) ? c : 0;
-    if (c < 0x20u)
-        return 0;
-
-    if (flags & ELI_INPUT_TEXT_CHARS_UPPERCASE) {
-        if (c >= 'a' && c <= 'z')
-            c = (uint16_t)(c - 'a' + 'A');
-    }
-    if (flags & ELI_INPUT_TEXT_CHARS_NO_BLANK) {
-        if (c == ' ' || c == '\t')
-            return 0;
-    }
-    if (flags & ELI_INPUT_TEXT_CHARS_DECIMAL) {
-        bool ok = (c >= '0' && c <= '9') || c == '.' || c == '+' || c == '-' ||
-                  c == '*' || c == '/';
-        if (!ok)
-            return 0;
-    }
-    if (flags & ELI_INPUT_TEXT_CHARS_SCIENTIFIC) {
-        bool ok = (c >= '0' && c <= '9') || c == '.' || c == '+' || c == '-' ||
-                  c == '*' || c == '/' || c == 'e' || c == 'E';
-        if (!ok)
-            return 0;
-    }
-    if (flags & ELI_INPUT_TEXT_CHARS_HEXADECIMAL) {
-        bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
-                  (c >= 'A' && c <= 'F') || c == '+' || c == '-';
-        if (!ok)
-            return 0;
-    }
-    return c;
-}
-
-/* ---------------------------------------------------------------------------
- * Editing: character insertion and key handling
- * ------------------------------------------------------------------------- */
-
-/** Consume the IO character queue into buf; @return true if the buffer changed. */
-static inline bool eli_input_text__process_chars(eli_input_text_state *st, char *buf, int *len,
-                                                 int buf_size, eli_input_text_flags flags)
-{
-    eli_io *io = eli_get_io();
-    if (io == NULL)
-        return false;
-
-    bool changed = false;
-    for (int i = 0; i < io->input_queue_characters_count; i++) {
-        uint16_t c = eli_input_text__filter(io->input_queue_characters[i], flags);
-        if (c == 0)
-            continue;
-        if (!changed)
-            eli_input_text__save_undo(st, buf, *len);
-        eli_input_text__delete_selection(st, buf, len);
-        char enc[3];
-        int n = eli_input_text__encode_utf8((uint32_t)c, enc);
-        int added = eli_input_text__insert(buf, len, buf_size, st->cursor, enc, n);
-        if (added > 0) {
-            eli_input_text__move_caret(st, st->cursor + added, false);
-            changed = true;
-        }
-    }
-    if (changed)
-        io->input_queue_characters_count = 0;
-    return changed;
-}
-
-/** Handle Backspace/Delete; @return true if the buffer changed. */
-static inline bool eli_input_text__process_erase(eli_input_text_state *st, char *buf, int *len)
-{
-    bool changed = false;
-    if (eli_is_key_pressed_ex(ELI_KEY_BACKSPACE, true)) {
-        eli_input_text__save_undo(st, buf, *len);
-        if (!eli_input_text__delete_selection(st, buf, len) && st->cursor > 0) {
-            int p = eli_input_text__prev_cp(buf, st->cursor);
-            eli_input_text__delete_range(buf, len, p, st->cursor);
-            eli_input_text__move_caret(st, p, false);
-        }
-        changed = true;
-    }
-    if (eli_is_key_pressed_ex(ELI_KEY_DELETE, true)) {
-        eli_input_text__save_undo(st, buf, *len);
-        if (!eli_input_text__delete_selection(st, buf, len) && st->cursor < *len) {
-            int nx = eli_input_text__next_cp(buf, *len, st->cursor);
-            eli_input_text__delete_range(buf, len, st->cursor, nx);
-        }
-        changed = true;
-    }
-    return changed;
-}
-
-/** Handle caret navigation keys (arrows / home / end). */
-static inline void eli_input_text__process_nav(eli_input_text_state *st, char *buf, int len,
-                                               bool multiline)
-{
-    bool shift = eli_is_key_down(ELI_KEY_LEFT_SHIFT) || eli_is_key_down(ELI_KEY_RIGHT_SHIFT);
-    if (eli_is_key_pressed_ex(ELI_KEY_LEFT_ARROW, true))
-        eli_input_text__move_caret(st, eli_input_text__prev_cp(buf, st->cursor), shift);
-    if (eli_is_key_pressed_ex(ELI_KEY_RIGHT_ARROW, true))
-        eli_input_text__move_caret(st, eli_input_text__next_cp(buf, len, st->cursor), shift);
-    if (eli_is_key_pressed(ELI_KEY_HOME)) {
-        int p = st->cursor;
-        while (p > 0 && buf[p - 1] != '\n')
-            p--;
-        eli_input_text__move_caret(st, p, shift);
-    }
-    if (eli_is_key_pressed(ELI_KEY_END)) {
-        int p = st->cursor;
-        while (p < len && buf[p] != '\n')
-            p++;
-        eli_input_text__move_caret(st, p, shift);
-    }
-    if (multiline && eli_is_key_pressed_ex(ELI_KEY_UP_ARROW, true)) {
-        int p = st->cursor;
-        while (p > 0 && buf[p - 1] != '\n')
-            p--;
-        if (p > 0)
-            eli_input_text__move_caret(st, p - 1, shift);
-    }
-    if (multiline && eli_is_key_pressed_ex(ELI_KEY_DOWN_ARROW, true)) {
-        int p = st->cursor;
-        while (p < len && buf[p] != '\n')
-            p++;
-        if (p < len)
-            eli_input_text__move_caret(st, eli_input_text__next_cp(buf, len, p), shift);
-    }
-}
-
-/** Handle clipboard + select-all + undo chords; @return true if buffer changed. */
-static inline bool eli_input_text__process_clipboard(eli_input_text_state *st, char *buf, int *len,
-                                                     int buf_size, eli_input_text_flags flags)
-{
-    bool changed = false;
-    if (eli_is_key_chord_pressed(ELI_SHORTCUT_SELECT_ALL)) {
-        st->selection_anchor = 0;
-        st->cursor = *len;
-    }
-    if (eli_is_key_chord_pressed(ELI_SHORTCUT_COPY) || eli_is_key_chord_pressed(ELI_SHORTCUT_CUT)) {
-        int a = eli_input_text__has_selection(st) ? eli_input_text__sel_min(st) : 0;
-        int b = eli_input_text__has_selection(st) ? eli_input_text__sel_max(st) : *len;
-        char tmp[ELI_INPUT_TEXT_SNAPSHOT_MAX];
-        int n = b - a;
-        if (n >= ELI_INPUT_TEXT_SNAPSHOT_MAX)
-            n = ELI_INPUT_TEXT_SNAPSHOT_MAX - 1;
-        memcpy(tmp, buf + a, (size_t)n);
-        tmp[n] = '\0';
-        eli_set_clipboard_text(tmp);
-        if (eli_is_key_chord_pressed(ELI_SHORTCUT_CUT) && !(flags & ELI_INPUT_TEXT_READ_ONLY)) {
-            eli_input_text__save_undo(st, buf, *len);
-            if (!eli_input_text__delete_selection(st, buf, len)) {
-                *len = 0;
-                buf[0] = '\0';
-                st->cursor = 0;
-                st->selection_anchor = 0;
-            }
-            changed = true;
-        }
-    }
-    if (eli_is_key_chord_pressed(ELI_SHORTCUT_PASTE) && !(flags & ELI_INPUT_TEXT_READ_ONLY)) {
-        const char *clip = eli_get_clipboard_text();
-        if (clip != NULL && clip[0] != '\0') {
-            eli_input_text__save_undo(st, buf, *len);
-            eli_input_text__delete_selection(st, buf, len);
-            for (const char *p = clip; *p != '\0'; p++) {
-                uint16_t c = eli_input_text__filter((uint16_t)(unsigned char)*p, flags);
-                if (c == 0)
-                    continue;
-                char enc[3];
-                int en = eli_input_text__encode_utf8((uint32_t)c, enc);
-                int added = eli_input_text__insert(buf, len, buf_size, st->cursor, enc, en);
-                st->cursor += added;
-            }
-            st->selection_anchor = st->cursor;
-            changed = true;
-        }
-    }
-    if (!(flags & ELI_INPUT_TEXT_NO_UNDO_REDO) && eli_is_key_chord_pressed(ELI_SHORTCUT_UNDO) &&
-        st->has_undo && st->undo_len < buf_size) {
-        memcpy(buf, st->undo, (size_t)st->undo_len);
-        buf[st->undo_len] = '\0';
-        *len = st->undo_len;
-        st->cursor = st->undo_cursor > *len ? *len : st->undo_cursor;
-        st->selection_anchor = st->cursor;
-        st->has_undo = false;
-        changed = true;
-    }
-    return changed;
-}
+#include "eli_input_text_edit.h"
 
 /* ---------------------------------------------------------------------------
  * Rendering
@@ -550,7 +118,10 @@ static inline void eli_input_text__render(const eli_input_text_state *st, eli_re
 
     if (is_active) {
         double elapsed = ctx->time - st->cursor_anim_base;
-        bool blink = fmod(elapsed, 1.20) <= 0.80;
+        double phase = fmod(elapsed, 1.20);
+        bool blink = phase <= 0.80;
+        /* Wake the loop at the next blink edge (on at [0, 0.8), off at [0.8, 1.2)). */
+        eli_request_redraw_after((float)((blink ? 0.80 : 1.20) - phase) + 0.001f);
         if (blink) {
             int line_start = st->cursor;
             while (line_start > 0 && buf[line_start - 1] != '\n')
@@ -602,7 +173,10 @@ static inline void eli_input_text__activate(eli_input_text_state *st, eli_id id,
     st->scroll_x = 0.0f;
     st->has_undo = false;
     st->cursor_anim_base = ctx ? ctx->time : 0.0;
-    int snap = len < ELI_INPUT_TEXT_SNAPSHOT_MAX ? len : ELI_INPUT_TEXT_SNAPSHOT_MAX - 1;
+    /* Escape-revert needs the whole original text; a longer buffer gets no revert
+     * rather than a truncated one. */
+    st->initial_valid = len < ELI_INPUT_TEXT_SNAPSHOT_MAX;
+    int snap = st->initial_valid ? len : 0;
     memcpy(st->initial, buf, (size_t)snap);
     st->initial[snap] = '\0';
     st->initial_len = snap;
@@ -613,6 +187,75 @@ static inline void eli_input_text__activate(eli_input_text_state *st, eli_id id,
         st->cursor = len;
         st->selection_anchor = len;
     }
+}
+
+/**
+ * Enter (newline in multiline, else commit) and Escape (revert or clear, then
+ * deactivate). In multiline, Shortcut+Enter (Cmd on macOS, else Ctrl) commits;
+ * ELI_INPUT_TEXT_CTRL_ENTER_FOR_NEWLINE swaps the two.
+ * @return true if the buffer changed.
+ */
+static inline bool eli_input_text__process_enter_escape(eli_input_text_state *st, char *buf,
+                                                        int *len, int buf_size,
+                                                        eli_input_text_flags flags, bool multiline,
+                                                        bool *enter_pressed, bool *deactivate)
+{
+    bool changed = false;
+    bool read_only = (flags & ELI_INPUT_TEXT_READ_ONLY) != 0;
+    if (eli_is_key_pressed(ELI_KEY_ENTER) || eli_is_key_pressed(ELI_KEY_KEYPAD_ENTER)) {
+        bool shortcut = eli_is_shortcut_mod_down(eli_get_io());
+        bool want_newline = multiline &&
+                            ((flags & ELI_INPUT_TEXT_CTRL_ENTER_FOR_NEWLINE) ? shortcut : !shortcut);
+        if (want_newline && !read_only) {
+            eli_input_text__save_undo(st, buf, *len);
+            eli_input_text__delete_selection(st, buf, len);
+            int added = eli_input_text__insert(buf, len, buf_size, st->cursor, "\n", 1);
+            st->cursor += added;
+            st->selection_anchor = st->cursor;
+            changed = added > 0;
+        } else {
+            *enter_pressed = true;
+            *deactivate = true;
+        }
+    }
+    if (eli_is_key_pressed(ELI_KEY_ESCAPE)) {
+        if (flags & ELI_INPUT_TEXT_ESCAPE_CLEARS_ALL) {
+            if (*len > 0) {
+                buf[0] = '\0';
+                *len = 0;
+                changed = true;
+            }
+        } else if (st->initial_valid && (*len != st->initial_len ||
+                                         memcmp(buf, st->initial, (size_t)st->initial_len) != 0)) {
+            memcpy(buf, st->initial, (size_t)st->initial_len);
+            buf[st->initial_len] = '\0';
+            *len = st->initial_len;
+            changed = true;
+        }
+        *deactivate = true;
+    }
+    return changed;
+}
+
+/** Invoke the ALWAYS/EDIT callback; @return the (possibly changed) text length. */
+static inline int eli_input_text__run_callback(const eli_input_text_state *st, char *buf, int len,
+                                               int buf_size, eli_input_text_flags flags,
+                                               bool value_changed, eli_input_text_callback callback,
+                                               void *user_data)
+{
+    eli_input_text_callback_data cb = {0};
+    cb.ctx = eli_get_current_context();
+    cb.flags = flags;
+    cb.event_flag = value_changed ? ELI_INPUT_TEXT_CALLBACK_EDIT : ELI_INPUT_TEXT_CALLBACK_ALWAYS;
+    cb.user_data = user_data;
+    cb.buf = buf;
+    cb.buf_text_len = len;
+    cb.buf_size = buf_size;
+    cb.cursor_pos = st->cursor;
+    cb.selection_start = eli_input_text__sel_min(st);
+    cb.selection_end = eli_input_text__sel_max(st);
+    callback(&cb);
+    return cb.buf_dirty ? eli_input_text__strnlen(buf, buf_size) : len;
 }
 
 /**
@@ -696,67 +339,25 @@ static inline bool eli_input_text_impl(const char *label, const char *hint, char
         }
         eli_input_text__process_nav(st, buf, len, multiline);
 
-        bool enter = eli_is_key_pressed(ELI_KEY_ENTER) || eli_is_key_pressed(ELI_KEY_KEYPAD_ENTER);
-        if (enter) {
-            bool want_newline = multiline;
-            if (multiline && (flags & ELI_INPUT_TEXT_CTRL_ENTER_FOR_NEWLINE))
-                want_newline = eli_is_key_down(ELI_KEY_LEFT_CTRL) ||
-                               eli_is_key_down(ELI_KEY_RIGHT_CTRL);
-            else if (multiline)
-                want_newline = !(eli_is_key_down(ELI_KEY_LEFT_CTRL) ||
-                                 eli_is_key_down(ELI_KEY_RIGHT_CTRL));
-            if (want_newline && !read_only) {
-                eli_input_text__save_undo(st, buf, len);
-                eli_input_text__delete_selection(st, buf, &len);
-                int added = eli_input_text__insert(buf, &len, buf_size, st->cursor, "\n", 1);
-                st->cursor += added;
-                st->selection_anchor = st->cursor;
-                value_changed = value_changed || added > 0;
-            } else {
-                enter_pressed = true;
-                deactivate = true;
-            }
-        }
-        if (eli_is_key_pressed(ELI_KEY_ESCAPE)) {
-            if (flags & ELI_INPUT_TEXT_ESCAPE_CLEARS_ALL) {
-                if (len > 0) {
-                    buf[0] = '\0';
-                    len = 0;
-                    value_changed = true;
-                }
-            } else if (memcmp(buf, st->initial, (size_t)st->initial_len) != 0 ||
-                       len != st->initial_len) {
-                memcpy(buf, st->initial, (size_t)st->initial_len);
-                buf[st->initial_len] = '\0';
-                len = st->initial_len;
-                value_changed = true;
-            }
-            deactivate = true;
-        }
+        value_changed = eli_input_text__process_enter_escape(st, buf, &len, buf_size, flags,
+                                                             multiline, &enter_pressed,
+                                                             &deactivate) || value_changed;
         if (value_changed)
             st->cursor_anim_base = ctx->time;
     }
 
     if (is_active && eli_is_mouse_clicked(ELI_MOUSE_BUTTON_LEFT) && !hovered)
         deactivate = true;
+    if (is_active && !deactivate) {
+        eli_input_text__claim_keys(id, flags);    /* app shortcuts yield while typing */
+        if (!read_only)
+            eli_input_mark_text_input_active();
+    }
 
     if (callback != NULL && (flags & (ELI_INPUT_TEXT_CALLBACK_ALWAYS | ELI_INPUT_TEXT_CALLBACK_EDIT))
-        && is_active) {
-        eli_input_text_callback_data cb = {0};
-        cb.ctx = ctx;
-        cb.flags = flags;
-        cb.event_flag = value_changed ? ELI_INPUT_TEXT_CALLBACK_EDIT : ELI_INPUT_TEXT_CALLBACK_ALWAYS;
-        cb.user_data = user_data;
-        cb.buf = buf;
-        cb.buf_text_len = len;
-        cb.buf_size = buf_size;
-        cb.cursor_pos = st->cursor;
-        cb.selection_start = eli_input_text__sel_min(st);
-        cb.selection_end = eli_input_text__sel_max(st);
-        callback(&cb);
-        if (cb.buf_dirty)
-            len = eli_input_text__strnlen(buf, buf_size);
-    }
+        && is_active)
+        len = eli_input_text__run_callback(st, buf, len, buf_size, flags, value_changed, callback,
+                                           user_data);
 
     if (is_active)
         eli_input_text__update_scroll(st, frame_bb, buf, flags);

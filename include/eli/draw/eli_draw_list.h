@@ -19,6 +19,7 @@
 
 #include "../core/eli_platform.h"
 #include "../core/eli_types.h"
+#include "../util/eli_mem.h"
 
 /** Half-extent of the default fullscreen clip rectangle, in pixels. */
 #define ELI_DRAW_CLIP_FULLSCREEN_EXTENT 8192.0f
@@ -32,14 +33,17 @@
 
 /**
  * Grow a heap buffer so it can hold at least `need` elements, using ~1.5x
- * geometric growth. Returns the (possibly moved) buffer and writes the new
- * capacity through `capacity`. A no-op when the buffer is already large enough.
+ * geometric growth through eli_mem. Returns the (possibly moved) buffer and
+ * writes the new capacity through `capacity`. A no-op when the buffer is already
+ * large enough. On allocation failure the old buffer is returned unchanged and
+ * `*capacity` stays below `need`: callers MUST check `*capacity >= need` (or
+ * use a bool-returning reserve) before writing.
  *
  * @param data      Current buffer (may be NULL).
  * @param capacity  In/out element capacity.
  * @param need      Minimum required element count.
  * @param elem_size Size of one element in bytes.
- * @return          Buffer pointer with capacity >= need.
+ * @return          Buffer pointer (capacity >= need only on success).
  *
  * Thread-safe: no
  * Reentrant: yes
@@ -53,10 +57,11 @@ static inline void *eli_draw_buf_grow(void *data, int *capacity, int need, size_
     while (cap < need)
         cap += cap / 2 + 1;
 
-    void *grown = realloc(data, (size_t)cap * elem_size);
-    if (grown != NULL)
-        *capacity = cap;
-    return (grown != NULL) ? grown : data;
+    void *grown = eli_mem_realloc(data, (size_t)*capacity * elem_size, (size_t)cap * elem_size);
+    if (grown == NULL)
+        return data;
+    *capacity = cap;
+    return grown;
 }
 
 /* ---------------------------------------------------------------------------
@@ -94,6 +99,8 @@ static inline void eli_draw_list_add_draw_cmd(eli_draw_list *list)
     list->cmds = (eli_draw_cmd *)eli_draw_buf_grow(list->cmds, &cap,
                                                    (int)list->cmd_count + 1, sizeof(*list->cmds));
     list->cmd_capacity = (uint32_t)cap;
+    if (cap < (int)list->cmd_count + 1)
+        return; /* OOM: geometry keeps flowing into the previous command */
     eli_draw_cmd *cmd = &list->cmds[list->cmd_count++];
     cmd->clip_rect = eli_draw_clip_vec4_to_rect(list->cmd_clip_rect);
     cmd->texture_id = list->cmd_texture_id;
@@ -117,6 +124,8 @@ static inline void eli_draw_list_pop_unused_draw_cmd(eli_draw_list *list)
 /** React to a clip-rect change: split the current command or retag/merge it. */
 static inline void eli_draw_list_on_changed_clip_rect(eli_draw_list *list)
 {
+    if (list->cmd_count == 0)
+        return;
     eli_draw_cmd *curr = &list->cmds[list->cmd_count - 1];
     eli_vec4 curr_clip = {curr->clip_rect.x, curr->clip_rect.y,
                           curr->clip_rect.x + curr->clip_rect.w,
@@ -143,6 +152,8 @@ static inline void eli_draw_list_on_changed_clip_rect(eli_draw_list *list)
 /** React to a texture change: split the current command or retag/merge it. */
 static inline void eli_draw_list_on_changed_texture(eli_draw_list *list)
 {
+    if (list->cmd_count == 0)
+        return;
     eli_draw_cmd *curr = &list->cmds[list->cmd_count - 1];
     if (curr->elem_count != 0 && curr->texture_id != list->cmd_texture_id) {
         eli_draw_list_add_draw_cmd(list);
@@ -198,21 +209,21 @@ static inline void eli_draw_list_init(eli_draw_list *list, eli_draw_list_flags f
  */
 static inline void eli_draw_list_clear(eli_draw_list *list)
 {
-    free(list->cmds);
-    free(list->vtx);
-    free(list->idx);
-    free(list->path);
-    free(list->clip_rect_stack);
-    free(list->texture_stack);
+    eli_mem_free(list->cmds);
+    eli_mem_free(list->vtx);
+    eli_mem_free(list->idx);
+    eli_mem_free(list->path);
+    eli_mem_free(list->clip_rect_stack);
+    eli_mem_free(list->texture_stack);
     /* The current channel's buffers alias the live cmds/idx freed above; every
      * other channel owns distinct buffers that must be released here. */
     for (int i = 0; i < list->channels_capacity; i++) {
         if (i == list->channels_current)
             continue;
-        free(list->channels[i].cmds);
-        free(list->channels[i].idx);
+        eli_mem_free(list->channels[i].cmds);
+        eli_mem_free(list->channels[i].idx);
     }
-    free(list->channels);
+    eli_mem_free(list->channels);
     memset(list, 0, sizeof(*list));
 }
 
@@ -236,6 +247,7 @@ static inline void eli_draw_list_reset(eli_draw_list *list)
     list->channels_count = 0;
     list->channels_current = 0;
     list->vtx_current_idx = 0;
+    list->dropped_vtx_count = 0;
     list->cmd_clip_rect = list->clip_rect_fullscreen;
     list->cmd_texture_id = 0;
     eli_draw_list_add_draw_cmd(list);
@@ -274,6 +286,8 @@ static inline void eli_draw_list_push_clip_rect(eli_draw_list *list, eli_vec2 cl
     list->clip_rect_stack = (eli_vec4 *)eli_draw_buf_grow(
         list->clip_rect_stack, &list->clip_rect_stack_capacity,
         list->clip_rect_stack_count + 1, sizeof(*list->clip_rect_stack));
+    if (list->clip_rect_stack_capacity < list->clip_rect_stack_count + 1)
+        return; /* OOM: keep the current clip; the matching pop restores the prior one */
     list->clip_rect_stack[list->clip_rect_stack_count++] = cr;
     list->cmd_clip_rect = cr;
     eli_draw_list_on_changed_clip_rect(list);
@@ -336,11 +350,13 @@ static inline eli_vec2 eli_draw_list_get_clip_rect_max(const eli_draw_list *list
  * Thread-safe: no
  * Reentrant: no
  */
-static inline void eli_draw_list_push_texture_id(eli_draw_list *list, uint32_t texture_id)
+static inline void eli_draw_list_push_texture_id(eli_draw_list *list, eli_texture_id texture_id)
 {
-    list->texture_stack = (uint32_t *)eli_draw_buf_grow(
+    list->texture_stack = (eli_texture_id *)eli_draw_buf_grow(
         list->texture_stack, &list->texture_stack_capacity,
         list->texture_stack_count + 1, sizeof(*list->texture_stack));
+    if (list->texture_stack_capacity < list->texture_stack_count + 1)
+        return; /* OOM: keep the current texture */
     list->texture_stack[list->texture_stack_count++] = texture_id;
     list->cmd_texture_id = texture_id;
     eli_draw_list_on_changed_texture(list);
@@ -359,7 +375,7 @@ static inline void eli_draw_list_pop_texture_id(eli_draw_list *list)
     if (list->texture_stack_count > 0)
         list->texture_stack_count--;
     list->cmd_texture_id = (list->texture_stack_count == 0)
-                               ? 0u
+                               ? (eli_texture_id)0
                                : list->texture_stack[list->texture_stack_count - 1];
     eli_draw_list_on_changed_texture(list);
 }
@@ -376,27 +392,43 @@ static inline void eli_draw_list_pop_texture_id(eli_draw_list *list)
  * known after emission; charge the actual total afterward with
  * eli_draw_list_prim_add_idx_to_cmd. Growth is geometric (amortized O(1)).
  *
+ * Refuses (returns false, writes nothing) when the buffers cannot grow (OOM),
+ * when the list has no open command, or, with 16-bit indices, when the new
+ * vertices would push an index past 65535 (the primitive is dropped and counted
+ * in list->dropped_vtx_count instead of wrapping; ELI_ASSERT fires in debug).
+ *
  * @param list       Target draw list.
  * @param idx_count  Number of additional indices to make room for.
  * @param vtx_count  Number of additional vertices to make room for.
+ * @return           true if the space is available and may be written.
  *
  * Thread-safe: no
  * Reentrant: no
  */
-static inline void eli_draw_list_prim_reserve_capacity(eli_draw_list *list, int idx_count,
+static inline bool eli_draw_list_prim_reserve_capacity(eli_draw_list *list, int idx_count,
                                                        int vtx_count)
 {
+    if (list->cmd_count == 0)
+        return false;
+#ifndef ELI_DRAW_IDX_32
+    if ((uint64_t)list->vtx_current_idx + (uint64_t)vtx_count > ELI_DRAW_IDX_16_VTX_LIMIT) {
+        ELI_ASSERT(!"draw list exceeded 65536 vertices with 16-bit indices; define ELI_DRAW_IDX_32");
+        list->dropped_vtx_count += (uint32_t)vtx_count;
+        return false;
+    }
+#endif
+    int vtx_need = (int)list->vtx_count + vtx_count;
     int vtx_cap = (int)list->vtx_capacity;
-    list->vtx = (eli_draw_vert *)eli_draw_buf_grow(list->vtx, &vtx_cap,
-                                                   (int)list->vtx_count + vtx_count,
+    list->vtx = (eli_draw_vert *)eli_draw_buf_grow(list->vtx, &vtx_cap, vtx_need,
                                                    sizeof(*list->vtx));
     list->vtx_capacity = (uint32_t)vtx_cap;
 
+    int idx_need = (int)list->idx_count + idx_count;
     int idx_cap = (int)list->idx_capacity;
-    list->idx = (eli_draw_idx *)eli_draw_buf_grow(list->idx, &idx_cap,
-                                                  (int)list->idx_count + idx_count,
+    list->idx = (eli_draw_idx *)eli_draw_buf_grow(list->idx, &idx_cap, idx_need,
                                                   sizeof(*list->idx));
     list->idx_capacity = (uint32_t)idx_cap;
+    return vtx_cap >= vtx_need && idx_cap >= idx_need;
 }
 
 /**
@@ -418,19 +450,23 @@ static inline void eli_draw_list_prim_add_idx_to_cmd(eli_draw_list *list, int id
 /**
  * Reserve capacity for `vtx_count` vertices and `idx_count` indices and charge
  * the indices to the current command. Fill the reserved slots with the prim_*
- * writers before reserving again.
+ * writers before reserving again. On failure nothing is reserved or charged and
+ * the caller must not write (see eli_draw_list_prim_reserve_capacity).
  *
  * @param list       Target draw list.
  * @param idx_count  Number of indices to reserve.
  * @param vtx_count  Number of vertices to reserve.
+ * @return           true if the space was reserved.
  *
  * Thread-safe: no
  * Reentrant: no
  */
-static inline void eli_draw_list_prim_reserve(eli_draw_list *list, int idx_count, int vtx_count)
+static inline bool eli_draw_list_prim_reserve(eli_draw_list *list, int idx_count, int vtx_count)
 {
-    eli_draw_list_prim_reserve_capacity(list, idx_count, vtx_count);
+    if (!eli_draw_list_prim_reserve_capacity(list, idx_count, vtx_count))
+        return false;
     eli_draw_list_prim_add_idx_to_cmd(list, idx_count);
+    return true;
 }
 
 /**
@@ -591,9 +627,10 @@ static inline void eli_draw_list_add_callback(eli_draw_list *list, eli_draw_call
  */
 static inline eli_draw_list *eli_draw_list_clone_output(const eli_draw_list *list)
 {
-    eli_draw_list *clone = (eli_draw_list *)calloc(1, sizeof(*clone));
+    eli_draw_list *clone = (eli_draw_list *)eli_mem_alloc(sizeof(*clone));
     if (clone == NULL)
         return NULL;
+    memset(clone, 0, sizeof(*clone));
 
     clone->flags = list->flags;
     clone->fringe_scale = list->fringe_scale;
@@ -605,7 +642,7 @@ static inline eli_draw_list *eli_draw_list_clone_output(const eli_draw_list *lis
     clone->vtx_current_idx = list->vtx_current_idx;
 
     if (list->cmd_count > 0) {
-        clone->cmds = (eli_draw_cmd *)malloc((size_t)list->cmd_count * sizeof(*clone->cmds));
+        clone->cmds = (eli_draw_cmd *)eli_mem_alloc((size_t)list->cmd_count * sizeof(*clone->cmds));
         if (clone->cmds != NULL) {
             memcpy(clone->cmds, list->cmds, (size_t)list->cmd_count * sizeof(*clone->cmds));
             clone->cmd_count = list->cmd_count;
@@ -613,7 +650,7 @@ static inline eli_draw_list *eli_draw_list_clone_output(const eli_draw_list *lis
         }
     }
     if (list->vtx_count > 0) {
-        clone->vtx = (eli_draw_vert *)malloc((size_t)list->vtx_count * sizeof(*clone->vtx));
+        clone->vtx = (eli_draw_vert *)eli_mem_alloc((size_t)list->vtx_count * sizeof(*clone->vtx));
         if (clone->vtx != NULL) {
             memcpy(clone->vtx, list->vtx, (size_t)list->vtx_count * sizeof(*clone->vtx));
             clone->vtx_count = list->vtx_count;
@@ -621,7 +658,7 @@ static inline eli_draw_list *eli_draw_list_clone_output(const eli_draw_list *lis
         }
     }
     if (list->idx_count > 0) {
-        clone->idx = (eli_draw_idx *)malloc((size_t)list->idx_count * sizeof(*clone->idx));
+        clone->idx = (eli_draw_idx *)eli_mem_alloc((size_t)list->idx_count * sizeof(*clone->idx));
         if (clone->idx != NULL) {
             memcpy(clone->idx, list->idx, (size_t)list->idx_count * sizeof(*clone->idx));
             clone->idx_count = list->idx_count;

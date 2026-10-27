@@ -33,7 +33,7 @@
 #define ELI_INPUT_NUMBER_BUF_SIZE 64
 #endif
 
-static char g_eli_input_number_buf[ELI_INPUT_NUMBER_BUF_SIZE];
+ELI_GLOBAL_ARRAY(char, g_eli_input_number_buf, ELI_INPUT_NUMBER_BUF_SIZE);
 
 /* ---------------------------------------------------------------------------
  * Scalar data-type helpers: format, parse, step, clamp

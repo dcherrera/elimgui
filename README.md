@@ -24,15 +24,15 @@ The repo ships an interactive **visual cheatsheet** — an elimgui app that show
 
 That builds the cheatsheet to WebAssembly, starts a local server, and opens it at **http://localhost:8080/cheatsheet.html**. (Use `./build.sh serve demo.html` for the simpler widget demo.)
 
-**Why a browser?** elimgui is WASM/browser-first: the library emits renderer-agnostic draw lists, and the only bundled renderer is the Canvas2D backend in `web/elimgui.js`. So the app runs in the browser — there's no native (SDL/GLFW) backend yet. For headless checks there's `./build.sh dogfood`, and the unit tests run natively via `./build.sh test`.
+**Browser or native.** The library emits renderer-agnostic draw lists. In the browser the Canvas2D backend in `web/elimgui.js` draws them; natively the header-only SDL3 backend in `backends/sdl3/` does (macOS and Linux; see [docs/native-backends.md](docs/native-backends.md) and `./build.sh sdl3-example`). For headless checks there's `./build.sh dogfood`, and the unit tests run natively via `./build.sh test`.
 
 ## Tech Stack
 
 | | |
 |---|---|
 | **Language** | C11 (header-only) |
-| **Target** | WebAssembly via `clang --target=wasm32` |
-| **Libc** | [JAClibc](https://github.com/dcherrera/jaclibc) — WASM-first, header-only C library |
+| **Target** | WebAssembly via `clang --target=wasm32`; native macOS/Linux via SDL3 |
+| **Libc** | [JAClibc](https://github.com/dcherrera/jaclibc) on wasm32; the system libc natively |
 | **Font Rendering** | stb_truetype (vendored) |
 | **JS Interop** | JAClibc's `jsio.h` (`JS_CODE`, `JS_EXPORT`, `JS_IMPORT`) |
 | **Toolchain** | Clang + wasm-ld (no Emscripten) |
@@ -116,6 +116,8 @@ git submodule update --init --recursive
 ./build.sh serve demo.html  # …the simpler widget demo instead
 ./build.sh test             # build + run the native unit-test suite
 ./build.sh dogfood          # headless: run the app natively and dump UI state
+./build.sh wasm-smoke       # build both wasm apps, check their draw data in Node
+./build.sh sdl3-example     # native desktop example (needs SDL3 via pkg-config)
 ./build.sh clean            # remove build artifacts
 ```
 
@@ -142,7 +144,8 @@ Feature-complete: the full Dear ImGui feature set is implemented, covered by a n
 | Docking — dock space, split, tab, tear-out | ✅ |
 | Demo & debug windows, visual cheatsheet | ✅ |
 | Web integration — WASM loader, Canvas2D renderer, input | ✅ |
-| Native rendering backend (SDL/GLFW/OpenGL) | Not yet |
+| Native backend — SDL3 platform + SDL_Renderer (macOS, Linux) | ✅ |
+| iOS, touch, IME, Android, Windows | Not yet |
 
 ## License
 

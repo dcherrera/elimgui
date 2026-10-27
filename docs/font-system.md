@@ -65,7 +65,8 @@ tables. It is safe to call again (it frees prior texture/glyph data first).
 | `eli_font_atlas_add_font_from_memory_ttf(...)` | Add from raw TTF/OTF bytes |
 | `eli_font_atlas_add_font_from_memory_compressed_ttf(...)` | Add from stb-compressed TTF |
 | `eli_font_atlas_build(atlas)` | Bake the texture (returns `bool`) |
-| `eli_font_atlas_is_built(atlas)` | Whether a texture has been baked |
+| `eli_font_atlas_is_built(atlas)` | Whether the atlas has been baked (stays true after `release_cpu_pixels`) |
+| `eli_font_atlas_release_cpu_pixels(atlas)` | Free the CPU pixel buffers after upload; fonts/UVs stay valid |
 | `eli_font_atlas_get_tex_data_as_alpha8(...)` | Fetch 1-byte texels (builds on demand) |
 | `eli_font_atlas_get_tex_data_as_rgba32(...)` | Fetch RGBA (white + alpha), cached |
 | `eli_font_atlas_set_tex_id(atlas, id)` | Store the backend texture id |
@@ -76,6 +77,27 @@ tables. It is safe to call again (it frees prior texture/glyph data first).
 selects the default Latin range), glyph offset/advance clamps, and pixel
 snapping. Pass `NULL` for the config to accept defaults (13px, 1× oversample,
 horizontal snap on).
+
+### HiDPI: rasterizer density
+
+`eli_font_config.rasterizer_density` (default 1; `<= 0` means 1) bakes glyphs at
+`size_pixels x density` texels while every metric (ascent, descent, line height,
+advances, glyph quads) stays in **points**. Layout is identical at any density; on a
+2x framebuffer each glyph texel maps to one device pixel, so text is sharp.
+
+```c
+eli_font_config cfg = eli_font_config_default();
+cfg.rasterizer_density = SDL_GetWindowPixelDensity(window);   /* 2 on Retina */
+eli_font *font = eli_font_atlas_add_font_default(atlas, &cfg);
+eli_font_atlas_build(atlas);
+/* upload, then free the CPU copy (a 1024^2 RGBA atlas is ~5 MB): */
+eli_font_atlas_release_cpu_pixels(atlas);
+eli_push_font(font);   /* after the bake: font_size is only known once built */
+```
+
+On a display-scale change, set the new density on every `atlas->configs[i]`, call
+`eli_font_atlas_build` again (font pointers stay valid) and re-upload. Pushing a font
+before the first bake leaves the context font size at 0 (nothing renders).
 
 ### Glyph ranges
 

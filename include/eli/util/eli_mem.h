@@ -7,10 +7,9 @@
  * allocator (pool, leak-tracker, sanitizer) via eli_set_allocator_functions() and
  * restore the platform default (malloc/free) by passing NULL for either function.
  *
- * Design note: The allocator state uses file-scope statics, which is correct for
- * elimgui's single-TU WASM build model and single-TU test binaries.  Multi-TU
- * hosts that need a shared allocator should install it in every TU that includes
- * this header.
+ * Design note: The allocator state is declared with ELI_GLOBAL (core/eli_state.h):
+ * per-TU statics by default (single-TU WASM build), one shared copy across TUs
+ * under ELI_SHARED_STATE.
  *
  * @status Complete — allocator swap, query, alloc, and free implemented.
  * @issues None
@@ -56,13 +55,13 @@ typedef void (*eli_free_func)(void *ptr, void *user_data);
  * unused-parameter warnings since the default wrappers have no user context.
  * ---------------------------------------------------------------------- */
 
-static void *eli_default_alloc(size_t sz, void *user_data)
+static inline void *eli_default_alloc(size_t sz, void *user_data)
 {
     (void)user_data;
     return malloc(sz);
 }
 
-static void eli_default_free(void *ptr, void *user_data)
+static inline void eli_default_free(void *ptr, void *user_data)
 {
     (void)user_data;
     free(ptr);
@@ -72,9 +71,9 @@ static void eli_default_free(void *ptr, void *user_data)
  * Module-private allocator state
  * ---------------------------------------------------------------------- */
 
-static eli_alloc_func eli_s_alloc_func     = eli_default_alloc;
-static eli_free_func  eli_s_free_func      = eli_default_free;
-static void          *eli_s_alloc_userdata = NULL;
+ELI_GLOBAL(eli_alloc_func, eli_s_alloc_func, eli_default_alloc);
+ELI_GLOBAL(eli_free_func, eli_s_free_func, eli_default_free);
+ELI_GLOBAL(void *, eli_s_alloc_userdata, NULL);
 
 /* -------------------------------------------------------------------------
  * Public API
@@ -165,6 +164,37 @@ static inline void eli_mem_free(void *ptr)
     if (ptr == NULL)
         return;
     eli_s_free_func(ptr, eli_s_alloc_userdata);
+}
+
+/**
+ * Resize a block previously returned by eli_mem_alloc()/eli_mem_realloc().
+ *
+ * The allocator seam has no realloc hook, so this allocates the new block,
+ * copies min(old_size, new_size) bytes and frees the old one. On failure the
+ * old block is left untouched and NULL is returned (realloc semantics).
+ *
+ * @param ptr       Block to resize, or NULL (then this is eli_mem_alloc).
+ * @param old_size  Current usable size of ptr in bytes (0 when ptr is NULL).
+ * @param new_size  Requested size in bytes; 0 frees ptr and returns NULL.
+ * @return          The resized block, or NULL on failure / new_size == 0.
+ *
+ * Thread-safe: depends on the installed allocator
+ * Reentrant:   depends on the installed allocator
+ */
+static inline void *eli_mem_realloc(void *ptr, size_t old_size, size_t new_size)
+{
+    if (new_size == 0) {
+        eli_mem_free(ptr);
+        return NULL;
+    }
+    void *grown = eli_mem_alloc(new_size);
+    if (grown == NULL)
+        return NULL;
+    if (ptr != NULL) {
+        memcpy(grown, ptr, old_size < new_size ? old_size : new_size);
+        eli_mem_free(ptr);
+    }
+    return grown;
 }
 
 #endif /* ELI_UTIL_MEM_H */

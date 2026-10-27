@@ -88,6 +88,19 @@ eli_col32 eli_color_vec4_to_u32(eli_vec4 v);    // pack, saturating to [0,1]
 state, the text-input queue, capture-intent outputs (`want_capture_mouse`, etc.), and
 clipboard callbacks. The backend fills the inputs; elimgui writes the outputs each frame.
 
+Fields added for native backends:
+
+| Field | Kind | Meaning |
+|---|---|---|
+| `config_mac_os_behaviors` | config | Cmd is the shortcut modifier; Cmd/Alt caret navigation (default: `__APPLE__`) |
+| `config_redraw_settle_frames` | config | frames owed after input before idle (default 2) |
+| `config_input_trickle_disabled` | config | apply all queued events in one frame (default false) |
+| `input_events`, `_count`, `_capacity` | queue | ordered events, heap (`eli_mem`), grows |
+| `input_queue_characters`, `_count`, `_capacity` | queue | this frame's UTF-32 code points, heap |
+| `want_capture_mouse/keyboard`, `want_text_input` | output | see input-system.md, computed each frame |
+| `metrics_dropped_vertices` | output | vertices refused by the 16-bit index guard this frame |
+| `platform_open_url_fn`, `platform_user_data` | callback | open a URL (SDL3 backend: `SDL_OpenURL`) |
+
 `eli_style` holds every sizing/spacing/rounding/alignment/behavior value plus
 `eli_vec4 colors[ELI_COL_COUNT]`. `eli_create_context` populates the sizing values with the
 Dear ImGui defaults; the `colors[]` theme is left zeroed for the style phase to fill.

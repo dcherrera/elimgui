@@ -1,7 +1,8 @@
 /**
  * @file test_input_text.c
- * @brief Unit tests for elimgui text input: ASCII and UTF-8 character queueing,
- *        non-BMP replacement, and per-frame queue clearing.
+ * @brief Unit tests for elimgui text input: ASCII and UTF-8 characters become
+ *        TEXT events that fill the UTF-32 queue at begin-frame, non-BMP code points
+ *        are preserved, and the queue clears at end-frame.
  *
  * @status Phase 4 text input coverage.
  * @issues None
@@ -17,13 +18,12 @@ ELI_TEST(add_single_characters) {
 
     eli_io_add_input_character('A');
     eli_io_add_input_character('z');
+    eli_io_add_input_character(0);              /* zero code point is ignored */
+    ELI_ASSERT_EQ(io->input_events_count, 2);   /* queued as ordered TEXT events */
+    eli_input_process_events(io);
     ELI_ASSERT_EQ(io->input_queue_characters_count, 2);
-    ELI_ASSERT_EQ(io->input_queue_characters[0], (uint16_t)'A');
-    ELI_ASSERT_EQ(io->input_queue_characters[1], (uint16_t)'z');
-
-    /* Zero code point is ignored. */
-    eli_io_add_input_character(0);
-    ELI_ASSERT_EQ(io->input_queue_characters_count, 2);
+    ELI_ASSERT_EQ(io->input_queue_characters[0], (uint32_t)'A');
+    ELI_ASSERT_EQ(io->input_queue_characters[1], (uint32_t)'z');
 
     eli_destroy_context(ctx);
 }
@@ -34,10 +34,11 @@ ELI_TEST(add_utf8_string_decodes_codepoints) {
 
     /* "hi" + U+00E9 (e-acute, 2-byte UTF-8: 0xC3 0xA9). */
     eli_io_add_input_characters_utf8("hi\xC3\xA9");
+    eli_input_process_events(io);
     ELI_ASSERT_EQ(io->input_queue_characters_count, 3);
-    ELI_ASSERT_EQ(io->input_queue_characters[0], (uint16_t)'h');
-    ELI_ASSERT_EQ(io->input_queue_characters[1], (uint16_t)'i');
-    ELI_ASSERT_EQ(io->input_queue_characters[2], (uint16_t)0x00E9);
+    ELI_ASSERT_EQ(io->input_queue_characters[0], (uint32_t)'h');
+    ELI_ASSERT_EQ(io->input_queue_characters[1], (uint32_t)'i');
+    ELI_ASSERT_EQ(io->input_queue_characters[2], (uint32_t)0x00E9);
 
     eli_destroy_context(ctx);
 }
@@ -48,20 +49,22 @@ ELI_TEST(add_utf8_three_byte_codepoint) {
 
     /* U+20AC euro sign (3-byte UTF-8: 0xE2 0x82 0xAC). */
     eli_io_add_input_characters_utf8("\xE2\x82\xAC");
+    eli_input_process_events(io);
     ELI_ASSERT_EQ(io->input_queue_characters_count, 1);
-    ELI_ASSERT_EQ(io->input_queue_characters[0], (uint16_t)0x20AC);
+    ELI_ASSERT_EQ(io->input_queue_characters[0], (uint32_t)0x20AC);
 
     eli_destroy_context(ctx);
 }
 
-ELI_TEST(add_utf8_non_bmp_becomes_replacement) {
+ELI_TEST(add_utf8_non_bmp_is_preserved) {
     eli_context *ctx = eli_create_context();
     eli_io *io = &ctx->io;
 
-    /* U+1F600 grinning face (4-byte UTF-8) exceeds the 16-bit queue -> U+FFFD. */
+    /* U+1F600 grinning face (4-byte UTF-8) is kept as one UTF-32 code point. */
     eli_io_add_input_characters_utf8("\xF0\x9F\x98\x80");
+    eli_input_process_events(io);
     ELI_ASSERT_EQ(io->input_queue_characters_count, 1);
-    ELI_ASSERT_EQ(io->input_queue_characters[0], (uint16_t)0xFFFD);
+    ELI_ASSERT_EQ(io->input_queue_characters[0], (uint32_t)0x1F600);
 
     eli_destroy_context(ctx);
 }
@@ -71,8 +74,8 @@ ELI_TEST(text_queue_clears_at_end_frame) {
     eli_io *io = &ctx->io;
     io->delta_time = 1.0f / 60.0f;
 
-    eli_input_update_begin_frame();
     eli_io_add_input_characters_utf8("abc");
+    eli_input_update_begin_frame();
     ELI_ASSERT_EQ(io->input_queue_characters_count, 3);
     eli_input_update_end_frame();
     ELI_ASSERT_EQ(io->input_queue_characters_count, 0);

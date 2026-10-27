@@ -125,9 +125,9 @@ ELI_TEST(input_text_typing_inserts_and_marks_edited) {
 
     /* Release then type "Hi": both characters land, edited flag fires. */
     eli_io_add_mouse_button_event(ELI_MOUSE_BUTTON_LEFT, false);
+    type_string("Hi");
     frame_begin();
     open_win();
-    type_string("Hi");
     bool ret = eli_input_text("Name", buf, sizeof(buf), 0, NULL, NULL);
     ELI_ASSERT_TRUE(eli_is_item_edited());
     ELI_ASSERT_TRUE(ret);          /* default policy returns true on edit */
@@ -159,9 +159,9 @@ ELI_TEST(input_text_backspace_deletes) {
     frame_end();
 
     eli_io_add_mouse_button_event(ELI_MOUSE_BUTTON_LEFT, false);
+    type_string("Hi");
     frame_begin();
     open_win();
-    type_string("Hi");
     eli_input_text("Name", buf, sizeof(buf), 0, NULL, NULL);
     eli_end();
     frame_end();
@@ -193,10 +193,10 @@ ELI_TEST(input_text_enter_returns_true_and_deactivates) {
 
     eli_io_add_mouse_pos_event(c.x, c.y);
     eli_io_add_mouse_button_event(ELI_MOUSE_BUTTON_LEFT, true);
+    type_string("Yo");
     frame_begin();
     open_win();
     /* Editing but no Enter: does not return true under ENTER_RETURNS_TRUE. */
-    type_string("Yo");
     bool r1 = eli_input_text("Name", buf, sizeof(buf), ELI_INPUT_TEXT_ENTER_RETURNS_TRUE, NULL, NULL);
     ELI_ASSERT_FALSE(r1);
     eli_end();

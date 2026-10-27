@@ -2,21 +2,23 @@
  * @file eli_platform.h
  * @brief Libc dependency seam for elimgui.
  *
- * Every elimgui header includes this instead of <jaclibc.h> directly, so the
+ * Every elimgui header includes this instead of a libc header directly, so the
  * library's dependency on a C runtime lives behind a single, swappable boundary
- * (library-first design). Two modes:
+ * (library-first design). Two libc modes, picked by macro:
  *
- *   - Production (default): pulls in JAClibc, which provides the standard libc
- *     surface AND the C-to-JS interop (jsio.h) used by the WASM/browser backend.
- *   - Hosted tests (-DELI_TEST_HOSTED): pulls in the host system libc instead, so
- *     unit tests compile and run as native binaries with real stdio/stdlib/math,
- *     independent of JAClibc's per-OS native support. JS-interop code paths are
- *     excluded from hosted builds (they are browser-only and covered by the demo).
+ *   - ELI_LIBC_SYSTEM: the host system libc (stdint ... float, stdio). Default for
+ *     every non-wasm32 target (native apps, unit tests). ELI_TEST_HOSTED is kept as
+ *     a back-compat alias for it.
+ *   - ELI_LIBC_JACLIBC: JAClibc. Default for wasm32. On wasm32 it also turns on
+ *     ELI_JSIO (C-to-JS interop) and the double-only pow/log/exp overrides. On a
+ *     native target it is opt-in and JS interop stays off.
  *
- * Use ELI_JSIO to guard JS-interop-only code so it compiles out under tests:
+ * Defining both is an error. Use ELI_JSIO to guard JS-interop-only code:
  *     #ifdef ELI_JSIO
  *         JS_EXPORT(on_mouse_move) void on_mouse_move(float x, float y) { ... }
  *     #endif
+ *
+ * Also pulls in core/eli_state.h (ELI_GLOBAL, multi-TU shared state).
  *
  * @status In use as the single libc include point for all elimgui headers.
  * @issues None
@@ -25,12 +27,27 @@
 #ifndef ELI_PLATFORM_H
 #define ELI_PLATFORM_H
 
-#ifdef ELI_TEST_HOSTED
+#if defined(ELI_TEST_HOSTED) && !defined(ELI_LIBC_SYSTEM)
+    #define ELI_LIBC_SYSTEM 1                   /* back-compat alias */
+#endif
+#if !defined(ELI_LIBC_SYSTEM) && !defined(ELI_LIBC_JACLIBC)
+    #if defined(__wasm32__)
+        #define ELI_LIBC_JACLIBC 1
+    #else
+        #define ELI_LIBC_SYSTEM 1               /* native default */
+    #endif
+#endif
+#if defined(ELI_LIBC_SYSTEM) && defined(ELI_LIBC_JACLIBC)
+    #error "elimgui: define only one of ELI_LIBC_SYSTEM / ELI_LIBC_JACLIBC"
+#endif
 
-    /* Native unit-test build: use the host system libc. No JS interop. */
+#if defined(ELI_LIBC_SYSTEM)
+
+    /* Host system libc. No JS interop. */
     #include <stdint.h>
     #include <stddef.h>
     #include <stdbool.h>
+    #include <stdio.h>
     #include <stdlib.h>
     #include <string.h>
     #include <math.h>
@@ -38,8 +55,22 @@
 
 #else
 
-    /* Production build: JAClibc (libc + jsio.h JS interop) for wasm32. */
+    /* JAClibc. JS interop and the soft-float workarounds apply only on wasm32. */
     #include <jaclibc.h>
+#endif
+
+/* Library invariant checks: on only with ELI_DEBUG and the system libc. Apps may
+ * define ELI_ASSERT themselves before including elimgui. */
+#ifndef ELI_ASSERT
+    #if defined(ELI_DEBUG) && defined(ELI_LIBC_SYSTEM)
+        #include <assert.h>
+        #define ELI_ASSERT(x) assert(x)
+    #else
+        #define ELI_ASSERT(x) ((void)0)
+    #endif
+#endif
+
+#if defined(ELI_LIBC_JACLIBC) && defined(__wasm32__)
     #define ELI_JSIO 1
 
     /* ----------------------------------------------------------------------
@@ -103,6 +134,8 @@
     #define exp(x)     eli__platform_exp((double)(x))
     #define expf(x)    ((float)eli__platform_exp((double)(x)))
 
-#endif /* ELI_TEST_HOSTED */
+#endif /* ELI_LIBC_JACLIBC && __wasm32__ */
+
+#include "eli_state.h"
 
 #endif /* ELI_PLATFORM_H */

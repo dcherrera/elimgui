@@ -45,12 +45,12 @@
 
 #define ELI_TAB_BAR_STACK_MAX 8
 
-static eli_tab_bar *g_eli_tab_bar_pool = NULL;
-static int          g_eli_tab_bar_pool_count = 0;
-static int          g_eli_tab_bar_pool_capacity = 0;
+ELI_GLOBAL(eli_tab_bar *, g_eli_tab_bar_pool, NULL);
+ELI_GLOBAL(int, g_eli_tab_bar_pool_count, 0);
+ELI_GLOBAL(int, g_eli_tab_bar_pool_capacity, 0);
 
-static int          g_eli_tab_bar_stack[ELI_TAB_BAR_STACK_MAX];
-static int          g_eli_tab_bar_stack_size = 0;
+ELI_GLOBAL_ARRAY(int, g_eli_tab_bar_stack, ELI_TAB_BAR_STACK_MAX);
+ELI_GLOBAL(int, g_eli_tab_bar_stack_size, 0);
 
 /** Find the pooled tab bar for `id`, creating a zeroed one if absent. */
 static inline eli_tab_bar *eli_tab__pool_find_or_create(eli_id id)

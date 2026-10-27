@@ -63,7 +63,8 @@ static inline void eli_draw_list_add_polyline(eli_draw_list *list, const eli_vec
     bool closed = (flags & ELI_DRAW_CLOSED) != 0;
     int count = closed ? num_points : num_points - 1;
     eli_vec2 uv = list->tex_uv_white_pixel;
-    eli_draw_list_prim_reserve(list, count * 6, count * 4);
+    if (!eli_draw_list_prim_reserve(list, count * 6, count * 4))
+        return;
 
     for (int i1 = 0; i1 < count; i1++) {
         int i2 = ((i1 + 1) == num_points) ? 0 : (i1 + 1);
@@ -109,7 +110,8 @@ static inline void eli_draw_list_add_convex_poly_filled(eli_draw_list *list,
         return;
 
     eli_vec2 uv = list->tex_uv_white_pixel;
-    eli_draw_list_prim_reserve(list, (num_points - 2) * 3, num_points);
+    if (!eli_draw_list_prim_reserve(list, (num_points - 2) * 3, num_points))
+        return;
     eli_draw_idx base = (eli_draw_idx)list->vtx_current_idx;
     for (int i = 0; i < num_points; i++)
         eli_draw_list_prim_write_vtx(list, points[i], uv, col);
@@ -182,7 +184,8 @@ static inline void eli_draw_list_add_rect_filled(eli_draw_list *list, eli_vec2 p
     if ((col & ELI_COL32_A_MASK) == 0)
         return;
     if (rounding < 0.5f || (flags & ELI_DRAW_ROUND_CORNERS_MASK) == ELI_DRAW_ROUND_CORNERS_NONE) {
-        eli_draw_list_prim_reserve(list, 6, 4);
+        if (!eli_draw_list_prim_reserve(list, 6, 4))
+            return;
         eli_draw_list_prim_rect(list, p_min, p_max, col);
     } else {
         eli_draw_list_path_rect(list, p_min, p_max, rounding, flags);
@@ -210,7 +213,8 @@ static inline void eli_draw_list_add_rect_filled_multi_color(eli_draw_list *list
     if (((col_upr_left | col_upr_right | col_bot_right | col_bot_left) & ELI_COL32_A_MASK) == 0)
         return;
     eli_vec2 uv = list->tex_uv_white_pixel;
-    eli_draw_list_prim_reserve(list, 6, 4);
+    if (!eli_draw_list_prim_reserve(list, 6, 4))
+        return;
     eli_draw_idx base = (eli_draw_idx)list->vtx_current_idx;
     eli_draw_list_prim_write_idx(list, base);
     eli_draw_list_prim_write_idx(list, (eli_draw_idx)(base + 1));

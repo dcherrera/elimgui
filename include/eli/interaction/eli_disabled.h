@@ -29,8 +29,8 @@
  * therefore pushed the dimmed-alpha style var (so end knows to pop it). Nested
  * scopes that were already disabled push only the item flag. File-static: no
  * context field is added for this bookkeeping. */
-static bool eli_disabled__pushed_alpha[ELI_DISABLED_STACK_MAX];
-static int eli_disabled__stack_size = 0;
+ELI_GLOBAL_ARRAY(bool, eli_disabled__pushed_alpha, ELI_DISABLED_STACK_MAX);
+ELI_GLOBAL(int, eli_disabled__stack_size, 0);
 
 /**
  * Open a disabled scope. When @p disabled is true and the current scope is not

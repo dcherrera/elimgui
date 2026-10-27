@@ -10,13 +10,14 @@
  */
 #include "eli_test.h"
 
-#include <eli/input/eli_input.h>
+#include <eli/elimgui.h>
 
 #define TEST_DT (1.0f / 60.0f)
 
 ELI_TEST(shortcut_copy_fires_on_chord) {
     eli_context *ctx = eli_create_context();
     ctx->io.delta_time = TEST_DT;
+    ctx->io.config_mac_os_behaviors = false;    /* Ctrl is the shortcut modifier */
 
     eli_io_add_key_event(ELI_KEY_LEFT_CTRL, true);
     eli_io_add_key_event(ELI_KEY_C, true);

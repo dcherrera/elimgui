@@ -116,6 +116,10 @@ static inline float eli_plot__value_to_y(float v, float scale_min, float scale_r
     return inner_max_y - norm * inner_h;
 }
 
+/* Persistent line-point scratch for plot lines, grown on demand (see below). */
+ELI_GLOBAL(eli_vec2 *, g_eli_plot_line_pts, NULL);
+ELI_GLOBAL(int, g_eli_plot_line_pts_cap, 0);
+
 /**
  * Emit the line-strip geometry for values_count samples into the window draw
  * list. One heap allocation holds the sample-coordinate array; it is freed
@@ -154,15 +158,15 @@ static inline void eli_plot__emit_lines(eli_draw_list *dl,
      * Per-frame malloc/free here churns the allocator every repaint (this runs
      * on every plotted line, every frame); a persistent grown buffer avoids
      * that churn entirely. Not freed — it lives for the program's duration. */
-    static eli_vec2 *pts = NULL;
-    static int pts_cap = 0;
-    if (values_count > pts_cap) {
-        eli_vec2 *grown = (eli_vec2 *)realloc(pts, (size_t)values_count * sizeof(*grown));
+    if (values_count > g_eli_plot_line_pts_cap) {
+        eli_vec2 *grown = (eli_vec2 *)realloc(g_eli_plot_line_pts,
+                                              (size_t)values_count * sizeof(*grown));
         if (grown == NULL)
             return;
-        pts = grown;
-        pts_cap = values_count;
+        g_eli_plot_line_pts = grown;
+        g_eli_plot_line_pts_cap = values_count;
     }
+    eli_vec2 *pts = g_eli_plot_line_pts;
 
     float x_step = inner_w / (float)(values_count - 1);
     for (int i = 0; i < values_count; i++) {
