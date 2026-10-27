@@ -162,7 +162,7 @@ ELI_TEST(clone_output_deep_copies_buffers) {
     ELI_ASSERT_FLT_NEAR(clone->vtx[2].y, 60.0f, 1e-4);
 
     eli_draw_list_clear(clone);
-    free(clone);
+    eli_mem_free(clone);
     eli_draw_list_clear(&dl);
 }
 

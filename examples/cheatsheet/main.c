@@ -155,7 +155,7 @@ int eli_atlas_height(void)
  * Vertex layout  (stride 20): float x,y,u,v; uint32 col   (RGBA byte order).
  * Command layout (stride 40): float clip.x,y,w,h; uint32 texture_id,
  *                             vtx_offset, idx_offset, elem_count; two pointers.
- * Index type: uint16.
+ * Index type: uint16, or uint32 with ELI_DRAW_IDX_32 (see eli_dd_idx_size).
  * ------------------------------------------------------------------------- */
 
 /** Resolve draw list `li`, or NULL if out of range / no draw data. */
@@ -165,6 +165,13 @@ static eli_draw_list *cheat_list(int li)
     if (!dd || li < 0 || li >= dd->cmd_lists_count)
         return NULL;
     return dd->cmd_lists[li];
+}
+
+/** @return Size in bytes of one draw index (2 = uint16, 4 = ELI_DRAW_IDX_32). */
+JS_EXPORT(eli_dd_idx_size)
+int eli_dd_idx_size(void)
+{
+    return (int)sizeof(eli_draw_idx);
 }
 
 /** @return Number of draw lists in the current frame's draw data. */

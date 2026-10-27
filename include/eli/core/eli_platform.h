@@ -59,6 +59,17 @@
     #include <jaclibc.h>
 #endif
 
+/* Library invariant checks: on only with ELI_DEBUG and the system libc. Apps may
+ * define ELI_ASSERT themselves before including elimgui. */
+#ifndef ELI_ASSERT
+    #if defined(ELI_DEBUG) && defined(ELI_LIBC_SYSTEM)
+        #include <assert.h>
+        #define ELI_ASSERT(x) assert(x)
+    #else
+        #define ELI_ASSERT(x) ((void)0)
+    #endif
+#endif
+
 #if defined(ELI_LIBC_JACLIBC) && defined(__wasm32__)
     #define ELI_JSIO 1
 

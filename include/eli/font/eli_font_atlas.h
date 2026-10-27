@@ -279,7 +279,7 @@ static inline bool eli_font_atlas_is_built(const eli_font_atlas *atlas)
 }
 
 /** Assign the backend texture identifier the renderer will bind. */
-static inline void eli_font_atlas_set_tex_id(eli_font_atlas *atlas, uint32_t id)
+static inline void eli_font_atlas_set_tex_id(eli_font_atlas *atlas, eli_texture_id id)
 {
     if (atlas)
         atlas->tex_id = id;

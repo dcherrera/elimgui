@@ -94,7 +94,7 @@ static inline void eli_image__shade_verts_linear_uv(eli_draw_list *list, uint32_
  * Thread-safe: no
  * Reentrant: no
  */
-static inline void eli_draw_list_add_image(eli_draw_list *list, uint32_t user_texture_id,
+static inline void eli_draw_list_add_image(eli_draw_list *list, eli_texture_id user_texture_id,
                                            eli_vec2 p_min, eli_vec2 p_max,
                                            eli_vec2 uv_min, eli_vec2 uv_max, eli_col32 col)
 {
@@ -105,8 +105,8 @@ static inline void eli_draw_list_add_image(eli_draw_list *list, uint32_t user_te
     if (push_tex)
         eli_draw_list_push_texture_id(list, user_texture_id);
 
-    eli_draw_list_prim_reserve(list, 6, 4);
-    eli_draw_list_prim_rect_uv(list, p_min, p_max, uv_min, uv_max, col);
+    if (eli_draw_list_prim_reserve(list, 6, 4))
+        eli_draw_list_prim_rect_uv(list, p_min, p_max, uv_min, uv_max, col);
 
     if (push_tex)
         eli_draw_list_pop_texture_id(list);
@@ -131,7 +131,7 @@ static inline void eli_draw_list_add_image(eli_draw_list *list, uint32_t user_te
  * Thread-safe: no
  * Reentrant: no
  */
-static inline void eli_draw_list_add_image_quad(eli_draw_list *list, uint32_t user_texture_id,
+static inline void eli_draw_list_add_image_quad(eli_draw_list *list, eli_texture_id user_texture_id,
                                                 eli_vec2 p1, eli_vec2 p2,
                                                 eli_vec2 p3, eli_vec2 p4,
                                                 eli_vec2 uv1, eli_vec2 uv2,
@@ -145,8 +145,8 @@ static inline void eli_draw_list_add_image_quad(eli_draw_list *list, uint32_t us
     if (push_tex)
         eli_draw_list_push_texture_id(list, user_texture_id);
 
-    eli_draw_list_prim_reserve(list, 6, 4);
-    eli_draw_list_prim_quad_uv(list, p1, p2, p3, p4, uv1, uv2, uv3, uv4, col);
+    if (eli_draw_list_prim_reserve(list, 6, 4))
+        eli_draw_list_prim_quad_uv(list, p1, p2, p3, p4, uv1, uv2, uv3, uv4, col);
 
     if (push_tex)
         eli_draw_list_pop_texture_id(list);
@@ -171,7 +171,7 @@ static inline void eli_draw_list_add_image_quad(eli_draw_list *list, uint32_t us
  * Thread-safe: no
  * Reentrant: no
  */
-static inline void eli_draw_list_add_image_rounded(eli_draw_list *list, uint32_t user_texture_id,
+static inline void eli_draw_list_add_image_rounded(eli_draw_list *list, eli_texture_id user_texture_id,
                                                    eli_vec2 p_min, eli_vec2 p_max,
                                                    eli_vec2 uv_min, eli_vec2 uv_max,
                                                    eli_col32 col, float rounding,
@@ -221,7 +221,7 @@ static inline void eli_draw_list_add_image_rounded(eli_draw_list *list, uint32_t
  * Thread-safe: no
  * Reentrant: no
  */
-static inline void eli_image(uint32_t user_texture_id, eli_vec2 image_size,
+static inline void eli_image(eli_texture_id user_texture_id, eli_vec2 image_size,
                               eli_vec2 uv0, eli_vec2 uv1,
                               eli_vec4 tint_col, eli_vec4 border_col)
 {
@@ -277,7 +277,7 @@ static inline void eli_image(uint32_t user_texture_id, eli_vec2 image_size,
  * Thread-safe: no
  * Reentrant: no
  */
-static inline bool eli_image_button(const char *str_id, uint32_t user_texture_id,
+static inline bool eli_image_button(const char *str_id, eli_texture_id user_texture_id,
                                     eli_vec2 image_size, eli_vec2 uv0, eli_vec2 uv1,
                                     eli_vec4 bg_col, eli_vec4 tint_col)
 {

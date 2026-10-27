@@ -30,6 +30,7 @@ usage() {
     echo "  demo      Build the demo example"
     echo "  cheatsheet  Build the visual cheatsheet app"
     echo "  test      Build and run native unit tests (tests/run_tests.sh)"
+    echo "  wasm-smoke  Build demo + cheatsheet wasm and check their draw data headlessly (node)"
     echo "  clean     Remove build artifacts"
     echo "  serve     Build + serve the cheatsheet and open it in the browser"
     echo "            (use 'serve demo.html' for the widget demo)"
@@ -71,6 +72,14 @@ build_cheatsheet() {
     echo "Built: web/cheatsheet.wasm"
 }
 
+# Build both wasm apps and walk their draw data in Node the way web/elimgui.js
+# does (layout + index-width check, no browser).
+wasm_smoke() {
+    build_demo && build_cheatsheet || return 1
+    node "${SCRIPT_DIR}/tests/web/wasm_smoke.mjs" \
+        "${SCRIPT_DIR}/web/demo.wasm" "${SCRIPT_DIR}/web/cheatsheet.wasm"
+}
+
 clean() {
     echo "Cleaning..."
     rm -f "${SCRIPT_DIR}/web/"*.wasm
@@ -106,6 +115,9 @@ case "${1:-help}" in
         ;;
     dogfood)
         build_dogfood
+        ;;
+    wasm-smoke)
+        wasm_smoke
         ;;
     test)
         shift || true

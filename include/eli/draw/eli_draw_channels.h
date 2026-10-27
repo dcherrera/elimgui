@@ -41,6 +41,8 @@ static inline void eli_draw_list_channels_split(eli_draw_list *list, int count)
     int old_capacity = list->channels_capacity;
     list->channels = (eli_draw_channel *)eli_draw_buf_grow(
         list->channels, &list->channels_capacity, count, sizeof(*list->channels));
+    if (list->channels_capacity < count)
+        return; /* OOM: stay unsplit; set_current/merge are no-ops */
     if (list->channels_capacity > old_capacity)
         memset(&list->channels[old_capacity], 0,
                (size_t)(list->channels_capacity - old_capacity) * sizeof(*list->channels));
@@ -111,6 +113,8 @@ static inline void eli_draw_channels_push_cmd(eli_draw_list *list, eli_draw_cmd 
     list->cmds = (eli_draw_cmd *)eli_draw_buf_grow(list->cmds, &cap, (int)list->cmd_count + 1,
                                                    sizeof(*list->cmds));
     list->cmd_capacity = (uint32_t)cap;
+    if (cap < (int)list->cmd_count + 1)
+        return; /* OOM: the command is dropped */
     list->cmds[list->cmd_count++] = cmd;
 }
 
@@ -145,6 +149,8 @@ static inline void eli_draw_list_channels_merge(eli_draw_list *list)
             list->idx = (eli_draw_idx *)eli_draw_buf_grow(
                 list->idx, &cap, (int)list->idx_count + ch->idx_count, sizeof(*list->idx));
             list->idx_capacity = (uint32_t)cap;
+            if (cap < (int)list->idx_count + ch->idx_count)
+                continue; /* OOM: this channel's geometry is dropped */
             memcpy(&list->idx[list->idx_count], ch->idx,
                    (size_t)ch->idx_count * sizeof(*list->idx));
             list->idx_count += (uint32_t)ch->idx_count;

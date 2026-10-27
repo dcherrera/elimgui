@@ -117,6 +117,7 @@ typedef struct eli_io {
     bool nav_visible;
     float framerate;
     int metrics_render_vertices;
+    int metrics_dropped_vertices; /* refused by the 16-bit index guard this frame */
     int metrics_render_indices;
     int metrics_render_windows;
     int metrics_active_windows;

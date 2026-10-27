@@ -16,6 +16,7 @@
 # Usage: tests/run_tests.sh [name-filter]
 #   name-filter  optional substring; only unit files whose name matches are run.
 #   ELI_TEST_PASSES="hosted shared" (env) picks the passes.
+#   ELI_TEST_SANITIZE=1 (env) builds with -fsanitize=address,undefined.
 
 set -uo pipefail
 
@@ -28,8 +29,19 @@ FILTER="${1:-}"
 PASSES="${ELI_TEST_PASSES:-hosted shared}"
 
 # Host compiler (Apple clang resolves the macOS SDK automatically). Override with CC.
+[[ -n "${CC:-}" ]] && CC_SET_BY_USER=1
 CC="${CC:-cc}"
 BASE_CFLAGS="-std=c11 -Wall -Wextra -Werror -g -I${ROOT_DIR}/include -I${ROOT_DIR}/vendor -I${SCRIPT_DIR}"
+if [[ -n "${ELI_TEST_SANITIZE:-}" ]]; then
+    # Apple clang 17's ASan runtime hangs at process start on macOS 26 (even for an
+    # empty main); Homebrew LLVM's works. Prefer it on macOS unless CC is set.
+    if [[ "$(uname -s)" == "Darwin" && -z "${CC_SET_BY_USER:-}" && -x /opt/homebrew/opt/llvm/bin/clang ]]; then
+        CC="/opt/homebrew/opt/llvm/bin/clang"
+        BASE_CFLAGS="${BASE_CFLAGS} -isysroot $(xcrun --show-sdk-path)"
+    fi
+    BASE_CFLAGS="${BASE_CFLAGS} -fsanitize=address,undefined -fno-omit-frame-pointer"
+    BUILD_ROOT="${BUILD_ROOT}/sanitize"
+fi
 
 total=0
 passed=0

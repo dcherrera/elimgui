@@ -18,6 +18,7 @@
 
 #include "../core/eli_platform.h"
 #include "../core/eli_types.h"
+#include "../draw/eli_draw_types.h"
 
 /* Forward typedefs. `eli_font` is also forward-declared by the core context;
  * C11 permits the identical typedef to be repeated here where it is defined. */
@@ -130,7 +131,7 @@ enum eli_font_atlas_flags_ {
  */
 struct eli_font_atlas {
     eli_font_atlas_flags flags;
-    uint32_t tex_id;
+    eli_texture_id tex_id;
 
     int tex_width;
     int tex_height;

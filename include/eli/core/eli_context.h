@@ -95,6 +95,7 @@ typedef struct eli_context {
     bool within_frame_scope;   /* true between eli_new_frame and end_frame/render */
     int frame_count;
     double time;
+    uint32_t serial;           /* unique per created context (never reused) */
     eli_io io;
     eli_style style;
     eli_draw_data *draw_data;  /* NULL until the draw phase produces output */
@@ -214,6 +215,10 @@ typedef struct eli_context {
  * unit (the app includes elimgui.h once), so file-static storage is correct. */
 ELI_GLOBAL(eli_context *, g_eli_context, NULL);
 
+/* Next value for eli_context.serial; lets module-global state detect that the
+ * context it belongs to was destroyed even if a new one reuses the address. */
+ELI_GLOBAL(uint32_t, g_eli_context_serial_next, 1);
+
 /* ---------------------------------------------------------------------------
  * Default style
  * ------------------------------------------------------------------------- */
@@ -314,6 +319,7 @@ static inline eli_context *eli_create_context(void)
     eli_style_set_defaults(&ctx->style);
 
     ctx->initialized = true;
+    ctx->serial = g_eli_context_serial_next++;
 
     if (g_eli_context == NULL)
         g_eli_context = ctx;

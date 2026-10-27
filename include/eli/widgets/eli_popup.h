@@ -92,6 +92,10 @@ ELI_GLOBAL(int, g_eli_open_popup_count, 0);
 ELI_GLOBAL_ARRAY(eli_popup_data, g_eli_begin_popup_stack, ELI_POPUP_STACK_MAX);
 ELI_GLOBAL(int, g_eli_begin_popup_count, 0);
 
+/* Serial of the context the stacks belong to; a different one resets them (the
+ * stacks hold window pointers that die with their context). */
+ELI_GLOBAL(uint32_t, g_eli_popup_context_serial, 0);
+
 /* ---------------------------------------------------------------------------
  * Queries
  * ------------------------------------------------------------------------- */
@@ -582,6 +586,10 @@ static inline void eli_popup_new_frame(void)
         return;
 
     g_eli_begin_popup_count = 0;
+    if (g_eli_popup_context_serial != ctx->serial) {
+        g_eli_open_popup_count = 0;
+        g_eli_popup_context_serial = ctx->serial;
+    }
 
     /* Reap popups whose owning window is no longer being submitted. */
     for (int n = 0; n < g_eli_open_popup_count; n++) {

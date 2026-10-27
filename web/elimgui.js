@@ -16,7 +16,6 @@
 /* Vertex/command/index binary layouts exported by examples/demo/main.c. */
 const ELI_VTX_STRIDE = 20; // float x,y,u,v; uint32 col
 const ELI_CMD_STRIDE = 40; // float clip[4]; uint32 tex,vtxOff,idxOff,elem; 2 ptrs
-const ELI_IDX_SIZE = 2; // uint16
 
 /* eli_key codes (see include/eli/core/eli_enums.h enum order). Only the subset
  * the demo needs is mapped; letters/digits are computed from these bases. */
@@ -123,6 +122,8 @@ class Renderer {
   render() {
     const ex = this.exports;
     const listCount = ex.eli_dd_list_count();
+    // 2 (uint16) unless the wasm was built with ELI_DRAW_IDX_32.
+    this.idxSize = ex.eli_dd_idx_size ? ex.eli_dd_idx_size() : 2;
     // Re-acquire the view every frame: linear memory may have grown.
     const dv = new DataView(ex.memory.buffer);
 
@@ -156,7 +157,10 @@ class Renderer {
     ctx.rect(clipX, clipY, clipW, clipH);
     ctx.clip();
 
-    const idxAt = (k) => dv.getUint16(idxBase + (idxOffset + k) * ELI_IDX_SIZE, true);
+    const idxSize = this.idxSize;
+    const idxAt = idxSize === 4
+      ? (k) => dv.getUint32(idxBase + (idxOffset + k) * 4, true)
+      : (k) => dv.getUint16(idxBase + (idxOffset + k) * 2, true);
     const vtx = (k) => Renderer.vertex(dv, vtxBase, vtxOffset + idxAt(k));
 
     let e = 0;

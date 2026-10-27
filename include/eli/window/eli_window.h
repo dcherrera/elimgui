@@ -584,10 +584,11 @@ static inline void eli_window_render(void)
     if (dd == NULL)
         return;
 
-    int total_vtx = 0, total_idx = 0;
+    int total_vtx = 0, total_idx = 0, dropped_vtx = 0;
     for (int i = 0; i < ctx->render_draw_lists_count; i++) {
         total_vtx += (int)ctx->render_draw_lists[i]->vtx_count;
         total_idx += (int)ctx->render_draw_lists[i]->idx_count;
+        dropped_vtx += (int)ctx->render_draw_lists[i]->dropped_vtx_count;
     }
 
     dd->valid = true;
@@ -601,6 +602,7 @@ static inline void eli_window_render(void)
 
     ctx->io.metrics_render_vertices = total_vtx;
     ctx->io.metrics_render_indices = total_idx;
+    ctx->io.metrics_dropped_vertices = dropped_vtx;
     ctx->io.metrics_render_windows = ctx->render_draw_lists_count;
 }
 
