@@ -23,7 +23,7 @@ for src in "${ROOT_DIR}"/tests/unit/*.c; do
     name="$(basename "${src}" .c)"
     if ${CC} -std=c11 -g ${EXTRA} -DELI_LIBC_JACLIBC -I"${ROOT_DIR}/vendor/jaclibc/include" \
          -I"${ROOT_DIR}/include" -I"${ROOT_DIR}/vendor" -I"${ROOT_DIR}/tests" \
-         "${src}" -o "${OUT}/${name}" >"${OUT}/${name}.log" 2>&1; then
+         "${src}" -lm -o "${OUT}/${name}" >"${OUT}/${name}.log" 2>&1; then
         if "${OUT}/${name}" >/dev/null 2>&1; then
             pass=$((pass + 1)); echo "PASS       ${name}"
         else

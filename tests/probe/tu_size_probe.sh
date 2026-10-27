@@ -17,9 +17,9 @@ FLAGS="-std=c11 ${OPT} -Wall -Wextra -Werror -DELI_SHARED_STATE -DELI_DRAW_IDX_3
 mkdir -p "${OUT}"
 
 # shellcheck disable=SC2086
-${CC} ${FLAGS} "${SRC}/unity.c" -o "${OUT}/one_tu"
+${CC} ${FLAGS} "${SRC}/unity.c" -lm -o "${OUT}/one_tu"
 # shellcheck disable=SC2086
-${CC} ${FLAGS} "${SRC}/probe_main.c" "${SRC}"/probe_ui_[1-4].c -o "${OUT}/five_tu"
+${CC} ${FLAGS} "${SRC}/probe_main.c" "${SRC}"/probe_ui_[1-4].c -lm -o "${OUT}/five_tu"
 "${OUT}/one_tu" && "${OUT}/five_tu"
 strip -o "${OUT}/one_tu.stripped" "${OUT}/one_tu" 2>/dev/null || cp "${OUT}/one_tu" "${OUT}/one_tu.stripped"
 strip -o "${OUT}/five_tu.stripped" "${OUT}/five_tu" 2>/dev/null || cp "${OUT}/five_tu" "${OUT}/five_tu.stripped"

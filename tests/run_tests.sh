@@ -70,7 +70,7 @@ run_suite() {
         fi
         objs+=("${bin}_b.o")
     fi
-    ${CC} ${BASE_CFLAGS} ${mode_flags} ${main_flags} "${src}" "${objs[@]+"${objs[@]}"}" -o "${bin}" || return 2
+    ${CC} ${BASE_CFLAGS} ${mode_flags} ${main_flags} "${src}" "${objs[@]+"${objs[@]}"}" -lm -o "${bin}" || return 2
     "${bin}" || return 1
 }
 
