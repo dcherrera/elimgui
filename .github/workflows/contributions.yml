@@ -1,0 +1,43 @@
+name: contributions
+
+# DCO sign-off + CLA roster check on every pull request.
+# The same scripts run locally: scripts/check-dco.sh, scripts/check-cla.sh
+#
+# Path note: Gitea/Forgejo Actions read .gitea/workflows first and fall back to
+# .github/workflows, so this one file serves both forges.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dco-and-cla:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fetch base branch
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: git fetch --no-tags origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
+
+      - name: DCO sign-off
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: ./scripts/check-dco.sh "origin/$BASE..HEAD"
+
+      - name: CLA signature
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: ./scripts/check-cla.sh "origin/$BASE..HEAD"
+
+      - name: File headers on added sources
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: ./scripts/check-headers.sh "origin/$BASE..HEAD"

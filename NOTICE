@@ -1,0 +1,65 @@
+elimgui
+Copyright (C) 2026 David (Corey) Herrera and the elimgui contributors.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+The full license text is in LICENSE.
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+
+Contributions
+-------------
+Contributions are accepted under the Contributor License Agreement in CLA.md
+(CLA-CORPORATE.md for organizations), with a Developer Certificate of Origin
+sign-off on every commit. Contributors retain copyright in their contributions.
+The signature roster is .cla/signatures.md.
+
+
+Third-party code
+----------------
+elimgui is a reimplementation of Dear ImGui (https://github.com/ocornut/imgui),
+Copyright (c) 2014-2026 Omar Cornut, MIT License. It follows Dear ImGui's API
+and behaviour, and in places its exact values: the built-in color themes
+(include/eli/style/eli_style_colors.h), the default style sizes
+(include/eli/core/eli_context.h), the CRC32 ID-hash and storage semantics
+(include/eli/id/), and the RGB/HSV conversion ported in
+include/eli/style/eli_style_color_utils.h.
+
+vendor/stb/stb_truetype.h (v1.26) and vendor/stb/stb_rect_pack.h (v1.01) are
+from stb (https://github.com/nothings/stb), Copyright (c) 2017 Sean Barrett,
+available under the MIT License or as public domain (Unlicense); elimgui uses
+them under the MIT License. Each file carries its license text at its end.
+
+include/eli/font/eli_font_proggy.h embeds ProggyClean.ttf,
+Copyright (c) 2004, 2005 Tristan Grimmer, MIT License, in stb's compressed
+form. Its decompressor is a port of stb_decompress from stb (Sean Barrett),
+public domain.
+
+vendor/jaclibc is a git submodule (not part of this tree) holding JACLibc
+(https://github.com/dcherrera/jaclibc), Copyright (c) 2025 FRINKnet and
+Friends, MIT License. WebAssembly builds link it; native builds use the
+system libc.
+
+The MIT License text is in LICENSES/MIT.txt.
+
+
+Trademarks
+----------
+No right is granted to use the "elimgui" name or any associated logo to name or
+promote a derivative product. Factual statements that your product uses elimgui
+are fine.
+
+
+Contact
+-------
+coreyh55@gmail.com
