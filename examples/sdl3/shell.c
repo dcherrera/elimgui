@@ -18,6 +18,8 @@
 
 static char g_shell_name[256] = "type here";
 static char g_shell_notes[4096] = "Multiline notes.\nSecond line.";
+static eli_vec2 g_shell_name_center;
+static bool g_shell_name_known = false;
 static eli_id g_shell_left_id = 0;   /* dock node for "Files" */
 static eli_id g_shell_right_id = 0;  /* dock node for "Editor" (top right) */
 static eli_id g_shell_bottom_id = 0; /* dock node for the perf fixture (bottom right) */
@@ -83,11 +85,22 @@ static void shell_draw_editor(void)
     shell_dock_next(g_shell_right_id);
     if (eli_begin("Editor", NULL, 0)) {
         eli_input_text("Name", g_shell_name, sizeof(g_shell_name), 0, NULL, NULL);
+        eli_vec2 mn = eli_get_item_rect_min(), mx = eli_get_item_rect_max();
+        g_shell_name_center = eli_make_vec2((mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f);
+        g_shell_name_known = true;
         eli_input_text_multiline("Notes", g_shell_notes, sizeof(g_shell_notes),
                                  eli_make_vec2(-1.0f, 160.0f), 0, NULL, NULL);
         eli_text("Clipboard: Ctrl/Cmd+C/V in the fields above.");
+        example_tasks_draw();
     }
     eli_end();
+}
+
+bool example_shell_name_field_center(float *x, float *y)
+{
+    *x = g_shell_name_center.x;
+    *y = g_shell_name_center.y;
+    return g_shell_name_known;
 }
 
 unsigned int example_shell_fixture_dock_id(void)

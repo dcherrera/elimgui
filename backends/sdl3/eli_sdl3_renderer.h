@@ -266,4 +266,42 @@ static inline void eli_sdl3_renderer_render_draw_data(const eli_draw_data *dd)
     SDL_SetRenderClipRect(r, had_clip ? &old_clip : NULL);
 }
 
+/**
+ * FNV-1a 64-bit hash of a frame's draw data (vertices, indices, commands, display
+ * size). Optional present-skip check (D6b): if it equals the previous frame's hash
+ * the app may skip render + present. Costs a pass over the geometry; off unless
+ * the app calls it.
+ *
+ * @param dd  Draw data (NULL/invalid hashes to 0).
+ * @return    Hash value.
+ *
+ * Thread-safe: yes (read-only)  Reentrant: yes
+ */
+static inline uint64_t eli_sdl3_draw_data_hash(const eli_draw_data *dd)
+{
+    uint64_t h = 1469598103934665603ull;
+    if (!dd || !dd->valid)
+        return 0;
+#define ELI_SDL3_FNV(ptr, n)                                                    \
+    do {                                                                        \
+        const unsigned char *b_ = (const unsigned char *)(ptr);                 \
+        for (size_t i_ = 0; i_ < (size_t)(n); i_++)                             \
+            h = (h ^ b_[i_]) * 1099511628211ull;                                \
+    } while (0)
+    ELI_SDL3_FNV(&dd->display_size, sizeof(dd->display_size));
+    for (int li = 0; li < dd->cmd_lists_count; li++) {
+        const eli_draw_list *l = dd->cmd_lists[li];
+        ELI_SDL3_FNV(l->vtx, (size_t)l->vtx_count * sizeof(*l->vtx));
+        ELI_SDL3_FNV(l->idx, (size_t)l->idx_count * sizeof(*l->idx));
+        for (uint32_t ci = 0; ci < l->cmd_count; ci++) {
+            const eli_draw_cmd *c = &l->cmds[ci];
+            ELI_SDL3_FNV(&c->clip_rect, sizeof(c->clip_rect));
+            ELI_SDL3_FNV(&c->texture_id, sizeof(c->texture_id));
+            ELI_SDL3_FNV(&c->elem_count, sizeof(c->elem_count));
+        }
+    }
+#undef ELI_SDL3_FNV
+    return h;
+}
+
 #endif /* ELI_SDL3_RENDERER_H */

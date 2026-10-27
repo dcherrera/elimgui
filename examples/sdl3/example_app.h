@@ -3,8 +3,9 @@
  * @brief Shared declarations for the SDL3 desktop example's translation units.
  *
  * main.c (the ELI_IMPLEMENTATION TU: SDL, loop, fonts), shell.c (dockspace and
- * panes) and perf_fixture.c (text-heavy window + frame overlay) are separate TUs
- * built with ELI_SHARED_STATE, proving one elimgui context across files (D4).
+ * panes), perf_fixture.c (text-heavy window + frame overlay) and tasks.c (worker
+ * thread + spinner) are separate TUs built with ELI_SHARED_STATE, proving one
+ * elimgui context across files (D4).
  *
  * @status In use.
  * @issues None
@@ -43,5 +44,20 @@ void example_perf_fixture_draw(void);
 
 /** Draw the frame counter / timing overlay on the foreground list (perf_fixture.c). */
 void example_overlay_draw(void);
+
+/** @return true and the Name field's center in points once it has been laid out (shell.c). */
+bool example_shell_name_field_center(float *x, float *y);
+
+/** SDL user event type that worker threads push to wake the loop (tasks.c). */
+extern uint32_t g_example_wake_event;
+
+/** Register the wake event (tasks.c). Call after SDL_Init. */
+void example_tasks_init(void);
+
+/** Apply worker results on the main thread and request a redraw (tasks.c). */
+void example_tasks_apply_wake(void);
+
+/** Worker-job button and spinner toggle, drawn inside the Editor pane (tasks.c). */
+void example_tasks_draw(void);
 
 #endif /* ELI_EXAMPLE_APP_H */

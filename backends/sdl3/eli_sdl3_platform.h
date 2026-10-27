@@ -9,7 +9,9 @@
  *
  *     eli_sdl3_platform_init(window);
  *     while (running) {
- *         ... for each SDL_Event e: eli_sdl3_platform_process_event(&e); ...
+ *         int t = eli_sdl3_wait_timeout_ms();          // -1, 0 or ms (idle loop)
+ *         ... SDL_WaitEvent / SDL_WaitEventTimeout(t), then drain with SDL_PollEvent,
+ *             feeding each event to eli_sdl3_platform_process_event(&e) ...
  *         eli_sdl3_platform_new_frame();
  *         eli_frame_begin(); ...widgets...; eli_frame_end();
  *         eli_sdl3_platform_end_frame();
@@ -252,9 +254,27 @@ static inline bool eli_sdl3_platform_process_event(const SDL_Event *e)
     SDL_WindowID id = eli_sdl3__event_window_id(e);
     if (id != 0 && id != g_eli_sdl3_platform.window_id)
         return false;
-    if (eli_sdl3__process_input_event(e))
-        return true;
-    return eli_sdl3__process_window_event(e);
+    bool consumed = eli_sdl3__process_input_event(e) || eli_sdl3__process_window_event(e);
+    if (consumed)
+        eli_request_redraw(); /* also covers expose/resize, which queue no input */
+    return consumed;
+}
+
+/**
+ * How long the app's loop may sleep, from eli_get_redraw_timeout().
+ *
+ * @return -1 = wait for the next event (SDL_WaitEvent), 0 = poll and build a frame
+ *         now, > 0 = SDL_WaitEventTimeout milliseconds (rounded up).
+ *
+ * Thread-safe: no  Reentrant: yes
+ */
+static inline int eli_sdl3_wait_timeout_ms(void)
+{
+    float t = eli_get_redraw_timeout();
+    if (t < 0.0f)
+        return -1;
+    float ms = ceilf(t * 1000.0f);
+    return ms > 2147483647.0f ? 2147483647 : (int)ms;
 }
 
 /* ---------------------------------------------------------------------------
