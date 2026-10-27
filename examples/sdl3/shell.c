@@ -16,7 +16,8 @@
 
 #include <stdio.h>
 
-static char g_shell_name[256] = "type here";
+static char g_shell_name[8192] = "type here";
+static int g_shell_app_copy_count = 0;   /* app-level Shortcut+C (GLOBAL route) */
 static char g_shell_notes[4096] = "Multiline notes.\nSecond line.";
 static eli_vec2 g_shell_name_center;
 static bool g_shell_name_known = false;
@@ -108,8 +109,21 @@ unsigned int example_shell_fixture_dock_id(void)
     return (unsigned int)(g_shell_bottom_id ? g_shell_bottom_id : g_shell_right_id);
 }
 
+const char *example_shell_name_text(void)
+{
+    return g_shell_name;
+}
+
+int example_shell_app_copy_count(void)
+{
+    return g_shell_app_copy_count;
+}
+
 void example_shell_draw(void)
 {
+    /* App-level copy shortcut: yields to an active text field, which owns Shortcut+C. */
+    if (eli_shortcut_ex(ELI_SHORTCUT_COPY, ELI_INPUT_ROUTE_GLOBAL))
+        g_shell_app_copy_count++;
     eli_id space = eli_dock_space_over_viewport(eli_get_main_viewport(), 0);
     if (g_shell_left_id == 0 && space != 0)
         shell_build_layout(space);

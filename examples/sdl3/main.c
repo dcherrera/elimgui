@@ -18,6 +18,8 @@
  *                      2 s warm-up (moves the mouse outside the window first)
  *   --focus-input      click the Name field once it exists (caret-blink idle check)
  *   --skip-unchanged   skip render+present when the draw-data hash is unchanged
+ *   --input-selftest   run the input checklist through the backend, print PASS/FAIL,
+ *                      exit with the number of failures (restores the clipboard)
  *   --hidden           create the window hidden (idle measurements on a machine in use:
  *                      no stray pointer events from the person at the desk)
  *
@@ -57,6 +59,7 @@ typedef struct example_options {
     bool focus_input;
     bool skip_unchanged;
     bool hidden;
+    bool input_selftest;
 } example_options;
 
 /** App-owned SDL + elimgui handles. */
@@ -124,10 +127,13 @@ static bool example_parse_args(int argc, char **argv, example_options *opt)
             opt->skip_unchanged = true;
         else if (!strcmp(a, "--hidden"))
             opt->hidden = true;
+        else if (!strcmp(a, "--input-selftest"))
+            opt->input_selftest = true;
         else {
             fprintf(stderr, "usage: %s [--frames N] [--screenshot F.bmp] [--font F.ttf] "
                             "[--font-size PX] [--driver NAME] [--idle-report S] "
-                            "[--focus-input] [--skip-unchanged] [--hidden]\n", argv[0]);
+                            "[--focus-input] [--skip-unchanged] [--hidden] "
+                            "[--input-selftest]\n", argv[0]);
             return false;
         }
     }
@@ -361,6 +367,17 @@ static void example_present(example_app *app, const example_options *opt, bool l
     SDL_RenderPresent(app->renderer);
 }
 
+/* --input-selftest: the selftest drives frames through this callback. */
+static example_app *g_example_present_app = NULL;
+static const example_options g_example_selftest_opt = {0};
+
+/** Build, render and present one frame (selftest frame callback). */
+static void example_frame_and_present(void)
+{
+    example_frame();
+    example_present(g_example_present_app, &g_example_selftest_opt, false);
+}
+
 int main(int argc, char **argv)
 {
     example_options opt;
@@ -371,6 +388,12 @@ int main(int argc, char **argv)
     if (!example_init(&app, &opt)) {
         example_shutdown(&app);
         return 1;
+    }
+    if (opt.input_selftest) {
+        g_example_present_app = &app;
+        int failed = example_input_selftest(app.window, example_frame_and_present);
+        example_shutdown(&app);
+        return failed ? 3 : 0;
     }
     if (opt.idle_report_s > 0.0)
         SDL_WarpMouseGlobal(0.0f, 0.0f);   /* spec §20.3: mouse outside the window */

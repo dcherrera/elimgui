@@ -17,6 +17,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <SDL3/SDL.h>
+
 /** Monospace fixture size (spec §20.3: 120 columns x 48 lines). */
 #define EXAMPLE_FIXTURE_COLS 120
 #define EXAMPLE_FIXTURE_LINES 48
@@ -47,6 +49,23 @@ void example_overlay_draw(void);
 
 /** @return true and the Name field's center in points once it has been laid out (shell.c). */
 bool example_shell_name_field_center(float *x, float *y);
+
+/** @return the Name field's text (shell.c). */
+const char *example_shell_name_text(void);
+
+/** @return how often the app-level Shortcut+C (GLOBAL route) fired (shell.c). */
+int example_shell_app_copy_count(void);
+
+/**
+ * Drive the real SDL3 backend with synthetic SDL events and the system clipboard:
+ * emoji typing, Cmd/Ctrl copy/paste, > 1 KB and 64 KB clipboard both ways, and app
+ * shortcuts yielding while typing. Restores the clipboard. (selftest.c)
+ *
+ * @param window  The example window (event window id).
+ * @param frame   Builds and renders one frame.
+ * @return        Number of failed checks (0 = all passed).
+ */
+int example_input_selftest(SDL_Window *window, void (*frame)(void));
 
 /** SDL user event type that worker threads push to wake the loop (tasks.c). */
 extern uint32_t g_example_wake_event;
