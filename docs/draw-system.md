@@ -27,7 +27,8 @@ code compiles for `wasm32` (production) and the host libc (`-DELI_TEST_HOSTED`).
 | Type | Purpose |
 |------|---------|
 | `eli_draw_vert` | One vertex: `x, y` position, `u, v` texture coords, `col` packed color. |
-| `eli_draw_idx` | 16-bit index into a list's vertex buffer. |
+| `eli_draw_idx` | Index into a list's vertex buffer: `uint16_t` by default, `uint32_t` with `ELI_DRAW_IDX_32` (see [Index width](#index-width-and-texture-ids)). |
+| `eli_texture_id` | Backend texture handle, `uintptr_t` by default (override with `ELI_TEXTURE_ID_TYPE`). |
 | `eli_draw_cmd` | One draw call: `clip_rect` (origin+size scissor), `texture_id`, `idx_offset`, `elem_count`, optional `user_callback`. |
 | `eli_draw_list` | Accumulates commands, vertices, indices, plus path/clip/texture/channel working state. |
 | `eli_draw_data` | A frame's finished output: an array of draw lists and totals. |
@@ -55,8 +56,13 @@ void eli_draw_list_clear(eli_draw_list *list);   // release all buffers, zero it
 ```
 
 `init` zeroes the list, sets a fullscreen clip rect, and opens one empty
-command. Buffers grow geometrically (~1.5×) via the libc seam; `clear` frees
-everything (commands, vertices, indices, path, clip/texture stacks, channels).
+command. Buffers grow geometrically (~1.5×) through `eli_mem` (so an installed
+allocator sees them); `clear` frees everything (commands, vertices, indices, path,
+clip/texture stacks, channels).
+
+**Out of memory.** If a buffer cannot grow, the operation is refused instead of
+writing past the old capacity: primitives emit nothing, a failed command/clip/
+texture push keeps the current state, and a failed path point is dropped.
 
 ### Command batching
 
@@ -152,7 +158,8 @@ command stores its clip as an origin+size `eli_rect` for the backend's scissor.
 For hand-writing geometry: reserve first, then fill the reserved slots.
 
 ```c
-void eli_draw_list_prim_reserve(list, idx_count, vtx_count);
+bool eli_draw_list_prim_reserve(list, idx_count, vtx_count);          // false = write nothing
+bool eli_draw_list_prim_reserve_capacity(list, idx_count, vtx_count); // grow only, no charge
 void eli_draw_list_prim_unreserve(list, idx_count, vtx_count);
 void eli_draw_list_prim_rect(list, a, c, col);
 void eli_draw_list_prim_rect_uv(list, a, c, uv_a, uv_c, col);
@@ -161,6 +168,28 @@ void eli_draw_list_prim_write_vtx(list, pos, uv, col);
 void eli_draw_list_prim_write_idx(list, idx);
 void eli_draw_list_prim_vtx(list, pos, uv, col);   // write idx + vtx together
 ```
+
+`prim_reserve` returns false when the buffers cannot grow (OOM) or the 16-bit
+index guard refuses the vertices; the caller must then skip its writes.
+
+---
+
+## Index width and texture ids
+
+- **16-bit (default).** A list holds at most 65,536 vertices. A primitive that would
+  cross that is dropped whole (never wrapped), counted in `list->dropped_vtx_count`
+  (reset each frame) and summed into `io.metrics_dropped_vertices`. With `ELI_DEBUG`
+  defined, `ELI_ASSERT` fires on it.
+- **32-bit.** Define `ELI_DRAW_IDX_32` in every TU (build flag). Renderers read
+  `sizeof(eli_draw_idx)`; the WASM demo exports it as `eli_dd_idx_size()` and
+  `web/elimgui.js` reads it. Recommended for native apps (a full 4K monospace screen
+  is ~260K vertices).
+- **Texture ids.** `eli_texture_id` (`uintptr_t`) flows through draw commands, the
+  texture stack, the font atlas (`eli_font_atlas_set_tex_id`) and the image APIs, so a
+  native backend can pass a pointer such as an `SDL_Texture *`. On wasm32 it is 4 bytes,
+  so the JS command layout (stride 40) is unchanged.
+- `cmd->vtx_offset` is always 0 today, but renderers must honor it (the SDL3 and JS
+  renderers do), so offset splitting can be added later without backend changes.
 
 ---
 
