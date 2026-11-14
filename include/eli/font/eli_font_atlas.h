@@ -2,17 +2,18 @@
 /* Copyright (C) 2026 David (Corey) Herrera */
 /**
  * @file eli_font_atlas.h
- * @brief Font atlas: stb_truetype/stb_rect_pack integration, font sources, and
- *        the bake pipeline that rasterizes glyphs into a single alpha8 texture.
+ * @brief Font atlas: lifecycle, font sources (including merge-mode fallback
+ *        chains), the up-front bake into one alpha8 page, the on-demand setup,
+ *        and the texture data accessors.
  *
- * This is the one translation unit that defines STB_TRUETYPE_IMPLEMENTATION and
- * STB_RECT_PACK_IMPLEMENTATION; every STBTT_/STBRP_ hook is routed through the
- * libc seam (eli_platform.h) so the same code compiles for wasm32 (JAClibc) and
- * for native hosted unit tests. The bake gathers glyph bitmap boxes for every
- * configured font, packs them (plus one white texel) with the skyline packer,
- * rasterizes each glyph, and fills per-font metrics and glyph tables.
+ * A baked atlas gathers glyph boxes for every configured source (merge sources
+ * only for codepoints their font still lacks), packs them plus one white block
+ * with the skyline packer into page 0, rasterizes them and fills each font's
+ * glyph table. An on-demand atlas (ELI_FONT_ATLAS_ON_DEMAND) only opens the
+ * faces, fills font metrics and creates page 0 with the white block; glyphs are
+ * rasterized on first lookup (eli_font_atlas_on_demand.h).
  *
- * @status Phase 3 atlas build in use.
+ * @status Phase 3 atlas build; pages, on-demand and merge chains.
  * @issues None
  * @todo None
  */
@@ -22,71 +23,13 @@
 #include "eli_font_types.h"
 #include "eli_font_proggy.h"
 #include "eli_font_glyph_ranges.h"
+#include "eli_font_stb.h"
+#include "eli_font_glyph_table.h"
+#include "eli_font_atlas_pages.h"
+#include "eli_font_atlas_on_demand.h"
 
 #include "../core/eli_platform.h"
 #include "../core/eli_types.h"
-
-/* Route stb's libc + math hooks through the seam headers (already included via
- * eli_platform.h). Defining these suppresses stb's own <stdlib.h>/<math.h>/etc. */
-#define STBTT_malloc(x, u) ((void)(u), malloc(x))
-#define STBTT_free(x, u)   ((void)(u), free(x))
-#define STBTT_assert(x)    ((void)0)
-#define STBTT_strlen(x)    strlen(x)
-#define STBTT_memcpy       memcpy
-#define STBTT_memset       memset
-#define STBTT_ifloor(x)    ((int)floor(x))
-#define STBTT_iceil(x)     ((int)ceil(x))
-#define STBTT_sqrt(x)      sqrt(x)
-#define STBTT_pow(x, y)    pow(x, y)
-#define STBTT_fmod(x, y)   fmod(x, y)
-#define STBTT_cos(x)       cos(x)
-#define STBTT_acos(x)      acos(x)
-#define STBTT_fabs(x)      fabs(x)
-
-#define STBRP_SORT      qsort
-#define STBRP_ASSERT(x) ((void)0)
-
-/* stb_rect_pack must precede stb_truetype so the latter binds the real packer.
- * Linkage follows eli_state.h: under ELI_SHARED_STATE only the ELI_IMPLEMENTATION
- * TU compiles the stb bodies (external linkage) and other TUs see declarations;
- * by default every TU gets its own static copy, so static-mode TUs still link. */
-#if !defined(ELI_SHARED_STATE) || defined(ELI_IMPLEMENTATION)
-    #define STB_RECT_PACK_IMPLEMENTATION
-    #define STB_TRUETYPE_IMPLEMENTATION
-#endif
-#if !defined(ELI_SHARED_STATE)
-    #define STBRP_STATIC
-    #define STBTT_STATIC
-#endif
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-#include <stb/stb_rect_pack.h>
-#include <stb/stb_truetype.h>
-#pragma GCC diagnostic pop
-
-/** Default spacing (in texels) left between packed glyphs. */
-#define ELI_FONT_ATLAS_DEFAULT_PADDING 1
-
-/** Side length (texels) of the opaque white block reserved for solid fills. */
-#define ELI_FONT_ATLAS_WHITE_SIZE 3
-
-/* ---------------------------------------------------------------------------
- * Small growable-buffer helper (returns NULL on allocation failure)
- * ------------------------------------------------------------------------- */
-
-/** Grow a heap array to hold at least `need` elements; doubles capacity. */
-static inline void *eli_font__grow(void *ptr, int *cap, int need, size_t elem)
-{
-    if (need <= *cap)
-        return ptr;
-    int new_cap = (*cap > 0) ? (*cap * 2) : 8;
-    if (new_cap < need)
-        new_cap = need;
-    void *p = realloc(ptr, (size_t)new_cap * elem);
-    if (p)
-        *cap = new_cap;
-    return p;
-}
 
 /** Round up to the next power of two (>= 1). */
 static inline int eli_font__next_pow2(int v)
@@ -95,85 +38,6 @@ static inline int eli_font__next_pow2(int v)
     while (p < v)
         p <<= 1;
     return p;
-}
-
-/* ---------------------------------------------------------------------------
- * Font glyph table helpers
- * ------------------------------------------------------------------------- */
-
-/** Release a font's glyph array and lookup table, leaving it empty. */
-static inline void eli_font__reset(eli_font *font)
-{
-    free(font->glyphs);
-    free(font->index_lookup);
-    font->glyphs = NULL;
-    font->glyph_count = 0;
-    font->glyph_capacity = 0;
-    font->index_lookup = NULL;
-    font->index_lookup_size = 0;
-    font->fallback_glyph = NULL;
-    font->fallback_advance_x = 0.0f;
-}
-
-/** Look up a glyph by codepoint, returning NULL (not the fallback) if absent. */
-static inline const eli_font_glyph *eli_font_find_glyph_no_fallback(const eli_font *font,
-                                                                    uint32_t codepoint)
-{
-    if (!font || codepoint >= (uint32_t)font->index_lookup_size)
-        return NULL;
-    int idx = font->index_lookup[codepoint];
-    if (idx < 0)
-        return NULL;
-    return &font->glyphs[idx];
-}
-
-/**
- * Look up a glyph by codepoint, falling back to the font's fallback glyph.
- *
- * @param font       Baked font.
- * @param codepoint  Unicode codepoint.
- * @return           Glyph pointer, the fallback glyph, or NULL if the font is
- *                   empty/NULL.
- *
- * Thread-safe: yes (read-only)  Reentrant: yes
- */
-static inline const eli_font_glyph *eli_font_find_glyph(const eli_font *font, uint32_t codepoint)
-{
-    const eli_font_glyph *g = eli_font_find_glyph_no_fallback(font, codepoint);
-    if (g)
-        return g;
-    return font ? font->fallback_glyph : NULL;
-}
-
-/** Append a fully-computed glyph and record its codepoint in the lookup table. */
-static inline void eli_font_add_glyph(eli_font *font, const eli_font_glyph *glyph)
-{
-    font->glyphs = (eli_font_glyph *)eli_font__grow(font->glyphs, &font->glyph_capacity,
-                                                    font->glyph_count + 1, sizeof(*font->glyphs));
-    font->glyphs[font->glyph_count] = *glyph;
-
-    if ((int)glyph->codepoint >= font->index_lookup_size) {
-        int old = font->index_lookup_size;
-        int want = (int)glyph->codepoint + 1;
-        font->index_lookup = (int *)eli_font__grow(font->index_lookup, &font->index_lookup_size,
-                                                   want, sizeof(*font->index_lookup));
-        for (int k = old; k < font->index_lookup_size; k++)
-            font->index_lookup[k] = -1;
-    }
-    font->index_lookup[glyph->codepoint] = font->glyph_count;
-    font->glyph_count++;
-}
-
-/** Resolve a font's fallback glyph/advance once all glyphs have been added. */
-static inline void eli_font__finish(eli_font *font)
-{
-    const eli_font_glyph *fb = eli_font_find_glyph_no_fallback(font, font->fallback_char);
-    if (!fb)
-        fb = eli_font_find_glyph_no_fallback(font, (uint32_t)' ');
-    if (!fb && font->glyph_count > 0)
-        fb = &font->glyphs[0];
-    font->fallback_glyph = fb;
-    font->fallback_advance_x = fb ? fb->advance_x : 0.0f;
 }
 
 /** Count the codepoints covered by a zero-terminated [lo, hi] range list. */
@@ -207,17 +71,20 @@ static inline eli_font_atlas *eli_font_atlas_create(void)
     return atlas;
 }
 
-/** Free the rasterized texture data and mark the atlas unbuilt. */
+/**
+ * Free every page (destroying page textures through the backend hooks), the
+ * RGBA copy and the rasterizer sources, and mark the atlas unbuilt.
+ */
 static inline void eli_font_atlas_clear_tex_data(eli_font_atlas *atlas)
 {
     if (!atlas)
         return;
-    free(atlas->tex_pixels_alpha8);
+    eli_texture_id legacy_id = atlas->tex_id;
+    eli_font__pages_free_all(atlas);
+    atlas->tex_id = atlas->backend.create_texture ? 0 : legacy_id; /* app-set id survives */
     free(atlas->tex_pixels_rgba32);
-    atlas->tex_pixels_alpha8 = NULL;
     atlas->tex_pixels_rgba32 = NULL;
-    atlas->tex_width = 0;
-    atlas->tex_height = 0;
+    eli_font__sources_free(atlas);
     atlas->built = false;
 }
 
@@ -225,7 +92,8 @@ static inline void eli_font_atlas_clear_tex_data(eli_font_atlas *atlas)
  * Free the atlas's CPU-side pixel buffers (alpha8 and rgba32) after the texture
  * has been uploaded to the GPU, WITHOUT marking the atlas unbuilt: fonts, glyphs
  * and UVs stay valid. get_tex_data_* then returns NULL pixels until the next
- * eli_font_atlas_build (needed again after a density change).
+ * eli_font_atlas_build (needed again after a density change). A no-op on an
+ * on-demand atlas, whose pages receive new glyphs.
  *
  * @param atlas  Target atlas (NULL is ignored).
  *
@@ -233,18 +101,15 @@ static inline void eli_font_atlas_clear_tex_data(eli_font_atlas *atlas)
  */
 static inline void eli_font_atlas_release_cpu_pixels(eli_font_atlas *atlas)
 {
-    if (!atlas)
+    if (!atlas || eli_font__on_demand(atlas))
         return;
-    free(atlas->tex_pixels_alpha8);
+    for (int i = 0; i < atlas->pages_count; i++) {
+        free(atlas->pages[i].pixels);
+        atlas->pages[i].pixels = NULL;
+    }
     free(atlas->tex_pixels_rgba32);
-    atlas->tex_pixels_alpha8 = NULL;
     atlas->tex_pixels_rgba32 = NULL;
-}
-
-/** @return a config's rasterizer density, treating <= 0 as 1. */
-static inline float eli_font__density(const eli_font_config *cfg)
-{
-    return (cfg->rasterizer_density > 0.0f) ? cfg->rasterizer_density : 1.0f;
+    eli_font__sync_page0(atlas);
 }
 
 /** Free any TTF source memory the atlas owns (decompressed/embedded blobs). */
@@ -252,6 +117,7 @@ static inline void eli_font_atlas_clear_input_data(eli_font_atlas *atlas)
 {
     if (!atlas)
         return;
+    eli_font__sources_free(atlas); /* they point into the font data */
     for (int i = 0; i < atlas->configs_count; i++) {
         if (atlas->configs[i].font_data_owned_by_atlas) {
             free(atlas->configs[i].font_data);
@@ -268,6 +134,7 @@ static inline void eli_font_atlas_clear_fonts(eli_font_atlas *atlas)
         return;
     for (int i = 0; i < atlas->fonts_count; i++) {
         eli_font__reset(atlas->fonts[i]);
+        free(atlas->fonts[i]->custom_ranges);
         free(atlas->fonts[i]);
     }
     free(atlas->fonts);
@@ -281,8 +148,8 @@ static inline void eli_font_atlas_clear(eli_font_atlas *atlas)
 {
     if (!atlas)
         return;
-    eli_font_atlas_clear_input_data(atlas);
     eli_font_atlas_clear_tex_data(atlas);
+    eli_font_atlas_clear_input_data(atlas);
     eli_font_atlas_clear_fonts(atlas);
     free(atlas->configs);
     atlas->configs = NULL;
@@ -309,11 +176,14 @@ static inline bool eli_font_atlas_is_built(const eli_font_atlas *atlas)
     return atlas && atlas->built;
 }
 
-/** Assign the backend texture identifier the renderer will bind. */
+/** Assign the backend texture identifier of page 0 (the whole baked texture). */
 static inline void eli_font_atlas_set_tex_id(eli_font_atlas *atlas, eli_texture_id id)
 {
-    if (atlas)
-        atlas->tex_id = id;
+    if (!atlas)
+        return;
+    atlas->tex_id = id;
+    if (atlas->pages_count > 0)
+        atlas->pages[0].tex_id = id;
 }
 
 /* ---------------------------------------------------------------------------
@@ -334,11 +204,14 @@ static inline eli_font_config eli_font_config_default(void)
 }
 
 /**
- * Append a font source described by `cfg` and allocate the font it bakes into.
+ * Append a font source described by `cfg`. A normal config allocates the font it
+ * bakes into; a merge_mode config joins the most recently added font as a
+ * fallback source (see eli_font_config) and returns that font.
  *
  * @param atlas  Target atlas.
  * @param cfg    Source configuration (copied; must have valid font_data).
- * @return       The new (unbaked) font, or NULL on bad input/allocation failure.
+ * @return       The (unbaked) font the source bakes into, or NULL on bad input,
+ *               allocation failure, or a merge with no font to merge into.
  *
  * Thread-safe: no  Reentrant: no
  */
@@ -346,22 +219,32 @@ static inline eli_font *eli_font_atlas_add_font(eli_font_atlas *atlas, const eli
 {
     if (!atlas || !cfg || !cfg->font_data || cfg->font_data_size <= 0)
         return NULL;
+    if (cfg->merge_mode && atlas->fonts_count == 0)
+        return NULL;
+    eli_font_config *configs = (eli_font_config *)eli_font__grow(
+        atlas->configs, &atlas->configs_capacity, atlas->configs_count + 1,
+        sizeof(*atlas->configs));
+    if (atlas->configs_capacity < atlas->configs_count + 1)
+        return NULL;
+    atlas->configs = configs;
+    eli_font **fonts = (eli_font **)eli_font__grow(atlas->fonts, &atlas->fonts_capacity,
+                                                   atlas->fonts_count + 1, sizeof(*atlas->fonts));
+    if (atlas->fonts_capacity < atlas->fonts_count + 1)
+        return NULL;
+    atlas->fonts = fonts;
 
-    eli_font *font = (eli_font *)calloc(1, sizeof(*font));
+    eli_font *font = cfg->merge_mode ? atlas->fonts[atlas->fonts_count - 1]
+                                     : (eli_font *)calloc(1, sizeof(*font));
     if (!font)
         return NULL;
-    font->container_atlas = atlas;
-    font->fallback_char = ELI_FONT_FALLBACK_CHAR;
-
-    atlas->configs = (eli_font_config *)eli_font__grow(atlas->configs, &atlas->configs_capacity,
-                                                       atlas->configs_count + 1,
-                                                       sizeof(*atlas->configs));
-    atlas->fonts = (eli_font **)eli_font__grow(atlas->fonts, &atlas->fonts_capacity,
-                                               atlas->fonts_count + 1, sizeof(*atlas->fonts));
+    if (!cfg->merge_mode) {
+        font->container_atlas = atlas;
+        font->fallback_char = ELI_FONT_FALLBACK_CHAR;
+        atlas->fonts[atlas->fonts_count++] = font;
+    }
     atlas->configs[atlas->configs_count] = *cfg;
     atlas->configs[atlas->configs_count].dst_font = font;
     atlas->configs_count++;
-    atlas->fonts[atlas->fonts_count++] = font;
     atlas->built = false;
     return font;
 }
@@ -370,7 +253,8 @@ static inline eli_font *eli_font_atlas_add_font(eli_font_atlas *atlas, const eli
  * Add a font from an in-memory TTF/OTF buffer.
  *
  * @param atlas         Target atlas.
- * @param font_data     TTF bytes (not copied; caller keeps them alive until build).
+ * @param font_data     TTF bytes (not copied; caller keeps them alive until build, or
+ *                      for the atlas's lifetime on an on-demand atlas).
  * @param font_data_size Size of font_data in bytes.
  * @param size_pixels   Target pixel height.
  * @param cfg           Optional config template (NULL for defaults).
@@ -457,7 +341,7 @@ static inline eli_font *eli_font_atlas_add_font_default(eli_font_atlas *atlas,
 }
 
 /* ---------------------------------------------------------------------------
- * Bake pipeline
+ * Bake pipeline (up front, one page)
  * ------------------------------------------------------------------------- */
 
 /** Per-glyph working record threaded through the two-pass bake. */
@@ -469,38 +353,58 @@ typedef struct eli_font__build_glyph {
     int w, h;
 } eli_font__build_glyph;
 
-/** Gather glyph boxes for every config into `out`; returns the glyph count. */
-static inline int eli_font__gather_glyphs(eli_font_atlas *atlas, stbtt_fontinfo *finfo,
-                                          const float *scales, eli_font__build_glyph *out,
-                                          stbrp_rect *rects, int padding)
+/** Scratch shared by the bake passes. */
+typedef struct eli_font__bake {
+    eli_font__build_glyph *glyphs;
+    stbrp_rect *rects;
+    int count;
+    int white_idx;
+    unsigned char *seen; /* per font: 8 KB bitset of codepoints already supplied */
+} eli_font__bake;
+
+/** @return the index of `font` in atlas->fonts. */
+static inline int eli_font__font_index(const eli_font_atlas *atlas, const eli_font *font)
 {
-    int n = 0;
+    for (int f = 0; f < atlas->fonts_count; f++)
+        if (atlas->fonts[f] == font)
+            return f;
+    return 0;
+}
+
+/** Gather glyph boxes for every config (merge sources skip supplied codepoints). */
+static inline void eli_font__gather_glyphs(eli_font_atlas *atlas, eli_font__bake *b, int padding)
+{
+    const eli_font__source *src = (const eli_font__source *)atlas->sources;
     for (int i = 0; i < atlas->configs_count; i++) {
         eli_font_config *cfg = &atlas->configs[i];
-        const uint16_t *ranges =
-            cfg->glyph_ranges ? cfg->glyph_ranges : eli_font_atlas_get_glyph_ranges_default(atlas);
+        unsigned char *seen = b->seen + (size_t)eli_font__font_index(atlas, cfg->dst_font) * 8192;
+        const uint16_t *ranges = eli_font__config_ranges(atlas, cfg);
         for (; ranges[0] && ranges[1]; ranges += 2) {
             for (uint32_t cp = ranges[0]; cp <= ranges[1]; cp++) {
-                int g = stbtt_FindGlyphIndex(&finfo[i], (int)cp);
+                if (seen[cp >> 3] & (1u << (cp & 7)))
+                    continue;
+                int g = stbtt_FindGlyphIndex(&src[i].info, (int)cp);
                 if (g == 0)
                     continue;
+                seen[cp >> 3] |= (unsigned char)(1u << (cp & 7));
                 int x0, y0, x1, y1;
-                stbtt_GetGlyphBitmapBox(&finfo[i], g, scales[i], scales[i], &x0, &y0, &x1, &y1);
-                out[n].cfg_index = i;
-                out[n].codepoint = cp;
-                out[n].glyph_index = g;
-                out[n].box_x0 = x0;
-                out[n].box_y0 = y0;
-                out[n].w = x1 - x0;
-                out[n].h = y1 - y0;
-                rects[n].id = n;
-                rects[n].w = (stbrp_coord)(out[n].w + padding);
-                rects[n].h = (stbrp_coord)(out[n].h + padding);
-                n++;
+                stbtt_GetGlyphBitmapBox(&src[i].info, g, src[i].scale, src[i].scale, &x0, &y0, &x1,
+                                        &y1);
+                eli_font__build_glyph *out = &b->glyphs[b->count];
+                out->cfg_index = i;
+                out->codepoint = cp;
+                out->glyph_index = g;
+                out->box_x0 = x0;
+                out->box_y0 = y0;
+                out->w = x1 - x0;
+                out->h = y1 - y0;
+                b->rects[b->count].id = b->count;
+                b->rects[b->count].w = (stbrp_coord)(out->w + padding);
+                b->rects[b->count].h = (stbrp_coord)(out->h + padding);
+                b->count++;
             }
         }
     }
-    return n;
 }
 
 /** Choose an atlas width from the total packed surface area (ImGui heuristic). */
@@ -522,94 +426,134 @@ static inline int eli_font__pick_width(const eli_font_atlas *atlas, const stbrp_
     return 512;
 }
 
-/** Rasterize packed glyphs and the white texel into a fresh alpha8 buffer. */
-static inline unsigned char *eli_font__rasterize(eli_font_atlas *atlas, stbtt_fontinfo *finfo,
-                                                 const float *scales,
-                                                 const eli_font__build_glyph *bg,
-                                                 const stbrp_rect *rects, int count, int white_idx,
-                                                 int tex_w, int tex_h)
+/** Pack the gathered rects into a tex_w-wide strip; returns the used height (0 = fail). */
+static inline int eli_font__pack_baked(eli_font_atlas *atlas, eli_font__bake *b, int tex_w)
 {
-    unsigned char *pixels = (unsigned char *)calloc((size_t)tex_w * (size_t)tex_h, 1);
-    if (!pixels)
-        return NULL;
-    for (int k = 0; k < count; k++) {
-        if (!rects[k].was_packed || bg[k].w <= 0 || bg[k].h <= 0)
-            continue;
-        int px = rects[k].x, py = rects[k].y;
-        stbtt_MakeGlyphBitmap(&finfo[bg[k].cfg_index], pixels + (size_t)py * tex_w + px, bg[k].w,
-                              bg[k].h, tex_w, scales[bg[k].cfg_index], scales[bg[k].cfg_index],
-                              bg[k].glyph_index);
-    }
-    if (rects[white_idx].was_packed) {
-        int wx = rects[white_idx].x, wy = rects[white_idx].y;
-        for (int dy = 0; dy < ELI_FONT_ATLAS_WHITE_SIZE; dy++)
-            for (int dx = 0; dx < ELI_FONT_ATLAS_WHITE_SIZE; dx++)
-                pixels[(size_t)(wy + dy) * tex_w + (wx + dx)] = 0xFF;
-        atlas->tex_uv_white_pixel =
-            eli_make_vec2((wx + 1.0f) / (float)tex_w, (wy + 1.0f) / (float)tex_h);
-    }
-    return pixels;
+    const int max_h = 1024 * 32;
+    stbrp_node *nodes = (stbrp_node *)calloc((size_t)tex_w, sizeof(*nodes));
+    if (!nodes)
+        return 0;
+    stbrp_context ctx;
+    stbrp_init_target(&ctx, tex_w, max_h, nodes, tex_w);
+    stbrp_pack_rects(&ctx, b->rects, b->count + 1);
+    free(nodes);
+    int tex_h = 0;
+    for (int k = 0; k <= b->count; k++)
+        if (b->rects[k].was_packed && b->rects[k].y + b->rects[k].h > tex_h)
+            tex_h = b->rects[k].y + b->rects[k].h;
+    if (tex_h > 0 && !(atlas->flags & ELI_FONT_ATLAS_NO_POWER_OF_TWO_HEIGHT))
+        tex_h = eli_font__next_pow2(tex_h);
+    return tex_h;
 }
 
-/** Populate one font's metrics and glyph table from the bake results. */
-static inline void eli_font__emit_font_glyphs(eli_font_atlas *atlas, stbtt_fontinfo *finfo,
-                                              const float *scales, const int *ascents,
-                                              const int *descents, const eli_font__build_glyph *bg,
-                                              const stbrp_rect *rects, int count)
+/** Rasterize the packed glyphs and the white block into page 0's pixels. */
+static inline void eli_font__rasterize_baked(eli_font_atlas *atlas, const eli_font__bake *b)
 {
-    for (int i = 0; i < atlas->configs_count; i++) {
-        eli_font_config *cfg = &atlas->configs[i];
-        eli_font *font = cfg->dst_font;
-        float pt_scale = scales[i] / eli_font__density(cfg); /* font units -> points */
-        eli_font__reset(font);
-        font->container_atlas = atlas;
-        font->font_size = cfg->size_pixels;
-        font->ascent = (float)((int)(ascents[i] * pt_scale + 0.5f));
-        font->descent = (float)((int)(descents[i] * pt_scale - 0.5f));
-        font->line_height = cfg->size_pixels;
-        font->fallback_char = ELI_FONT_FALLBACK_CHAR;
-        font->tex_uv_white_pixel = atlas->tex_uv_white_pixel;
+    eli_font_atlas_page *page = &atlas->pages[0];
+    eli_font__source *src = (eli_font__source *)atlas->sources;
+    int tex_w = page->width, tex_h = page->height;
+    for (int k = 0; k < b->count; k++) {
+        const eli_font__build_glyph *g = &b->glyphs[k];
+        if (!b->rects[k].was_packed || g->w <= 0 || g->h <= 0)
+            continue;
+        eli_font__source *s = &src[g->cfg_index];
+        stbtt_MakeGlyphBitmap(&s->info,
+                              page->pixels + (size_t)b->rects[k].y * tex_w + b->rects[k].x, g->w,
+                              g->h, tex_w, s->scale, s->scale, g->glyph_index);
     }
-    for (int k = 0; k < count; k++) {
-        const eli_font__build_glyph *b = &bg[k];
-        eli_font_config *cfg = &atlas->configs[b->cfg_index];
-        eli_font *font = cfg->dst_font;
-        float density = eli_font__density(cfg);
-        int adv, lsb;
-        stbtt_GetGlyphHMetrics(&finfo[b->cfg_index], b->glyph_index, &adv, &lsb);
-        float advance = adv * scales[b->cfg_index] / density;
-        if (cfg->pixel_snap_h)
-            advance = (float)((int)(advance + 0.5f));
-        if (cfg->glyph_min_advance_x > 0.0f && advance < cfg->glyph_min_advance_x)
-            advance = cfg->glyph_min_advance_x;
-        if (cfg->glyph_max_advance_x > 0.0f && advance > cfg->glyph_max_advance_x)
-            advance = cfg->glyph_max_advance_x;
+    const stbrp_rect *white = &b->rects[b->white_idx];
+    if (white->was_packed) {
+        for (int dy = 0; dy < ELI_FONT_ATLAS_WHITE_SIZE; dy++)
+            for (int dx = 0; dx < ELI_FONT_ATLAS_WHITE_SIZE; dx++)
+                page->pixels[(size_t)(white->y + dy) * tex_w + (white->x + dx)] = 0xFF;
+        atlas->tex_uv_white_pixel =
+            eli_make_vec2((white->x + 1.0f) / (float)tex_w, (white->y + 1.0f) / (float)tex_h);
+    }
+}
 
-        eli_font_glyph gl;
-        memset(&gl, 0, sizeof(gl));
-        gl.codepoint = b->codepoint;
-        gl.advance_x = advance;
-        if (rects[k].was_packed && b->w > 0 && b->h > 0) {
-            gl.visible = true;
-            /* Bitmap boxes are in texels; quads are in points (texels / density). */
-            gl.x0 = (float)b->box_x0 / density + cfg->glyph_offset_x;
-            gl.y0 = font->ascent + (float)b->box_y0 / density + cfg->glyph_offset_y;
-            gl.x1 = gl.x0 + (float)b->w / density;
-            gl.y1 = gl.y0 + (float)b->h / density;
-            gl.u0 = rects[k].x * atlas->tex_uv_scale.x;
-            gl.v0 = rects[k].y * atlas->tex_uv_scale.y;
-            gl.u1 = (rects[k].x + b->w) * atlas->tex_uv_scale.x;
-            gl.v1 = (rects[k].y + b->h) * atlas->tex_uv_scale.y;
-        }
+/** Fill every font's metrics and glyph table from the bake results. */
+static inline void eli_font__emit_font_glyphs(eli_font_atlas *atlas, const eli_font__bake *b)
+{
+    for (int f = 0; f < atlas->fonts_count; f++)
+        eli_font__init_metrics(atlas, atlas->fonts[f]);
+    for (int k = 0; k < b->count; k++) {
+        const eli_font__build_glyph *g = &b->glyphs[k];
+        eli_font__placement pl = { g->box_x0, g->box_y0, g->w, g->h, 0, b->rects[k].x,
+                                   b->rects[k].y, b->rects[k].was_packed != 0 };
+        eli_font *font = atlas->configs[g->cfg_index].dst_font;
+        eli_font_glyph gl = eli_font__compose_glyph(atlas, g->cfg_index, font, g->codepoint,
+                                                    g->glyph_index, &pl);
         eli_font_add_glyph(font, &gl);
     }
+    for (int f = 0; f < atlas->fonts_count; f++)
+        eli_font__finish(atlas->fonts[f]);
+}
+
+/** Bake every configured source into page 0 (sources already open). */
+static inline bool eli_font__build_baked(eli_font_atlas *atlas)
+{
+    int padding = eli_font__padding(atlas);
+    int total_possible = 0;
     for (int i = 0; i < atlas->configs_count; i++)
-        eli_font__finish(atlas->configs[i].dst_font);
+        total_possible += eli_font__count_range_glyphs(
+            eli_font__config_ranges(atlas, &atlas->configs[i]));
+
+    bool ok = false;
+    eli_font__bake b;
+    memset(&b, 0, sizeof(b));
+    b.glyphs = (eli_font__build_glyph *)calloc((size_t)total_possible + 1, sizeof(*b.glyphs));
+    b.rects = (stbrp_rect *)calloc((size_t)total_possible + 1, sizeof(*b.rects));
+    b.seen = (unsigned char *)calloc((size_t)atlas->fonts_count, 8192);
+    int slot = eli_font__page_alloc_slot(atlas);
+    if (!b.glyphs || !b.rects || !b.seen || slot != 0)
+        goto cleanup;
+
+    eli_font__gather_glyphs(atlas, &b, padding);
+    b.white_idx = b.count;
+    b.rects[b.white_idx].id = -1;
+    b.rects[b.white_idx].w = (stbrp_coord)(ELI_FONT_ATLAS_WHITE_SIZE + padding);
+    b.rects[b.white_idx].h = (stbrp_coord)(ELI_FONT_ATLAS_WHITE_SIZE + padding);
+
+    int tex_w = eli_font__pick_width(atlas, b.rects, b.count + 1);
+    int tex_h = eli_font__pack_baked(atlas, &b, tex_w);
+    eli_font_atlas_page *page = &atlas->pages[0];
+    page->pixels = tex_h > 0 ? (unsigned char *)calloc((size_t)tex_w * (size_t)tex_h, 1) : NULL;
+    if (!page->pixels)
+        goto cleanup;
+    page->width = tex_w;
+    page->height = tex_h;
+    page->live = true;
+    page->version = 1;
+    eli_font__rasterize_baked(atlas, &b);
+    eli_font__emit_font_glyphs(atlas, &b);
+    ok = true;
+
+cleanup:
+    free(b.glyphs);
+    free(b.rects);
+    free(b.seen);
+    return ok;
+}
+
+/** Set up an on-demand atlas: page 0 with the white block, font metrics only. */
+static inline bool eli_font__build_on_demand(eli_font_atlas *atlas)
+{
+    if (eli_font__page_new_on_demand(atlas) != 0)
+        return false;
+    float uv = 1.0f / (float)eli_font__page_size(atlas);
+    atlas->tex_uv_white_pixel = eli_make_vec2(uv, uv);
+    for (int f = 0; f < atlas->fonts_count; f++) {
+        eli_font__init_metrics(atlas, atlas->fonts[f]);
+        eli_font__finish(atlas->fonts[f]);
+    }
+    return true;
 }
 
 /**
- * Bake all configured fonts into the atlas texture. Implicitly adds the default
- * font if none were configured. Re-bakeable (frees prior texture/glyphs).
+ * Build the atlas: bake every configured source up front into page 0, or on an
+ * on-demand atlas open the faces and create page 0 (glyphs load on first use).
+ * Implicitly adds the default font if none were configured. Re-buildable (frees
+ * prior pages and glyphs; font pointers stay valid).
  *
  * @param atlas  Target atlas.
  * @return       true on success, false on empty/failed build.
@@ -622,91 +566,27 @@ static inline bool eli_font_atlas_build(eli_font_atlas *atlas)
         return false;
     if (atlas->configs_count == 0 && eli_font_atlas_add_font_default(atlas, NULL) == NULL)
         return false;
-
+    eli_texture_id legacy_id = atlas->tex_id;
     eli_font_atlas_clear_tex_data(atlas);
-    int padding = (atlas->tex_glyph_padding > 0) ? atlas->tex_glyph_padding
-                                                 : ELI_FONT_ATLAS_DEFAULT_PADDING;
-    int nfonts = atlas->configs_count;
-
-    bool ok = false;
-    stbtt_fontinfo *finfo = (stbtt_fontinfo *)calloc(nfonts, sizeof(*finfo));
-    float *scales = (float *)calloc(nfonts, sizeof(*scales));
-    int *ascents = (int *)calloc(nfonts, sizeof(*ascents));
-    int *descents = (int *)calloc(nfonts, sizeof(*descents));
-    eli_font__build_glyph *bg = NULL;
-    stbrp_rect *rects = NULL;
-    stbrp_node *nodes = NULL;
-    unsigned char *pixels = NULL;
-    if (!finfo || !scales || !ascents || !descents)
-        goto cleanup;
-
-    int total_possible = 0;
-    for (int i = 0; i < nfonts; i++) {
-        eli_font_config *cfg = &atlas->configs[i];
-        int off = stbtt_GetFontOffsetForIndex((const unsigned char *)cfg->font_data, cfg->font_no);
-        if (off < 0 || !stbtt_InitFont(&finfo[i], (const unsigned char *)cfg->font_data, off))
-            goto cleanup;
-        scales[i] = stbtt_ScaleForPixelHeight(&finfo[i], cfg->size_pixels * eli_font__density(cfg));
-        int gap;
-        stbtt_GetFontVMetrics(&finfo[i], &ascents[i], &descents[i], &gap);
-        const uint16_t *ranges =
-            cfg->glyph_ranges ? cfg->glyph_ranges : eli_font_atlas_get_glyph_ranges_default(atlas);
-        total_possible += eli_font__count_range_glyphs(ranges);
+    if (!eli_font__sources_init(atlas))
+        return false;
+    bool ok = eli_font__on_demand(atlas) ? eli_font__build_on_demand(atlas)
+                                         : eli_font__build_baked(atlas);
+    if (!ok) {
+        eli_font_atlas_clear_tex_data(atlas);
+        return false;
     }
-
-    bg = (eli_font__build_glyph *)calloc((size_t)total_possible, sizeof(*bg));
-    rects = (stbrp_rect *)calloc((size_t)total_possible + 1, sizeof(*rects));
-    if ((total_possible > 0 && !bg) || !rects)
-        goto cleanup;
-
-    int count = eli_font__gather_glyphs(atlas, finfo, scales, bg, rects, padding);
-    int white_idx = count;
-    rects[white_idx].id = -1;
-    rects[white_idx].w = (stbrp_coord)(ELI_FONT_ATLAS_WHITE_SIZE + padding);
-    rects[white_idx].h = (stbrp_coord)(ELI_FONT_ATLAS_WHITE_SIZE + padding);
-
-    int tex_w = eli_font__pick_width(atlas, rects, count + 1);
-    const int max_h = 1024 * 32;
-    nodes = (stbrp_node *)calloc((size_t)tex_w, sizeof(*nodes));
-    if (!nodes)
-        goto cleanup;
-    stbrp_context ctx;
-    stbrp_init_target(&ctx, tex_w, max_h, nodes, tex_w);
-    stbrp_pack_rects(&ctx, rects, count + 1);
-
-    int tex_h = 0;
-    for (int k = 0; k <= count; k++)
-        if (rects[k].was_packed && rects[k].y + rects[k].h > tex_h)
-            tex_h = rects[k].y + rects[k].h;
-    if (tex_h <= 0)
-        goto cleanup;
-    if (!(atlas->flags & ELI_FONT_ATLAS_NO_POWER_OF_TWO_HEIGHT))
-        tex_h = eli_font__next_pow2(tex_h);
-
-    atlas->tex_width = tex_w;
-    atlas->tex_height = tex_h;
-    atlas->tex_uv_scale = eli_make_vec2(1.0f / (float)tex_w, 1.0f / (float)tex_h);
-
-    pixels = eli_font__rasterize(atlas, finfo, scales, bg, rects, count, white_idx, tex_w, tex_h);
-    if (!pixels)
-        goto cleanup;
-    atlas->tex_pixels_alpha8 = pixels;
-    pixels = NULL;
-
-    eli_font__emit_font_glyphs(atlas, finfo, scales, ascents, descents, bg, rects, count);
+    if (!eli_font__on_demand(atlas))
+        eli_font__sources_free(atlas); /* every glyph is baked */
+    if (atlas->backend.create_texture)
+        eli_font__page_create_texture(atlas, &atlas->pages[0]);
+    else
+        atlas->pages[0].tex_id = legacy_id; /* an app-assigned id carries over */
+    eli_font__sync_page0(atlas);
+    for (int f = 0; f < atlas->fonts_count; f++)
+        atlas->fonts[f]->tex_uv_white_pixel = atlas->tex_uv_white_pixel;
     atlas->built = true;
-    ok = true;
-
-cleanup:
-    free(finfo);
-    free(scales);
-    free(ascents);
-    free(descents);
-    free(bg);
-    free(rects);
-    free(nodes);
-    free(pixels);
-    return ok;
+    return true;
 }
 
 /* ---------------------------------------------------------------------------
@@ -714,7 +594,8 @@ cleanup:
  * ------------------------------------------------------------------------- */
 
 /**
- * Fetch the single-channel (alpha8) texture, building the atlas if needed.
+ * Fetch page 0 as single-channel (alpha8) data, building the atlas if needed. On
+ * a baked atlas page 0 is the whole texture.
  *
  * @param atlas           Target atlas.
  * @param out_pixels      Receives the alpha8 pixel pointer (may be NULL).
@@ -743,7 +624,7 @@ static inline void eli_font_atlas_get_tex_data_as_alpha8(eli_font_atlas *atlas,
 }
 
 /**
- * Fetch the atlas as RGBA32 (white with per-texel alpha), building/converting on
+ * Fetch page 0 as RGBA32 (white with per-texel alpha), building/converting on
  * demand. The RGBA buffer is cached and owned by the atlas.
  *
  * Thread-safe: no  Reentrant: no
