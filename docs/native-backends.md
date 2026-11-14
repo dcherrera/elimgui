@@ -72,7 +72,7 @@ so either can be replaced alone.
 | Header | Role |
 |---|---|
 | `sdl3/eli_sdl3_platform.h` | SDL events -> `eli_io`; cursor, clipboard, open URL, mouse warp; display size / density / delta time; `eli_sdl3_wait_timeout_ms` |
-| `sdl3/eli_sdl3_renderer.h` | `eli_draw_data` -> `SDL_RenderGeometryRaw`; RGBA texture helpers; font-atlas upload |
+| `sdl3/eli_sdl3_renderer.h` | `eli_draw_data` -> `SDL_RenderGeometryRaw`; RGBA and single-channel texture helpers; font-atlas pages |
 | `sdl3/eli_sdl3_keymap.h` | SDL keycode/scancode -> `eli_key` (used by the platform header) |
 | `sdl3/eli_sdl3_quit_signals.h` | Optional: SIGINT/SIGTERM wake an idle loop with `SDL_EVENT_QUIT` (POSIX) |
 
@@ -102,11 +102,15 @@ int  eli_sdl3_wait_timeout_ms(void);      /* -1 wait, 0 poll, else ms (idle loop
 ```c
 bool           eli_sdl3_renderer_init(SDL_Renderer *r);
 void           eli_sdl3_renderer_shutdown(void);
-bool           eli_sdl3_renderer_create_fonts_texture(eli_font_atlas *atlas); /* sets tex id */
+bool           eli_sdl3_renderer_create_fonts_texture(eli_font_atlas *atlas); /* hooks + tex id */
 void           eli_sdl3_renderer_destroy_fonts_texture(void);
 eli_texture_id eli_sdl3_texture_create_rgba(int w, int h, const void *pixels);
 bool           eli_sdl3_texture_update_rgba(eli_texture_id id, const SDL_Rect *rect,
                                             const void *pixels, int pitch);
+eli_texture_id eli_sdl3_texture_create_alpha8_on(SDL_Renderer *r, int w, int h,
+                                                 const unsigned char *alpha8);
+bool           eli_sdl3_texture_update_alpha8(eli_texture_id id, const SDL_Rect *rect,
+                                              const unsigned char *alpha8, int pitch);
 void           eli_sdl3_texture_destroy(eli_texture_id id);
 void           eli_sdl3_renderer_render_draw_data(const eli_draw_data *dd);
 ```
@@ -116,6 +120,17 @@ clip rects stay in points), expands each list's RGBA8 colors to `SDL_FColor` onc
 list (SDL3 has no 8-bit color geometry path), honors `cmd->vtx_offset` and user
 callbacks, and restores viewport, clip and scale. Textures are `SDL_PIXELFORMAT_RGBA32`,
 static, blended, linear. The app clears and presents.
+
+Font pages are single-channel: `SDL_PIXELFORMAT_INDEX8` (an R8 texture on the GPU, 1
+byte per texel) with a 256-entry palette mapping coverage i to white with alpha i, so
+vertex color tints text exactly as the old white-RGBA32 atlas did at a quarter of the
+memory (a 1024x2048 atlas: 8.4 MB -> 2.1 MB). SDL draws palette textures with a
+manual bilinear lookup; a renderer without INDEX8 gets RGBA32. `create_fonts_texture`
+installs the atlas's backend hooks (the atlas owns its page textures: rebuilding or
+destroying it frees them) and `render_draw_data` calls `eli_font_atlas_update` on the
+current context's atlas before drawing, so on-demand pages upload new glyphs and free
+idle pages (font-system.md). `shutdown` releases the page textures and detaches the
+hooks, so destroy the atlas after it.
 
 ### DPI and fonts
 
@@ -170,10 +185,14 @@ ELI_SDL3_STATIC=1 ./build.sh sdl3-example
 examples/sdl3/build/elimgui_sdl3 [--frames N] [--screenshot out.bmp] [--font f.ttf]
                                  [--font-size PX] [--driver NAME] [--idle-report S]
                                  [--focus-input] [--skip-unchanged] [--hidden]
+                                 [--on-demand] [--atlas-selftest]
 ```
 
 `--frames N` renders N frames and exits 0 (used for the sanitizer runs); `--screenshot`
-saves the last frame as BMP. On macOS the debug build uses Homebrew LLVM: Apple clang
+saves the last frame as BMP. `--on-demand` uses an on-demand atlas; the exit log
+prints the font pages' GPU bytes. `--atlas-selftest` checks the pages are INDEX8 and
+that a frame drawn with them is byte-identical to the same draw data drawn with RGBA32
+copies (offscreen readback); it exits with the number of failures. On macOS the debug build uses Homebrew LLVM: Apple clang
 17's ASan runtime hangs at startup on macOS 26 (even for an empty `main`).
 
 ### Results (Phase B)
