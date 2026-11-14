@@ -11,7 +11,8 @@
  *
  * Usage: elimgui_sdl3 [--frames N] [--screenshot out.bmp] [--font file.ttf]
  *                     [--font-size PX] [--driver NAME] [--idle-report SECONDS]
- *                     [--focus-input] [--skip-unchanged]
+ *                     [--focus-input] [--skip-unchanged] [--drawables 2|3] [--no-vsync]
+ *                     [--release-hidden] [--hide-after S] [--warm-frames N]
  *   --frames N         build and render N frames, then exit 0 (CI / sanitizer runs)
  *   --screenshot F     save the last rendered frame as a BMP
  *   --font F           use a TTF instead of the embedded ProggyClean
@@ -24,6 +25,13 @@
  *                      exit with the number of failures (restores the clipboard)
  *   --hidden           create the window hidden (idle measurements on a machine in use:
  *                      no stray pointer events from the person at the desk)
+ *   --drawables N      Metal swapchain depth (2 or 3; default: SDL's 3)
+ *   --no-vsync         present without waiting for vblank
+ *   --release-hidden   shrink the swapchain to 1x1 px while hidden/minimised
+ *   --hide-after S     hide the window S seconds after start (swapchain-release probe)
+ *   --warm-frames N    build the first N frames back to back (fills the drawable pool)
+ *   --swapchain-selftest  check drawable count, vsync, release/restore on hide/show and
+ *                      timers paused while hidden; print PASS/FAIL, exit with failures
  *
  * @status In use (spec §17).
  * @issues None
@@ -62,6 +70,12 @@ typedef struct example_options {
     bool skip_unchanged;
     bool hidden;
     bool input_selftest;
+    bool swapchain_selftest;
+    int drawables;              /* 0 = SDL's default */
+    bool no_vsync;
+    bool release_hidden;
+    double hide_after_s;        /* 0 = never */
+    long warm_frames;
 } example_options;
 
 /** App-owned SDL + elimgui handles. */
@@ -131,13 +145,32 @@ static bool example_parse_args(int argc, char **argv, example_options *opt)
             opt->hidden = true;
         else if (!strcmp(a, "--input-selftest"))
             opt->input_selftest = true;
+        else if (!strcmp(a, "--swapchain-selftest"))
+            opt->swapchain_selftest = true;
+        else if (!strcmp(a, "--drawables") && has_value)
+            opt->drawables = (int)strtol(argv[++i], NULL, 10);
+        else if (!strcmp(a, "--no-vsync"))
+            opt->no_vsync = true;
+        else if (!strcmp(a, "--release-hidden"))
+            opt->release_hidden = true;
+        else if (!strcmp(a, "--hide-after") && has_value)
+            opt->hide_after_s = strtod(argv[++i], NULL);
+        else if (!strcmp(a, "--warm-frames") && has_value)
+            opt->warm_frames = strtol(argv[++i], NULL, 10);
         else {
             fprintf(stderr, "usage: %s [--frames N] [--screenshot F.bmp] [--font F.ttf] "
                             "[--font-size PX] [--driver NAME] [--idle-report S] "
                             "[--focus-input] [--skip-unchanged] [--hidden] "
-                            "[--input-selftest]\n", argv[0]);
+                            "[--input-selftest] [--swapchain-selftest] [--drawables 2|3] "
+                            "[--no-vsync] [--release-hidden] [--hide-after S] "
+                            "[--warm-frames N]\n", argv[0]);
             return false;
         }
+    }
+    if (opt->swapchain_selftest) {     /* the configuration the selftest checks */
+        opt->drawables = 2;
+        opt->no_vsync = false;
+        opt->release_hidden = true;
     }
     return true;
 }
@@ -196,13 +229,17 @@ static bool example_init(example_app *app, const example_options *opt)
         SDL_Log("example: window/renderer failed: %s", SDL_GetError());
         return false;
     }
-    SDL_SetRenderVSync(app->renderer, 1);
     g_example_stats.renderer_name = SDL_GetRendererName(app->renderer);
 
     example_tasks_init();
     eli_context *ctx = eli_create_context();
     eli_style_colors_dark(&ctx->style);
-    if (!eli_sdl3_platform_init(app->window) || !eli_sdl3_renderer_init(app->renderer))
+    eli_sdl3_renderer_config surface = {
+        .drawable_count = opt->drawables,
+        .vsync = opt->no_vsync ? ELI_SDL3_VSYNC_OFF : ELI_SDL3_VSYNC_ON,
+        .release_when_hidden = opt->release_hidden,
+    };
+    if (!eli_sdl3_platform_init(app->window) || !eli_sdl3_renderer_init_ex(app->renderer, &surface))
         return false;
     return example_build_fonts(app, opt, SDL_GetWindowPixelDensity(app->window));
 }
@@ -217,6 +254,7 @@ static bool example_handle_event(example_app *app, const example_options *opt, c
         example_tasks_apply_wake();
     else if (e->type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED)
         example_build_fonts(app, opt, SDL_GetWindowPixelDensity(app->window));
+    eli_sdl3_renderer_process_event(e);
     eli_sdl3_platform_process_event(e);
     return true;
 }
@@ -369,6 +407,29 @@ static void example_present(example_app *app, const example_options *opt, bool l
     SDL_RenderPresent(app->renderer);
 }
 
+/**
+ * --hide-after: hide the window once its time has come. Returns ms until then
+ * (-1 when off or done), for the loop's wait cap.
+ */
+static int example_hide_step(example_app *app, const example_options *opt, Uint64 start_ms)
+{
+    if (opt->hide_after_s <= 0.0 || (SDL_GetWindowFlags(app->window) & SDL_WINDOW_HIDDEN))
+        return -1;
+    double left = opt->hide_after_s - (double)(SDL_GetTicks() - start_ms) / 1000.0;
+    if (left > 0.0)
+        return (int)(left * 1000.0) + 1;
+    SDL_HideWindow(app->window);
+    return -1;
+}
+
+/** @return the smaller wait cap of two (-1 = no cap). */
+static int example_min_cap(int a, int b)
+{
+    if (a < 0)
+        return b;
+    return (b >= 0 && b < a) ? b : a;
+}
+
 /* --input-selftest: the selftest drives frames through this callback. */
 static example_app *g_example_present_app = NULL;
 static const example_options g_example_selftest_opt = {0};
@@ -397,17 +458,24 @@ int main(int argc, char **argv)
         example_shutdown(&app);
         return failed ? 3 : 0;
     }
+    if (opt.swapchain_selftest) {
+        g_example_present_app = &app;
+        int failed = example_swapchain_selftest(app.window, app.renderer, example_frame_and_present);
+        example_shutdown(&app);
+        return failed ? 3 : 0;
+    }
     if (opt.idle_report_s > 0.0)
         SDL_WarpMouseGlobal(0.0f, 0.0f);   /* spec §20.3: mouse outside the window */
     probe.start_ms = SDL_GetTicks();
     bool running = true;
     while (running) {
         bool done = false, need_frame = true;
-        if (opt.frames > 0)
-            eli_request_redraw();          /* --frames: render back to back */
+        if (opt.frames > 0 || (long)g_example_stats.frames_built < opt.warm_frames)
+            eli_request_redraw();          /* --frames / --warm-frames: render back to back */
         int cap = example_idle_probe_step(&probe, &opt, &done);
         if (done)
             break;
+        cap = example_min_cap(cap, example_hide_step(&app, &opt, probe.start_ms));
         running = example_wait_events(&app, &opt, cap, &need_frame);
         if (!need_frame)
             continue;
@@ -420,10 +488,11 @@ int main(int argc, char **argv)
             running = false;
     }
     SDL_Log("example: %llu frames (%llu presents skipped), last build %.3f ms, submit %.3f ms, "
-            "%d vertices, renderer %s", (unsigned long long)g_example_stats.frames_built,
+            "%d vertices, renderer %s, %d drawables%s", (unsigned long long)g_example_stats.frames_built,
             (unsigned long long)app.skipped_presents, g_example_stats.last_build_ms,
             g_example_stats.last_submit_ms, eli_get_io()->metrics_render_vertices,
-            g_example_stats.renderer_name);
+            g_example_stats.renderer_name, eli_sdl3_renderer_drawable_count(),
+            eli_sdl3_renderer_surface_released() ? " (released)" : "");
     example_shutdown(&app);
     return 0;
 }
