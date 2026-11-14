@@ -296,13 +296,17 @@ static inline void eli_table__build_sort_specs(eli_table *table)
         return;
     }
 
-    eli_table_column_sort_specs *arr = (eli_table_column_sort_specs *)realloc(
-        table->sort_specs.specs, (size_t)count * sizeof(*arr));
-    if (arr == NULL) {
-        table->sort_specs.specs_count = 0;
-        return;
+    eli_table_column_sort_specs *arr = table->sort_specs.specs;
+    if (count > table->sort_specs_capacity) {
+        arr = (eli_table_column_sort_specs *)eli_mem_realloc(
+            arr, (size_t)table->sort_specs_capacity * sizeof(*arr), (size_t)count * sizeof(*arr));
+        if (arr == NULL) {
+            table->sort_specs.specs_count = 0;
+            return;
+        }
+        table->sort_specs.specs = arr;
+        table->sort_specs_capacity = count;
     }
-    table->sort_specs.specs = arr;
 
     int w = 0;
     for (int order = 0; order < count; order++) {

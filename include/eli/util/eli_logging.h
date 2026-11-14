@@ -113,6 +113,21 @@ static inline void eli_log_buffer_reset(void)
         eli_log_buffer[0] = '\0';
 }
 
+/**
+ * Release the capture buffer. Called from the context's widget shutdown hook so
+ * the buffer goes back to the allocator that produced it.
+ *
+ * Thread-safe: no
+ * Reentrant: no
+ */
+static inline void eli_log_shutdown(void)
+{
+    eli_mem_free(eli_log_buffer);
+    eli_log_buffer = NULL;
+    eli_log_buffer_len = 0;
+    eli_log_buffer_capacity = 0;
+}
+
 /** Begin a capture session targeting `target` at `auto_open_depth`. */
 static inline void eli_log_begin(eli_log_target target, int auto_open_depth)
 {

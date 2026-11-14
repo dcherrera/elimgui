@@ -8,7 +8,7 @@
  *
  * This is the foundation the shape/path helpers build on. Everything here is
  * renderer-agnostic and allocation-explicit: buffers grow geometrically via the
- * libc seam and are released by eli_draw_list_clear.
+ * eli_mem allocator seam and are released by eli_draw_list_clear.
  *
  * @status Phase 2 draw-list core in use.
  * @issues None

@@ -9,7 +9,7 @@
  * Mirrors Dear ImGui's ImGuiStorage: pairs are held in a single array kept
  * sorted by key, so lookups are O(log n) binary search and inserts shift the
  * tail. Values share a union (int/float/void*); bool is stored as int 0/1.
- * Memory grows geometrically via the libc seam and is released by
+ * Memory grows geometrically through the eli_mem allocator seam and is released by
  * eli_storage_clear.
  *
  * @status Phase 5 state storage in use.
@@ -80,7 +80,8 @@ static inline bool eli_storage_reserve(eli_storage *st, int needed)
     if (new_cap < needed)
         new_cap = needed;
     eli_storage_pair *grown =
-        (eli_storage_pair *)realloc(st->data, (size_t)new_cap * sizeof(*grown));
+        (eli_storage_pair *)eli_mem_realloc(st->data, (size_t)st->capacity * sizeof(*grown),
+                                            (size_t)new_cap * sizeof(*grown));
     if (grown == NULL)
         return false;
     st->data = grown;
@@ -124,7 +125,7 @@ static inline void eli_storage_clear(eli_storage *st)
 {
     if (st == NULL)
         return;
-    free(st->data);
+    eli_mem_free(st->data);
     st->data = NULL;
     st->size = 0;
     st->capacity = 0;

@@ -40,7 +40,8 @@ static inline void **eli_window_grow_ptr_array(void **data, int *capacity, int n
     int cap = (*capacity > 0) ? *capacity : 8;
     while (cap < need)
         cap += cap / 2 + 1;
-    void **grown = (void **)realloc(data, (size_t)cap * sizeof(void *));
+    void **grown = (void **)eli_mem_realloc(data, (size_t)*capacity * sizeof(*data),
+                                            (size_t)cap * sizeof(*data));
     if (grown != NULL)
         *capacity = cap;
     return (grown != NULL) ? grown : data;
@@ -72,28 +73,28 @@ static inline void eli_window_shutdown_context(eli_context *ctx)
         if (win == NULL)
             continue;
         eli_draw_list_clear(&win->draw_list);
-        free(win->name);
-        free(win);
+        eli_mem_free(win->name);
+        eli_mem_free(win);
     }
-    free(ctx->windows);
+    eli_mem_free(ctx->windows);
     ctx->windows = NULL;
     ctx->windows_count = 0;
     ctx->windows_capacity = 0;
 
-    free(ctx->windows_focus_order);
+    eli_mem_free(ctx->windows_focus_order);
     ctx->windows_focus_order = NULL;
     ctx->windows_focus_order_count = 0;
     ctx->windows_focus_order_capacity = 0;
 
-    free(ctx->render_draw_lists);
+    eli_mem_free(ctx->render_draw_lists);
     ctx->render_draw_lists = NULL;
     ctx->render_draw_lists_count = 0;
     ctx->render_draw_lists_capacity = 0;
 
-    free(ctx->next_window_data);
+    eli_mem_free(ctx->next_window_data);
     ctx->next_window_data = NULL;
 
-    free(ctx->draw_data);
+    eli_mem_free(ctx->draw_data);
     ctx->draw_data = NULL;
 }
 
@@ -114,7 +115,7 @@ static inline eli_next_window_data *eli_get_next_window_data(eli_context *ctx)
     if (ctx->window_shutdown_fn == NULL)
         ctx->window_shutdown_fn = eli_window_shutdown_context;
     if (ctx->next_window_data == NULL)
-        ctx->next_window_data = (eli_next_window_data *)calloc(1, sizeof(*ctx->next_window_data));
+        ctx->next_window_data = (eli_next_window_data *)eli_mem_calloc(1, sizeof(*ctx->next_window_data));
     return ctx->next_window_data;
 }
 
@@ -172,14 +173,14 @@ static inline eli_window *eli_window_get_or_create(eli_context *ctx, const char 
     if (win != NULL)
         return win;
 
-    win = (eli_window *)calloc(1, sizeof(*win));
+    win = (eli_window *)eli_mem_calloc(1, sizeof(*win));
     if (win == NULL)
         return NULL;
 
     size_t name_len = strlen(name);
-    win->name = (char *)malloc(name_len + 1);
+    win->name = (char *)eli_mem_alloc(name_len + 1);
     if (win->name == NULL) {
-        free(win);
+        eli_mem_free(win);
         return NULL;
     }
     memcpy(win->name, name, name_len + 1);

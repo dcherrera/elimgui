@@ -329,7 +329,7 @@ static inline void eli_style_set_defaults(eli_style *style)
  */
 static inline eli_context *eli_create_context(void)
 {
-    eli_context *ctx = (eli_context *)calloc(1, sizeof(*ctx));
+    eli_context *ctx = (eli_context *)eli_mem_calloc(1, sizeof(*ctx));
     if (!ctx)
         return NULL;
 
@@ -405,7 +405,7 @@ static inline void eli_destroy_context(eli_context *ctx)
     eli_mem_free(ctx->io.input_events);
     eli_mem_free(ctx->io.input_queue_characters);
 
-    free(ctx);
+    eli_mem_free(ctx);
 }
 
 /**

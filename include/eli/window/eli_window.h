@@ -611,6 +611,8 @@ static inline void eli_window_render(void)
         return;
 
     ctx->render_draw_lists_count = 0;
+    if (ctx->window_shutdown_fn == NULL)
+        ctx->window_shutdown_fn = eli_window_shutdown_context; /* owns draw_data + render list */
 
     /* Background draw list (Phase 27 util) renders behind every window. Included
      * only when it holds geometry; owned by the util phase via the context. */
@@ -635,7 +637,7 @@ static inline void eli_window_render(void)
         eli_window_push_render_draw_list(ctx, ctx->foreground_draw_list);
 
     if (ctx->draw_data == NULL)
-        ctx->draw_data = (eli_draw_data *)calloc(1, sizeof(*ctx->draw_data));
+        ctx->draw_data = (eli_draw_data *)eli_mem_calloc(1, sizeof(*ctx->draw_data));
     eli_draw_data *dd = ctx->draw_data;
     if (dd == NULL)
         return;
