@@ -251,6 +251,7 @@ ELI_TEST(text_wrapped_geometry_matches_reference) {
     /* Expected: each reference line drawn unwrapped, one text line height apart. */
     eli_draw_list want;
     eli_draw_list_init(&want, ELI_DRAW_LIST_NONE);
+    want.tex_uv_white_pixel = dl->tex_uv_white_pixel; /* non-glyph shapes (tofu) sample it */
     float y = g_wrap_pos.y, max_w = 0.0f;
     for (int i = 0; i < n; i++) {
         if (ref[i].end > ref[i].start)
