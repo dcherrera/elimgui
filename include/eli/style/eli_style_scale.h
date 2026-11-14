@@ -44,6 +44,7 @@ static inline void eli_style_scale_all_sizes(eli_style *style, float scale_facto
     style->window_padding = eli_style__scale_vec2(style->window_padding, s);
     style->window_rounding *= s;
     style->window_min_size = eli_style__scale_vec2(style->window_min_size, s);
+    style->close_button_size *= s;
     style->child_rounding *= s;
     style->popup_rounding *= s;
     style->frame_padding = eli_style__scale_vec2(style->frame_padding, s);
