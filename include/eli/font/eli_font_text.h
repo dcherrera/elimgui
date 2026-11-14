@@ -11,7 +11,7 @@
  * and the get_font accessors). Text is UTF-8 decoded; whitespace glyphs advance
  * the pen without emitting geometry.
  *
- * @status Phase 3 text + font stack in use.
+ * @status Phase 3 text + font stack; page switching, tofu, custom glyphs.
  * @issues None
  * @todo None
  */
@@ -246,21 +246,79 @@ static inline eli_vec2 eli_font_calc_text_size_wrapped(const eli_font *font, flo
  * Text rendering
  * ------------------------------------------------------------------------- */
 
-/**
- * Emit glyph quads for one run of text starting at `pos`; '\n' returns the pen to
- * pos.x one line down. Capacity must already be reserved (one quad per byte); the
- * caller charges the returned index count to the current command.
- *
- * @return Number of indices written.
- */
-static inline int eli_font__emit_glyph_run(eli_draw_list *list, const eli_font *font, float scale,
-                                           float line_h, eli_vec2 pos, eli_col32 col,
-                                           const char *text_begin, const char *text_end,
-                                           const eli_vec4 *cpu_fine_clip_rect)
+/** Run state for eli_draw_list_add_text_ex while it switches page textures. */
+typedef struct eli_font__text_run {
+    eli_draw_list *list;
+    int idx_pending;     /* indices written but not yet charged to the command */
+    bool pushed;         /* a page texture was pushed onto the list's stack */
+} eli_font__text_run;
+
+/** Charge the run's pending indices to the current command. */
+static inline void eli_font__text_flush(eli_font__text_run *run)
 {
+    eli_draw_list_prim_add_idx_to_cmd(run->list, run->idx_pending);
+    run->idx_pending = 0;
+}
+
+/** Make `tex` the list's current texture for the rest of the run. */
+static inline void eli_font__text_set_texture(eli_font__text_run *run, eli_texture_id tex)
+{
+    eli_draw_list *list = run->list;
+    eli_font__text_flush(run);
+    if (!run->pushed) {
+        eli_draw_list_push_texture_id(list, tex);
+        run->pushed = list->cmd_texture_id == tex;
+        return;
+    }
+    list->texture_stack[list->texture_stack_count - 1] = tex;
+    list->cmd_texture_id = tex;
+    eli_draw_list_on_changed_texture(list);
+}
+
+/** Draw the missing-glyph box in a cell: an outline inset like a terminal tofu. */
+static inline void eli_font__draw_tofu(eli_draw_list *list, eli_vec2 a, eli_vec2 b, float scale,
+                                       eli_col32 col)
+{
+    float w = b.x - a.x, h = b.y - a.y;
+    float ix = w * 0.12f > 1.0f ? w * 0.12f : 1.0f, iy = h * 0.15f;
+    float t = scale > 1.0f ? scale : 1.0f;
+    eli_draw_list_add_rect(list, eli_make_vec2(a.x + ix, a.y + iy),
+                           eli_make_vec2(b.x - ix, b.y - iy), col, 0.0f, 0, t);
+}
+
+/** Draw a tofu/custom glyph in its cell; false when the run's reserve failed after. */
+static inline bool eli_font__text_draw_special(eli_font__text_run *run, const eli_font *font,
+                                               const eli_font_glyph *g, eli_vec2 a, eli_vec2 b,
+                                               float scale, eli_col32 col, int bytes_left)
+{
+    eli_font__text_flush(run);
+    if (g->kind == ELI_FONT_GLYPH_TOFU)
+        eli_font__draw_tofu(run->list, a, b, scale, col);
+    else if (font->custom_glyph_fn)
+        font->custom_glyph_fn(run->list, font, g->codepoint, a, b, col,
+                              font->custom_glyph_user_data);
+    /* The shape used its own reserve; reserve again for the rest of the run. */
+    return eli_draw_list_prim_reserve_capacity(run->list, bytes_left * 6, bytes_left * 4);
+}
+
+/**
+ * Emit glyphs for one run of text starting at `pos`; '\n' returns the pen to pos.x
+ * one line down. Switches page textures through `run` and re-reserves after a
+ * tofu/custom glyph for the bytes left up to `reserve_end` (the end of the whole
+ * add_text_ex text, so later wrapped lines stay covered).
+ *
+ * @return false when a re-reserve failed and the caller must stop.
+ */
+static inline bool eli_font__emit_glyph_run(eli_font__text_run *run, const eli_font *font,
+                                            float scale, float line_h, eli_vec2 pos,
+                                            eli_col32 col, const char *text_begin,
+                                            const char *text_end, const char *reserve_end,
+                                            const eli_vec4 *cpu_fine_clip_rect)
+{
+    eli_draw_list *list = run->list;
+    const eli_font_atlas *atlas = font->container_atlas;
     float x = pos.x;
     float y = pos.y;
-    int idx_written = 0;
 
     const char *s = text_begin;
     while (s < text_end) {
@@ -276,35 +334,45 @@ static inline int eli_font__emit_glyph_run(eli_draw_list *list, const eli_font *
         const eli_font_glyph *g = eli_font_find_glyph(font, cp);
         if (!g)
             continue;
-        if (g->visible) {
-            float x0 = x + g->x0 * scale;
-            float y0 = y + g->y0 * scale;
-            float x1 = x + g->x1 * scale;
-            float y1 = y + g->y1 * scale;
-            bool skip = false;
-            if (cpu_fine_clip_rect) {
-                const eli_vec4 *c = cpu_fine_clip_rect;
-                if (x1 < c->x || x0 > c->z || y1 < c->y || y0 > c->w)
-                    skip = true;
-            }
-            if (!skip) {
+        float adv = g->advance_x * scale;
+        if (g->visible || g->kind != ELI_FONT_GLYPH_ATLAS) {
+            bool special = g->kind != ELI_FONT_GLYPH_ATLAS;
+            float x0 = special ? x : x + g->x0 * scale;
+            float y0 = special ? y : y + g->y0 * scale;
+            float x1 = special ? x + adv : x + g->x1 * scale;
+            float y1 = special ? y + line_h : y + g->y1 * scale;
+            const eli_vec4 *c = cpu_fine_clip_rect;
+            bool skip = c && (x1 < c->x || x0 > c->z || y1 < c->y || y0 > c->w);
+            if (!skip && special) {
+                if (!eli_font__text_draw_special(run, font, g, eli_make_vec2(x0, y0),
+                                                 eli_make_vec2(x1, y1), scale, col,
+                                                 (int)(reserve_end - s)))
+                    return false;
+            } else if (!skip) {
+                eli_texture_id tex = atlas && g->page < atlas->pages_count
+                                         ? atlas->pages[g->page].tex_id
+                                         : list->cmd_texture_id;
+                if (tex != list->cmd_texture_id)
+                    eli_font__text_set_texture(run, tex);
                 eli_draw_list_prim_rect_uv(list, eli_make_vec2(x0, y0), eli_make_vec2(x1, y1),
                                            eli_make_vec2(g->u0, g->v0), eli_make_vec2(g->u1, g->v1),
                                            col);
-                idx_written += 6;
+                run->idx_pending += 6;
             }
         }
-        x += g->advance_x * scale;
+        x += adv;
     }
-    return idx_written;
+    return true;
 }
 
 /**
- * Append a UTF-8 string's glyph quads to a draw list. The caller is responsible
- * for having the font atlas texture bound on the draw list.
+ * Append a UTF-8 string's glyphs to a draw list. Glyph quads sample the glyph's
+ * atlas page: when it is not the list's current texture the run switches to it
+ * (and restores the previous texture at the end). Missing glyphs draw the tofu
+ * box; custom glyphs call the font's custom_glyph_fn with their cell.
  *
  * @param list       Target draw list.
- * @param font       Baked font (no-op if NULL).
+ * @param font       Font (no-op if NULL).
  * @param font_size  Rendering size in pixels.
  * @param pos        Top-left pen position of the first line.
  * @param col        Text color (transparent is a no-op).
@@ -340,19 +408,20 @@ static inline void eli_draw_list_add_text_ex(eli_draw_list *list, const eli_font
     int byte_count = (int)(text_end - text_begin);
     if (!eli_draw_list_prim_reserve_capacity(list, byte_count * 6, byte_count * 4))
         return;
+    eli_font__text_run run = { list, 0, false };
 
-    int idx_written = 0;
     if (wrap_width <= 0.0f) {
-        idx_written = eli_font__emit_glyph_run(list, font, scale, line_h, pos, col, text_begin,
-                                               text_end, cpu_fine_clip_rect);
+        eli_font__emit_glyph_run(&run, font, scale, line_h, pos, col, text_begin, text_end,
+                                 text_end, cpu_fine_clip_rect);
     } else {
         eli_vec2 line_pos = pos;
         for (const char *line = text_begin;;) {
             float line_w;
             const char *line_end = eli_font_calc_word_wrap_line(font, font_size, line, text_end,
                                                                 wrap_width, &line_w);
-            idx_written += eli_font__emit_glyph_run(list, font, scale, line_h, line_pos, col, line,
-                                                    line_end, cpu_fine_clip_rect);
+            if (!eli_font__emit_glyph_run(&run, font, scale, line_h, line_pos, col, line,
+                                          line_end, text_end, cpu_fine_clip_rect))
+                break;
             if (line_end == text_end)
                 break;
             line = line_end + 1;
@@ -361,7 +430,9 @@ static inline void eli_draw_list_add_text_ex(eli_draw_list *list, const eli_font
     }
 
     /* Charge exactly the emitted indices to the current command. */
-    eli_draw_list_prim_add_idx_to_cmd(list, idx_written);
+    eli_font__text_flush(&run);
+    if (run.pushed)
+        eli_draw_list_pop_texture_id(list);
 }
 
 /**

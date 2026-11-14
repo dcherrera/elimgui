@@ -19,13 +19,20 @@ the same code compiles for wasm32 and for native host tests).
 | Data types | `eli_font_types.h` | `eli_font`, `eli_font_atlas`, `eli_font_config`, `eli_font_glyph` |
 | Embedded font | `eli_font_proggy.h` | ProggyClean blob + `eli_font_stb_decompress` |
 | Glyph ranges | `eli_font_glyph_ranges.h` | `eli_font_atlas_get_glyph_ranges_*` |
+| stb seam | `eli_font_stb.h` | stb_truetype / stb_rect_pack implementation + libc hooks |
+| Glyph table | `eli_font_glyph_table.h` | `eli_font_find_glyph[_no_fallback]`, fallback/tofu, custom glyphs |
+| Pages | `eli_font_atlas_pages.h` | `eli_font_atlas_set_backend`, `eli_font_atlas_update`, LRU/idle pages |
+| On-demand | `eli_font_atlas_on_demand.h` | per-source faces, merge-mode composition, lazy glyph load |
 | Atlas build | `eli_font_atlas.h` | `eli_font_atlas_add_font_*`, `eli_font_atlas_build`, tex-data getters |
 | Text + stack | `eli_font_text.h` | `eli_draw_list_add_text[_ex]`, `eli_calc_text_size`, `eli_push_font` |
 
-A `eli_font_atlas` owns a single-channel (alpha8) texture and the fonts baked
-into it. A `eli_font` owns a flat `eli_font_glyph` array plus a codepoint→glyph
-lookup. Glyphs store the pen-relative corner offsets (`x0..y1`, top-left origin)
-and atlas UVs (`u0..v1`) needed to build a text quad, plus `advance_x`.
+A `eli_font_atlas` owns single-channel (alpha8) texture **pages** and the fonts
+baked into them; a baked atlas has one page (the whole texture, mirrored in the
+`tex_*` fields). A `eli_font` owns a flat `eli_font_glyph` array plus a two-level
+codepoint→glyph lookup (256-codepoint blocks, allocated on use). Glyphs store the
+pen-relative corner offsets (`x0..y1`, top-left origin), their `page` and UVs
+(`u0..v1`) needed to build a text quad, plus `advance_x` and a `kind` (atlas
+quad, tofu box, or custom).
 
 ## Building an atlas
 
@@ -78,6 +85,70 @@ selects the default Latin range), glyph offset/advance clamps, and pixel
 snapping. Pass `NULL` for the config to accept defaults (13px, 1× oversample,
 horizontal snap on).
 
+### On-demand glyphs and pages
+
+Set `ELI_FONT_ATLAS_ON_DEMAND` before building to skip the up-front bake: build only
+opens the faces, fills font metrics and creates page 0 (with the white block). A
+glyph is rasterized on its first lookup into a `page_size`-square page (default
+512, 256 KB), so memory follows what is drawn, not how many faces and ranges are
+loaded. Font data must stay alive for the atlas's lifetime. `glyph_ranges` then
+limits which codepoints a source may supply (`NULL` = any it has).
+
+```c
+atlas->flags |= ELI_FONT_ATLAS_ON_DEMAND;      /* page_size, max_pages, page_idle_frames: 0 = defaults */
+eli_font *font = eli_font_atlas_add_font_from_memory_ttf(atlas, ttf, size, 13.0f, NULL, NULL);
+eli_font_atlas_build(atlas);                    /* fast: no rasterization */
+eli_font_atlas_set_backend(atlas, &hooks);      /* create/update/destroy page textures */
+/* each rendered frame, before drawing: */
+eli_font_atlas_update(atlas);                   /* upload new glyphs, free idle pages */
+```
+
+- Every page has the white block at the same texels, so solid fills work with any
+  page bound. Text switches the draw list's texture when a glyph's page differs and
+  restores it after the run.
+- When a glyph fits no page and `max_pages` (default 8) are live, the least
+  recently used page not used this frame (never page 0) is cleared and reused; its
+  glyphs reload on next use. If every page was used this frame, one more is
+  allocated (a soft cap bounded by the frame's working set).
+- `eli_font_atlas_update` frees pages (other than page 0) unused for
+  `page_idle_frames` (default 600) and advances the frame clock LRU uses. Without
+  it, pages are never recycled or freed.
+- A lookup may grow the glyph array: a glyph pointer stays valid only until the
+  next lookup of a codepoint not yet loaded.
+- `eli_font_atlas_release_cpu_pixels` is a no-op on an on-demand atlas.
+- `eli_font_atlas_texture_bytes` / `eli_font_atlas_live_page_count` report what
+  the pages hold.
+
+Backend hooks (`eli_font_atlas_backend`) receive coverage bytes; the SDL3 backend
+installs them in `eli_sdl3_renderer_create_fonts_texture` (INDEX8 pages, see
+native-backends.md). A baked atlas with hooks also gets its page texture from them.
+
+### Fallback chains (merge mode)
+
+`eli_font_config.merge_mode` adds a source to the previously added font as a
+fallback: it supplies only codepoints the earlier sources lack, aligned to that
+font's baseline (baked atlases skip the duplicates entirely). With
+`merge_match_advance`, each merged glyph takes the font's cell advance
+(`cell_advance_x`, its `'M'`), centred and shrunk about its centre when wider, so
+a borrowed symbol never shifts monospace columns.
+
+```c
+eli_font *term = eli_font_atlas_add_font_from_memory_ttf(atlas, mono, mono_size, 12.0f, NULL, ranges);
+eli_font_config fb = eli_font_config_default();
+fb.merge_mode = true;
+fb.merge_match_advance = true;
+eli_font_atlas_add_font_from_memory_ttf(atlas, symbols, symbols_size, 12.0f, &fb, symbol_ranges);
+```
+
+### Missing glyphs and custom glyphs
+
+A codepoint no source has draws a **tofu box** (an outline inset in a cell as wide
+as `'?'`, so layouts measured with the old `'?'` fallback do not move), not `'?'`. `eli_font_set_fallback_char(font, '?')` restores a glyph
+fallback. `eli_font_add_custom_glyph_range(font, lo, hi, advance)` with
+`eli_font_set_custom_glyph_fn(font, fn, user)` draws those codepoints through a
+callback instead of any face (box drawing, spinners, icons): it gets the draw list
+and the glyph's cell (advance wide, one line tall). Ranges survive rebuilds.
+
 ### HiDPI: rasterizer density
 
 `eli_font_config.rasterizer_density` (default 1; `<= 0` means 1) bakes glyphs at
@@ -115,7 +186,7 @@ completeness over atlas size).
 /* Measure with an explicit font/size. */
 eli_vec2 size = eli_font_calc_text_size(font, font->font_size, "Hello", NULL);
 
-/* Draw with an explicit font/size (caller binds the atlas texture). */
+/* Draw with an explicit font/size (page 0 bound; other pages switch per glyph). */
 eli_draw_list_add_text_ex(draw_list, font, font->font_size,
                           eli_make_vec2(x, y), ELI_COL32_WHITE,
                           "Hello", NULL, 0.0f, NULL);
@@ -125,7 +196,8 @@ eli_draw_list_add_text_ex(draw_list, font, font->font_size,
 - Width is the widest line; height is `line_count * line_height`
   (`line_height == font_size`). `'\n'` starts a new line.
 - Whitespace glyphs advance the pen but emit no geometry, so `add_text` emits
-  exactly `4` vertices and `6` indices per **visible** glyph.
+  exactly `4` vertices and `6` indices per **visible** atlas glyph (tofu and custom
+  glyphs add their own shapes).
 - The optional `cpu_fine_clip_rect` (`min.x, min.y, max.x, max.y`) skips glyphs
   that fall fully outside it.
 
@@ -177,8 +249,8 @@ Native unit tests build with `-DELI_TEST_HOSTED` (host libc) and also need
 
 ## Notes / gotchas
 
-- `add_text[_ex]` does **not** manage the draw list's texture stack; the caller
-  is expected to have the font atlas texture bound (matches Dear ImGui).
+- `add_text[_ex]` expects page 0 bound (windows push `atlas->tex_id`); glyphs on
+  other pages switch the texture for their quads and restore it after the run.
 - The embedded ProggyClean blob (`eli_font_proggy.h`) is the big-data exception
   to the per-file size guideline. Its `eli_font_stb_decompress` also expands any
   stb-compressed TTF passed to `add_font_from_memory_compressed_ttf`.

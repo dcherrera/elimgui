@@ -24,6 +24,10 @@
 #include "eli_font_types.h"
 #include "eli_font_proggy.h"
 #include "eli_font_glyph_ranges.h"
+#include "eli_font_stb.h"
+#include "eli_font_glyph_table.h"
+#include "eli_font_atlas_pages.h"
+#include "eli_font_atlas_on_demand.h"
 #include "eli_font_atlas.h"
 #include "eli_font_text.h"
 
