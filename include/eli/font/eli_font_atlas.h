@@ -65,7 +65,7 @@ static inline void eli_font_atlas_init(eli_font_atlas *atlas)
 /** Allocate and initialize a heap atlas; NULL on allocation failure. */
 static inline eli_font_atlas *eli_font_atlas_create(void)
 {
-    eli_font_atlas *atlas = (eli_font_atlas *)calloc(1, sizeof(*atlas));
+    eli_font_atlas *atlas = (eli_font_atlas *)eli_font__calloc(1, sizeof(*atlas));
     if (atlas)
         eli_font_atlas_init(atlas);
     return atlas;
@@ -82,7 +82,7 @@ static inline void eli_font_atlas_clear_tex_data(eli_font_atlas *atlas)
     eli_texture_id legacy_id = atlas->tex_id;
     eli_font__pages_free_all(atlas);
     atlas->tex_id = atlas->backend.create_texture ? 0 : legacy_id; /* app-set id survives */
-    free(atlas->tex_pixels_rgba32);
+    eli_mem_free(atlas->tex_pixels_rgba32);
     atlas->tex_pixels_rgba32 = NULL;
     eli_font__sources_free(atlas);
     atlas->built = false;
@@ -104,10 +104,10 @@ static inline void eli_font_atlas_release_cpu_pixels(eli_font_atlas *atlas)
     if (!atlas || eli_font__on_demand(atlas))
         return;
     for (int i = 0; i < atlas->pages_count; i++) {
-        free(atlas->pages[i].pixels);
+        eli_mem_free(atlas->pages[i].pixels);
         atlas->pages[i].pixels = NULL;
     }
-    free(atlas->tex_pixels_rgba32);
+    eli_mem_free(atlas->tex_pixels_rgba32);
     atlas->tex_pixels_rgba32 = NULL;
     eli_font__sync_page0(atlas);
 }
@@ -120,7 +120,7 @@ static inline void eli_font_atlas_clear_input_data(eli_font_atlas *atlas)
     eli_font__sources_free(atlas); /* they point into the font data */
     for (int i = 0; i < atlas->configs_count; i++) {
         if (atlas->configs[i].font_data_owned_by_atlas) {
-            free(atlas->configs[i].font_data);
+            eli_mem_free(atlas->configs[i].font_data);
             atlas->configs[i].font_data = NULL;
             atlas->configs[i].font_data_owned_by_atlas = false;
         }
@@ -134,10 +134,10 @@ static inline void eli_font_atlas_clear_fonts(eli_font_atlas *atlas)
         return;
     for (int i = 0; i < atlas->fonts_count; i++) {
         eli_font__reset(atlas->fonts[i]);
-        free(atlas->fonts[i]->custom_ranges);
-        free(atlas->fonts[i]);
+        eli_mem_free(atlas->fonts[i]->custom_ranges);
+        eli_mem_free(atlas->fonts[i]);
     }
-    free(atlas->fonts);
+    eli_mem_free(atlas->fonts);
     atlas->fonts = NULL;
     atlas->fonts_count = 0;
     atlas->fonts_capacity = 0;
@@ -151,7 +151,7 @@ static inline void eli_font_atlas_clear(eli_font_atlas *atlas)
     eli_font_atlas_clear_tex_data(atlas);
     eli_font_atlas_clear_input_data(atlas);
     eli_font_atlas_clear_fonts(atlas);
-    free(atlas->configs);
+    eli_mem_free(atlas->configs);
     atlas->configs = NULL;
     atlas->configs_count = 0;
     atlas->configs_capacity = 0;
@@ -164,7 +164,7 @@ static inline void eli_font_atlas_destroy(eli_font_atlas *atlas)
     if (!atlas)
         return;
     eli_font_atlas_clear(atlas);
-    free(atlas);
+    eli_mem_free(atlas);
 }
 
 /**
@@ -234,7 +234,7 @@ static inline eli_font *eli_font_atlas_add_font(eli_font_atlas *atlas, const eli
     atlas->fonts = fonts;
 
     eli_font *font = cfg->merge_mode ? atlas->fonts[atlas->fonts_count - 1]
-                                     : (eli_font *)calloc(1, sizeof(*font));
+                                     : (eli_font *)eli_font__calloc(1, sizeof(*font));
     if (!font)
         return NULL;
     if (!cfg->merge_mode) {
@@ -299,17 +299,17 @@ eli_font_atlas_add_font_from_memory_compressed_ttf(eli_font_atlas *atlas,
         return NULL;
     unsigned int size =
         eli_font_stb_decompress_length((const unsigned char *)compressed_font_data);
-    unsigned char *buf = (unsigned char *)malloc(size);
+    unsigned char *buf = (unsigned char *)eli_mem_alloc(size);
     if (!buf)
         return NULL;
     if (eli_font_stb_decompress(buf, (const unsigned char *)compressed_font_data) != size) {
-        free(buf);
+        eli_mem_free(buf);
         return NULL;
     }
     eli_font *font = eli_font_atlas_add_font_from_memory_ttf(atlas, buf, (int)size, size_pixels,
                                                              cfg, glyph_ranges);
     if (!font) {
-        free(buf);
+        eli_mem_free(buf);
         return NULL;
     }
     atlas->configs[atlas->configs_count - 1].font_data_owned_by_atlas = true;
@@ -430,13 +430,13 @@ static inline int eli_font__pick_width(const eli_font_atlas *atlas, const stbrp_
 static inline int eli_font__pack_baked(eli_font_atlas *atlas, eli_font__bake *b, int tex_w)
 {
     const int max_h = 1024 * 32;
-    stbrp_node *nodes = (stbrp_node *)calloc((size_t)tex_w, sizeof(*nodes));
+    stbrp_node *nodes = (stbrp_node *)eli_font__calloc((size_t)tex_w, sizeof(*nodes));
     if (!nodes)
         return 0;
     stbrp_context ctx;
     stbrp_init_target(&ctx, tex_w, max_h, nodes, tex_w);
     stbrp_pack_rects(&ctx, b->rects, b->count + 1);
-    free(nodes);
+    eli_mem_free(nodes);
     int tex_h = 0;
     for (int k = 0; k <= b->count; k++)
         if (b->rects[k].was_packed && b->rects[k].y + b->rects[k].h > tex_h)
@@ -501,9 +501,9 @@ static inline bool eli_font__build_baked(eli_font_atlas *atlas)
     bool ok = false;
     eli_font__bake b;
     memset(&b, 0, sizeof(b));
-    b.glyphs = (eli_font__build_glyph *)calloc((size_t)total_possible + 1, sizeof(*b.glyphs));
-    b.rects = (stbrp_rect *)calloc((size_t)total_possible + 1, sizeof(*b.rects));
-    b.seen = (unsigned char *)calloc((size_t)atlas->fonts_count, 8192);
+    b.glyphs = (eli_font__build_glyph *)eli_font__calloc((size_t)total_possible + 1, sizeof(*b.glyphs));
+    b.rects = (stbrp_rect *)eli_font__calloc((size_t)total_possible + 1, sizeof(*b.rects));
+    b.seen = (unsigned char *)eli_font__calloc((size_t)atlas->fonts_count, 8192);
     int slot = eli_font__page_alloc_slot(atlas);
     if (!b.glyphs || !b.rects || !b.seen || slot != 0)
         goto cleanup;
@@ -517,7 +517,7 @@ static inline bool eli_font__build_baked(eli_font_atlas *atlas)
     int tex_w = eli_font__pick_width(atlas, b.rects, b.count + 1);
     int tex_h = eli_font__pack_baked(atlas, &b, tex_w);
     eli_font_atlas_page *page = &atlas->pages[0];
-    page->pixels = tex_h > 0 ? (unsigned char *)calloc((size_t)tex_w * (size_t)tex_h, 1) : NULL;
+    page->pixels = tex_h > 0 ? (unsigned char *)eli_font__calloc((size_t)tex_w * (size_t)tex_h, 1) : NULL;
     if (!page->pixels)
         goto cleanup;
     page->width = tex_w;
@@ -529,9 +529,9 @@ static inline bool eli_font__build_baked(eli_font_atlas *atlas)
     ok = true;
 
 cleanup:
-    free(b.glyphs);
-    free(b.rects);
-    free(b.seen);
+    eli_mem_free(b.glyphs);
+    eli_mem_free(b.rects);
+    eli_mem_free(b.seen);
     return ok;
 }
 
@@ -639,7 +639,7 @@ static inline void eli_font_atlas_get_tex_data_as_rgba32(eli_font_atlas *atlas,
         eli_font_atlas_build(atlas);
     if (!atlas->tex_pixels_rgba32 && atlas->tex_pixels_alpha8) {
         size_t n = (size_t)atlas->tex_width * (size_t)atlas->tex_height;
-        atlas->tex_pixels_rgba32 = (unsigned int *)malloc(n * sizeof(unsigned int));
+        atlas->tex_pixels_rgba32 = (unsigned int *)eli_mem_alloc(n * sizeof(unsigned int));
         if (atlas->tex_pixels_rgba32) {
             for (size_t k = 0; k < n; k++) {
                 unsigned int a = atlas->tex_pixels_alpha8[k];

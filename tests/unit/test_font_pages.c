@@ -5,7 +5,8 @@
  * @brief Unit tests for on-demand glyphs and atlas pages: lazy rasterization
  *        (identical to the baked glyph), missing-codepoint caching, backend hooks
  *        and dirty uploads, LRU recycling, the soft cap, idle freeing, the
- *        two-level lookup, and text switching textures between pages.
+ *        two-level lookup, text switching textures between pages, and every
+ *        allocation going through the eli_mem seam.
  *
  * @status On-demand page coverage.
  * @issues None
@@ -287,6 +288,44 @@ ELI_TEST(release_cpu_pixels_is_a_no_op_on_demand) {
     ELI_ASSERT_NOT_NULL(atlas->tex_pixels_alpha8);
     ELI_ASSERT_NOT_NULL(eli_font_find_glyph_no_fallback(f, 'Q'));
     eli_font_atlas_destroy(atlas);
+}
+
+/* ---- allocation seam -------------------------------------------------------- */
+
+static int g_seam_live, g_seam_allocs;
+
+static void *seam_alloc(size_t sz, void *user)
+{
+    (void)user;
+    g_seam_live++;
+    g_seam_allocs++;
+    return malloc(sz);
+}
+
+static void seam_free(void *p, void *user)
+{
+    (void)user;
+    if (p)
+        g_seam_live--;
+    free(p);
+}
+
+ELI_TEST(on_demand_atlas_allocates_through_the_seam_and_frees_everything) {
+    g_seam_live = g_seam_allocs = 0;
+    eli_set_allocator_functions(seam_alloc, seam_free, NULL);
+    eli_font *f;
+    eli_font_atlas *atlas = on_demand_atlas(52.0f, 64, 2, &f);
+    ELI_ASSERT_TRUE(eli_font_atlas_build(atlas));
+    for (uint32_t cp = '!'; cp < 0x7F; cp++) { /* fills, recycles and frees pages */
+        eli_font_find_glyph(f, cp);
+        eli_font_atlas_update(atlas);
+    }
+    ELI_ASSERT_TRUE(eli_font_add_custom_glyph_range(f, 0x2800, 0x28FF, 0.0f));
+    ELI_ASSERT_TRUE(eli_font_atlas_build(atlas)); /* a rebuild frees the old pages */
+    eli_font_atlas_destroy(atlas);
+    eli_set_allocator_functions(NULL, NULL, NULL);
+    ELI_ASSERT_GT(g_seam_allocs, 10);
+    ELI_ASSERT_EQ(g_seam_live, 0);
 }
 
 ELI_TEST_MAIN()

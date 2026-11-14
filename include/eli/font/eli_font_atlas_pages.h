@@ -150,8 +150,8 @@ static inline void eli_font__page_free(eli_font_atlas *atlas, int idx)
 {
     eli_font_atlas_page *p = &atlas->pages[idx];
     eli_font__page_destroy_texture(atlas, p);
-    free(p->pixels);
-    free(p->packer);
+    eli_mem_free(p->pixels);
+    eli_mem_free(p->packer);
     memset(p, 0, sizeof(*p));
 }
 
@@ -160,7 +160,7 @@ static inline void eli_font__pages_free_all(eli_font_atlas *atlas)
 {
     for (int i = 0; i < atlas->pages_count; i++)
         eli_font__page_free(atlas, i);
-    free(atlas->pages);
+    eli_mem_free(atlas->pages);
     atlas->pages = NULL;
     atlas->pages_count = 0;
     atlas->pages_capacity = 0;
@@ -232,8 +232,8 @@ static inline int eli_font__page_new_on_demand(eli_font_atlas *atlas)
         return -1;
     int size = eli_font__page_size(atlas);
     eli_font_atlas_page *p = &atlas->pages[idx];
-    p->pixels = (unsigned char *)malloc((size_t)size * (size_t)size);
-    p->packer = malloc(sizeof(eli_font__page_packer) + (size_t)size * sizeof(stbrp_node));
+    p->pixels = (unsigned char *)eli_mem_alloc((size_t)size * (size_t)size);
+    p->packer = eli_mem_alloc(sizeof(eli_font__page_packer) + (size_t)size * sizeof(stbrp_node));
     p->width = size;
     p->height = size;
     p->live = true;

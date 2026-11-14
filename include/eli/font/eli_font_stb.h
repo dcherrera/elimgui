@@ -17,11 +17,12 @@
 #define ELI_FONT_ELI_FONT_STB_H
 
 #include "../core/eli_platform.h"
+#include "../util/eli_mem.h"
 
 /* Route stb's libc + math hooks through the seam headers (already included via
  * eli_platform.h). Defining these suppresses stb's own <stdlib.h>/<math.h>/etc. */
-#define STBTT_malloc(x, u) ((void)(u), malloc(x))
-#define STBTT_free(x, u)   ((void)(u), free(x))
+#define STBTT_malloc(x, u) ((void)(u), eli_mem_alloc(x))
+#define STBTT_free(x, u)   ((void)(u), eli_mem_free(x))
 #define STBTT_assert(x)    ((void)0)
 #define STBTT_strlen(x)    strlen(x)
 #define STBTT_memcpy       memcpy

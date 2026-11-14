@@ -72,7 +72,8 @@ so either can be replaced alone.
 | Header | Role |
 |---|---|
 | `sdl3/eli_sdl3_platform.h` | SDL events -> `eli_io`; cursor, clipboard, open URL, mouse warp; display size / density / delta time; `eli_sdl3_wait_timeout_ms` |
-| `sdl3/eli_sdl3_renderer.h` | `eli_draw_data` -> `SDL_RenderGeometryRaw`; RGBA and single-channel texture helpers; font-atlas pages |
+| `sdl3/eli_sdl3_renderer.h` | `eli_draw_data` -> `SDL_RenderGeometryRaw`; RGBA and single-channel texture helpers; font-atlas pages; present surface (vsync, drawable count, release while hidden) |
+| `sdl3/eli_sdl3_metal.h` | CAMetalLayer drawable count / size from C via the ObjC runtime (used by the renderer; Apple links libobjc) |
 | `sdl3/eli_sdl3_keymap.h` | SDL keycode/scancode -> `eli_key` (used by the platform header) |
 | `sdl3/eli_sdl3_quit_signals.h` | Optional: SIGINT/SIGTERM wake an idle loop with `SDL_EVENT_QUIT` (POSIX) |
 
@@ -85,6 +86,8 @@ bool eli_sdl3_platform_process_event(const SDL_Event *e); /* true = consumed (bu
 void eli_sdl3_platform_new_frame(void);   /* display size (points), fb scale (density), dt */
 void eli_sdl3_platform_end_frame(void);   /* cursor shape, mouse warp */
 int  eli_sdl3_wait_timeout_ms(void);      /* -1 wait, 0 poll, else ms (idle loop) */
+bool eli_sdl3_platform_window_unseen(void);              /* hidden, minimised or occluded */
+void eli_sdl3_platform_set_run_timers_while_hidden(bool); /* default false; call after init */
 ```
 
 - Mouse buttons SDL 1/3/2/X1/X2 -> eli 0/1/2/3/4; wheel `(-x, y)` like the web glue.
@@ -113,6 +116,12 @@ bool           eli_sdl3_texture_update_alpha8(eli_texture_id id, const SDL_Rect 
                                               const unsigned char *alpha8, int pitch);
 void           eli_sdl3_texture_destroy(eli_texture_id id);
 void           eli_sdl3_renderer_render_draw_data(const eli_draw_data *dd);
+
+/* present surface */
+bool eli_sdl3_renderer_init_ex(SDL_Renderer *r, const eli_sdl3_renderer_config *cfg);
+void eli_sdl3_renderer_process_event(const SDL_Event *e);  /* feed every event */
+bool eli_sdl3_renderer_surface_released(void);
+int  eli_sdl3_renderer_drawable_count(void);               /* 0 = not Metal */
 ```
 
 `render_draw_data` sets `SDL_SetRenderScale(framebuffer_scale)` itself (draw data and
@@ -131,6 +140,52 @@ destroying it frees them) and `render_draw_data` calls `eli_font_atlas_update` o
 current context's atlas before drawing, so on-demand pages upload new glyphs and free
 idle pages (font-system.md). `shutdown` releases the page textures and detaches the
 hooks, so destroy the atlas after it.
+
+### Present surface
+
+```c
+eli_sdl3_renderer_config cfg = {
+    .drawable_count = 0,                 /* Metal: 2 or 3; 0 keeps SDL's 3 */
+    .vsync = ELI_SDL3_VSYNC_ON,          /* KEEP (0), OFF, ON, ADAPTIVE */
+    .release_when_hidden = true,         /* hidden or minimised */
+    .release_when_occluded = true,       /* fully covered */
+};
+eli_sdl3_renderer_init_ex(renderer, &cfg);   /* refused options are logged, not fatal */
+```
+
+Each Metal drawable is one window-sized BGRA8 IOSurface (2560x1600 px = 15.6 MiB,
+3420x1944 px = 25.4 MiB). Release shrinks the layer's drawables to 1x1 px while the
+window cannot be seen; Core Animation frees the pool but keeps the surface on screen,
+so on show the last frame is displayed until the next present (no blank flash). A
+pixel-size change while released (SDL regrows the layer) is shrunk again.
+`render_draw_data` draws nothing while released. Non-Metal renderers: release and
+drawable count are no-ops; vsync applies everywhere.
+
+Timed redraws (caret blink, tooltip delay, key repeat, `eli_request_redraw_after`)
+pause while the window is unseen: `eli_sdl3_wait_timeout_ms` returns -1 instead of a
+deadline. Input and `eli_request_redraw()` still build frames; showing, restoring or
+exposing the window builds one and the timers resume. A hidden window that stands in
+for a visible one (tests) calls `eli_sdl3_platform_set_run_timers_while_hidden(true)`.
+
+Measured (macOS M4, SDL 3.4.10 Metal, 2560x1600 px, the example;
+`tests/probe/sdl3_swapchain_probe.sh`, footprint `IOSurface`, MiB):
+
+| Run | Visible | Hidden |
+|---|---|---|
+| default (3 drawables), vsync | 46.9-62.5 (3-4 surfaces) | same |
+| `--no-vsync` (pool fills) | 62.5 | 62.5 |
+| `--no-vsync --drawables 2` | 46.9 | 46.9 |
+| `--release-hidden` | 46.9-62.5 | 15.6 |
+| `--release-hidden --drawables 2 --no-vsync` | 46.9 | 15.6 |
+
+The surfaces are the drawables in the pool plus the one on screen. 2 drawables cap the
+pool at 2 but cost frame rate when rendering continuously: 600 vsync'd frames of the
+example took 5.0 s with 3 drawables (120 fps) and 6.8 s with 2 (88 fps). Keep 3 unless
+memory matters more than smooth continuous animation.
+
+`--swapchain-selftest` checks the drawable count and vsync, release/restore on hide/show
+and minimise/restore, nothing drawn while released, and timers paused while hidden.
+`tests/probe/red_proof_sdl3.sh` mutates a source line and confirms the selftest fails.
 
 ### DPI and fonts
 
@@ -185,6 +240,9 @@ ELI_SDL3_STATIC=1 ./build.sh sdl3-example
 examples/sdl3/build/elimgui_sdl3 [--frames N] [--screenshot out.bmp] [--font f.ttf]
                                  [--font-size PX] [--driver NAME] [--idle-report S]
                                  [--focus-input] [--skip-unchanged] [--hidden]
+                                 [--input-selftest] [--swapchain-selftest]
+                                 [--drawables 2|3] [--no-vsync] [--release-hidden]
+                                 [--hide-after S] [--warm-frames N]
                                  [--on-demand] [--atlas-selftest]
 ```
 
@@ -267,7 +325,9 @@ and reports frames built and process CPU (getrusage) over the last 30 s.
 | Run | Frames in 30 s | CPU (one core) |
 |---|---|---|
 | macOS M4, Metal, static UI (`--hidden`) | 0 | 0.006% |
-| macOS M4, Metal, Name field focused | 49 (caret blink, ~1.6/s) | 0.57% |
+| macOS M4, Metal, static UI, window visible | 0 | 0.010% |
+| macOS M4, Metal, Name field focused, window visible | 49 (caret blink, ~1.6/s) | 0.66% |
+| macOS M4, Metal, Name field focused, `--hidden` (timers paused) | 0 (was 49 before the pause) | 0.013% (was 0.79%) |
 | Linux x86-64, `offscreen` + software, static UI | 0 | 2.6% (*) |
 | Linux x86-64, `offscreen` + software, field focused | 49 | 21.6% (*) |
 

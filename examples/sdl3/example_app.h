@@ -5,9 +5,9 @@
  * @brief Shared declarations for the SDL3 desktop example's translation units.
  *
  * main.c (the ELI_IMPLEMENTATION TU: SDL, loop, fonts), shell.c (dockspace and
- * panes), perf_fixture.c (text-heavy window + frame overlay) and tasks.c (worker
- * thread + spinner) are separate TUs built with ELI_SHARED_STATE, proving one
- * elimgui context across files (D4).
+ * panes), perf_fixture.c (text-heavy window + frame overlay), tasks.c (worker
+ * thread + spinner) and the two selftests are separate TUs built with
+ * ELI_SHARED_STATE, proving one elimgui context across files (D4).
  *
  * @status In use.
  * @issues None
@@ -68,6 +68,20 @@ int example_shell_app_copy_count(void);
  * @return        Number of failed checks (0 = all passed).
  */
 int example_input_selftest(SDL_Window *window, void (*frame)(void));
+
+/**
+ * Check the present-surface controls through the real backend: Metal drawable count
+ * and vsync as configured (2, on), swapchain released (1x1 px, nothing drawn) while
+ * hidden and restored to the window's pixel size on show, timed redraws paused while
+ * hidden and resumed on show. (swapchain_selftest.c)
+ *
+ * @param window    The example window (starts visible).
+ * @param renderer  Its renderer, attached with drawable_count 2, vsync on,
+ *                  release_when_hidden.
+ * @param frame     Builds and renders one frame.
+ * @return          Number of failed checks (0 = all passed).
+ */
+int example_swapchain_selftest(SDL_Window *window, SDL_Renderer *renderer, void (*frame)(void));
 
 struct eli_font_atlas;
 

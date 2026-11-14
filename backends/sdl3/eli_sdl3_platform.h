@@ -46,6 +46,7 @@ typedef struct eli_sdl3_platform_state {
     char *clipboard_cache;                     /* last SDL_GetClipboardText, SDL_free'd */
     SDL_Cursor *cursors[ELI_MOUSE_CURSOR_COUNT];
     int last_cursor;                           /* last applied eli_mouse_cursor, -2 = none */
+    bool run_timers_while_hidden;              /* false: timed redraws wait until the window shows */
 } eli_sdl3_platform_state;
 
 ELI_GLOBAL(eli_sdl3_platform_state, g_eli_sdl3_platform, {0});
@@ -217,6 +218,9 @@ static inline bool eli_sdl3__process_window_event(const SDL_Event *e)
         eli_sdl3__release_all_input();
         return true;
     case SDL_EVENT_WINDOW_FOCUS_GAINED:
+    case SDL_EVENT_WINDOW_SHOWN:      /* shown again: paused timers resume with this frame */
+    case SDL_EVENT_WINDOW_RESTORED:
+    case SDL_EVENT_WINDOW_MAXIMIZED:
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
     case SDL_EVENT_WINDOW_RESIZED:
     case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
@@ -267,8 +271,32 @@ static inline bool eli_sdl3_platform_process_event(const SDL_Event *e)
     return consumed;
 }
 
+/** @return true while the window is hidden, minimised or fully covered. */
+static inline bool eli_sdl3_platform_window_unseen(void)
+{
+    SDL_Window *w = g_eli_sdl3_platform.window;
+    return w && (SDL_GetWindowFlags(w) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED));
+}
+
 /**
- * How long the app's loop may sleep, from eli_get_redraw_timeout().
+ * Choose whether timed redraws (caret blink, tooltip delay, key repeat, app
+ * animations via eli_request_redraw_after) keep running while the window is
+ * hidden, minimised or occluded. Default false: they pause and resume with the
+ * frame that showing the window builds. Input and eli_request_redraw() always
+ * build frames. Set true when a hidden window stands in for a visible one (tests).
+ * Call after eli_sdl3_platform_init (which resets it).
+ *
+ * Thread-safe: no  Reentrant: no
+ */
+static inline void eli_sdl3_platform_set_run_timers_while_hidden(bool run)
+{
+    g_eli_sdl3_platform.run_timers_while_hidden = run;
+}
+
+/**
+ * How long the app's loop may sleep, from eli_get_redraw_timeout(). A timed
+ * deadline is dropped (-1) while the window cannot be seen, unless
+ * eli_sdl3_platform_set_run_timers_while_hidden(true).
  *
  * @return -1 = wait for the next event (SDL_WaitEvent), 0 = poll and build a frame
  *         now, > 0 = SDL_WaitEventTimeout milliseconds (rounded up).
@@ -279,6 +307,8 @@ static inline int eli_sdl3_wait_timeout_ms(void)
 {
     float t = eli_get_redraw_timeout();
     if (t < 0.0f)
+        return -1;
+    if (t > 0.0f && !g_eli_sdl3_platform.run_timers_while_hidden && eli_sdl3_platform_window_unseen())
         return -1;
     float ms = ceilf(t * 1000.0f);
     return ms > 2147483647.0f ? 2147483647 : (int)ms;

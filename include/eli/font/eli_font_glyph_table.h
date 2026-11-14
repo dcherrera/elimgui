@@ -24,6 +24,7 @@
 
 #include "../core/eli_platform.h"
 #include "../core/eli_types.h"
+#include "../util/eli_mem.h"
 
 /** Largest Unicode codepoint the lookup accepts. */
 #define ELI_FONT_CODEPOINT_MAX 0x10FFFFu
@@ -31,6 +32,18 @@
 /* Defined in eli_font_atlas_on_demand.h: rasterize `codepoint` through the font's
  * source chain; returns its glyph index or ELI_FONT_LOOKUP_MISSING. */
 static inline int eli_font__load_glyph(eli_font *font, uint32_t codepoint);
+
+/** Allocate `count` zeroed elements of `size` bytes through the eli_mem seam (NULL on
+ *  overflow or failure). */
+static inline void *eli_font__calloc(size_t count, size_t size)
+{
+    if (count == 0 || size == 0 || count > (size_t)-1 / size)
+        return NULL;
+    void *p = eli_mem_alloc(count * size);
+    if (p)
+        memset(p, 0, count * size);
+    return p;
+}
 
 /** Grow a heap array to hold at least `need` elements; doubles capacity. */
 static inline void *eli_font__grow(void *ptr, int *cap, int need, size_t elem)
@@ -40,7 +53,7 @@ static inline void *eli_font__grow(void *ptr, int *cap, int need, size_t elem)
     int new_cap = (*cap > 0) ? (*cap * 2) : 8;
     if (new_cap < need)
         new_cap = need;
-    void *p = realloc(ptr, (size_t)new_cap * elem);
+    void *p = eli_mem_realloc(ptr, (size_t)*cap * elem, (size_t)new_cap * elem);
     if (p)
         *cap = new_cap;
     return p;
@@ -67,7 +80,9 @@ static inline bool eli_font__lookup_set(eli_font *font, uint32_t cp, int value)
     int b = (int)(cp / ELI_FONT_LOOKUP_BLOCK);
     if (b >= font->lookup_block_count) {
         int want = b + 1;
-        int **grown = (int **)realloc(font->lookup_blocks, (size_t)want * sizeof(*grown));
+        int **grown = (int **)eli_mem_realloc(font->lookup_blocks,
+                                              (size_t)font->lookup_block_count * sizeof(*grown),
+                                              (size_t)want * sizeof(*grown));
         if (!grown)
             return false;
         for (int k = font->lookup_block_count; k < want; k++)
@@ -76,7 +91,7 @@ static inline bool eli_font__lookup_set(eli_font *font, uint32_t cp, int value)
         font->lookup_block_count = want;
     }
     if (!font->lookup_blocks[b]) {
-        int *block = (int *)malloc(ELI_FONT_LOOKUP_BLOCK * sizeof(*block));
+        int *block = (int *)eli_mem_alloc(ELI_FONT_LOOKUP_BLOCK * sizeof(*block));
         if (!block)
             return false;
         for (int k = 0; k < ELI_FONT_LOOKUP_BLOCK; k++)
@@ -91,8 +106,8 @@ static inline bool eli_font__lookup_set(eli_font *font, uint32_t cp, int value)
 static inline void eli_font__lookup_free(eli_font *font)
 {
     for (int b = 0; b < font->lookup_block_count; b++)
-        free(font->lookup_blocks[b]);
-    free(font->lookup_blocks);
+        eli_mem_free(font->lookup_blocks[b]);
+    eli_mem_free(font->lookup_blocks);
     font->lookup_blocks = NULL;
     font->lookup_block_count = 0;
 }
@@ -117,7 +132,7 @@ static inline void eli_font__resolve_fallback(eli_font *font)
 /** Release a font's glyph array and lookup table, leaving it empty. */
 static inline void eli_font__reset(eli_font *font)
 {
-    free(font->glyphs);
+    eli_mem_free(font->glyphs);
     eli_font__lookup_free(font);
     font->glyphs = NULL;
     font->glyph_count = 0;
@@ -281,8 +296,9 @@ static inline bool eli_font_add_custom_glyph_range(eli_font *font, uint32_t lo, 
 {
     if (!font || lo > hi || hi > ELI_FONT_CODEPOINT_MAX)
         return false;
-    eli_font_custom_range *grown = (eli_font_custom_range *)realloc(
-        font->custom_ranges, (size_t)(font->custom_range_count + 1) * sizeof(*grown));
+    eli_font_custom_range *grown = (eli_font_custom_range *)eli_mem_realloc(
+        font->custom_ranges, (size_t)font->custom_range_count * sizeof(*grown),
+        (size_t)(font->custom_range_count + 1) * sizeof(*grown));
     if (!grown)
         return false;
     font->custom_ranges = grown;

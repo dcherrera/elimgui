@@ -50,7 +50,7 @@ static inline float eli_font__density(const eli_font_config *cfg)
 /** Free the per-config sources. */
 static inline void eli_font__sources_free(eli_font_atlas *atlas)
 {
-    free(atlas->sources);
+    eli_mem_free(atlas->sources);
     atlas->sources = NULL;
 }
 
@@ -58,7 +58,7 @@ static inline void eli_font__sources_free(eli_font_atlas *atlas)
 static inline bool eli_font__sources_init(eli_font_atlas *atlas)
 {
     eli_font__sources_free(atlas);
-    eli_font__source *src = (eli_font__source *)calloc((size_t)atlas->configs_count,
+    eli_font__source *src = (eli_font__source *)eli_font__calloc((size_t)atlas->configs_count,
                                                        sizeof(*src));
     if (!src)
         return false;
@@ -67,7 +67,7 @@ static inline bool eli_font__sources_init(eli_font_atlas *atlas)
         const unsigned char *data = (const unsigned char *)cfg->font_data;
         int off = stbtt_GetFontOffsetForIndex(data, cfg->font_no);
         if (off < 0 || !stbtt_InitFont(&src[i].info, data, off)) {
-            free(src);
+            eli_mem_free(src);
             return false;
         }
         src[i].scale = stbtt_ScaleForPixelHeight(&src[i].info,
