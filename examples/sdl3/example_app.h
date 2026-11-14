@@ -83,6 +83,17 @@ int example_input_selftest(SDL_Window *window, void (*frame)(void));
  */
 int example_swapchain_selftest(SDL_Window *window, SDL_Renderer *renderer, void (*frame)(void));
 
+struct eli_font_atlas;
+
+/**
+ * `--atlas-selftest`: check the font pages are INDEX8 and that a frame drawn with
+ * them matches the same frame drawn with RGBA32 copies (atlas_selftest.c).
+ * `frame` builds, renders and presents one frame.
+ *
+ * @return the number of failed checks
+ */
+int example_atlas_selftest(SDL_Renderer *r, struct eli_font_atlas *atlas, void (*frame)(void));
+
 /** SDL user event type that worker threads push to wake the loop (tasks.c). */
 extern uint32_t g_example_wake_event;
 

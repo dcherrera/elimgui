@@ -12,7 +12,7 @@
  * Usage: elimgui_sdl3 [--frames N] [--screenshot out.bmp] [--font file.ttf]
  *                     [--font-size PX] [--driver NAME] [--idle-report SECONDS]
  *                     [--focus-input] [--skip-unchanged] [--drawables 2|3] [--no-vsync]
- *                     [--release-hidden] [--hide-after S] [--warm-frames N]
+ *                     [--release-hidden] [--hide-after S] [--warm-frames N] [--on-demand]
  *   --frames N         build and render N frames, then exit 0 (CI / sanitizer runs)
  *   --screenshot F     save the last rendered frame as a BMP
  *   --font F           use a TTF instead of the embedded ProggyClean
@@ -23,6 +23,9 @@
  *   --skip-unchanged   skip render+present when the draw-data hash is unchanged
  *   --input-selftest   run the input checklist through the backend, print PASS/FAIL,
  *                      exit with the number of failures (restores the clipboard)
+ *   --on-demand        rasterize glyphs on first use into atlas pages (no up-front bake)
+ *   --atlas-selftest   check the font pages are single-channel and draw identically to
+ *                      RGBA32 pages, print PASS/FAIL, exit with the number of failures
  *   --hidden           create the window hidden (idle measurements on a machine in use:
  *                      no stray pointer events from the person at the desk)
  *   --drawables N      Metal swapchain depth (2 or 3; default: SDL's 3)
@@ -76,6 +79,8 @@ typedef struct example_options {
     bool release_hidden;
     double hide_after_s;        /* 0 = never */
     long warm_frames;
+    bool on_demand;
+    bool atlas_selftest;
 } example_options;
 
 /** App-owned SDL + elimgui handles. */
@@ -157,13 +162,17 @@ static bool example_parse_args(int argc, char **argv, example_options *opt)
             opt->hide_after_s = strtod(argv[++i], NULL);
         else if (!strcmp(a, "--warm-frames") && has_value)
             opt->warm_frames = strtol(argv[++i], NULL, 10);
+        else if (!strcmp(a, "--on-demand"))
+            opt->on_demand = true;
+        else if (!strcmp(a, "--atlas-selftest"))
+            opt->atlas_selftest = true;
         else {
             fprintf(stderr, "usage: %s [--frames N] [--screenshot F.bmp] [--font F.ttf] "
                             "[--font-size PX] [--driver NAME] [--idle-report S] "
                             "[--focus-input] [--skip-unchanged] [--hidden] "
                             "[--input-selftest] [--swapchain-selftest] [--drawables 2|3] "
                             "[--no-vsync] [--release-hidden] [--hide-after S] "
-                            "[--warm-frames N]\n", argv[0]);
+                            "[--warm-frames N] [--on-demand] [--atlas-selftest]\n", argv[0]);
             return false;
         }
     }
@@ -184,6 +193,8 @@ static bool example_build_fonts(example_app *app, const example_options *opt, fl
 {
     if (!app->atlas) {
         app->atlas = eli_font_atlas_create();
+        if (opt->on_demand)
+            app->atlas->flags |= ELI_FONT_ATLAS_ON_DEMAND;
         eli_font_config cfg = eli_font_config_default();
         cfg.rasterizer_density = density;
         eli_font *font = NULL;
@@ -205,7 +216,8 @@ static bool example_build_fonts(example_app *app, const example_options *opt, fl
         return false;
     if (eli_get_font() == NULL)
         eli_push_font(eli_get_io()->font_default); /* after the bake: font_size is known */
-    eli_font_atlas_release_cpu_pixels(app->atlas);
+    if (!opt->atlas_selftest) /* the selftest re-uploads the pages as RGBA32 */
+        eli_font_atlas_release_cpu_pixels(app->atlas);
     g_example_stats.density = density;
     return true;
 }
@@ -464,6 +476,12 @@ int main(int argc, char **argv)
         example_shutdown(&app);
         return failed ? 3 : 0;
     }
+    if (opt.atlas_selftest) {
+        g_example_present_app = &app;
+        int failed = example_atlas_selftest(app.renderer, app.atlas, example_frame_and_present);
+        example_shutdown(&app);
+        return failed ? 3 : 0;
+    }
     if (opt.idle_report_s > 0.0)
         SDL_WarpMouseGlobal(0.0f, 0.0f);   /* spec §20.3: mouse outside the window */
     probe.start_ms = SDL_GetTicks();
@@ -493,6 +511,8 @@ int main(int argc, char **argv)
             g_example_stats.last_submit_ms, eli_get_io()->metrics_render_vertices,
             g_example_stats.renderer_name, eli_sdl3_renderer_drawable_count(),
             eli_sdl3_renderer_surface_released() ? " (released)" : "");
+    SDL_Log("example: font atlas %d page(s), %zu texels (single-channel GPU bytes; RGBA32 was 4x)",
+            eli_font_atlas_live_page_count(app.atlas), eli_font_atlas_texture_bytes(app.atlas));
     example_shutdown(&app);
     return 0;
 }
