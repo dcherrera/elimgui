@@ -22,29 +22,10 @@
 #include "../core/eli_platform.h"
 #include "../core/eli_types.h"
 #include "../core/eli_context.h"
+#include "eli_storage_types.h"
 
 /** Initial capacity used the first time a storage grows. */
 #define ELI_STORAGE_INIT_CAPACITY 8
-
-/** One key/value entry. The value union is selected by the accessor used. */
-typedef struct eli_storage_pair {
-    eli_id key;
-    union {
-        int   val_i;
-        float val_f;
-        void *val_p;
-    };
-} eli_storage_pair;
-
-/**
- * Sorted key/value map. Zero-initialize (all fields 0/NULL) before first use;
- * the accessors grow it on demand. Release with eli_storage_clear.
- */
-typedef struct eli_storage {
-    eli_storage_pair *data;
-    int size;
-    int capacity;
-} eli_storage;
 
 /* ---------------------------------------------------------------------------
  * Internal helpers

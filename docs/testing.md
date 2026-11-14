@@ -188,6 +188,7 @@ current suite/test counts (62 suites, 337 tests total as of Phase 32).
 |-------|-------|-----------------|
 | `test_window_lifecycle` | 7 | Create/retrieve same instance, `set_next_window_pos`/size, pivot center, work-region insets, collapse (body skip + size clamp), `ELI_WINDOW_NO_TITLEBAR`, draw data gathers active windows |
 | `test_window_interaction` | 4 | Hover/focus z-order, title-bar drag moves window, child-window create/end, child ID stability |
+| `test_window_registry` | 7 | By-id lookup for every window, render order and focus index vs. reference nested-loop/linear-scan versions, hovered = topmost, window-creation OOM leaves the registry unchanged |
 | `test_window_scroll` | 5 | Scroll range from content, set + clamp, `set_scroll_from_pos_y`, mouse-wheel scrolls hovered window, horizontal scrollbar flag |
 
 ### Widget behavior
@@ -238,6 +239,7 @@ current suite/test counts (62 suites, 337 tests total as of Phase 32).
 | `test_style_stack` | 6 | `eli_push/pop_style_color`, `eli_push/pop_style_var`, `eli_push/pop_item_flag` |
 | `test_style_utils` | 7 | `eli_get_color_u32`, `eli_get_style_color_name`, HSV↔RGB conversions |
 | `test_mem` | 8 | Default allocator, custom allocator override, `eli_mem_alloc`/`eli_mem_free` |
+| `test_mem_coverage` | 11 | libc allocator redefined to catch bypasses: every category (context, font, windows, storage, draw list, table, tab bar, plot, docking, overlays, drag-drop, logging, settings) allocates through the seam; destroy returns every block |
 
 ### Font system
 

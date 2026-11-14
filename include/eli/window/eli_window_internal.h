@@ -54,14 +54,22 @@ static inline float eli_window_effective_font_size(const eli_context *ctx)
     return (fs > 0.0f) ? fs : ELI_WINDOW_DEFAULT_FONT_SIZE;
 }
 
+/** Release one pooled window: its draw list, name, and the window itself. */
+static inline void eli_window_free(eli_window *win)
+{
+    eli_draw_list_clear(&win->draw_list);
+    eli_mem_free(win->name);
+    eli_mem_free(win);
+}
+
 /* ---------------------------------------------------------------------------
  * Context shutdown hook
  * ------------------------------------------------------------------------- */
 
 /**
  * Release all window heap state owned by a context: every pooled window's draw
- * list, name, and the window itself, plus the pool/focus/render arrays and the
- * next-window-data block. Registered on ctx->window_shutdown_fn so
+ * list, name, and the window itself, plus the pool/focus/render arrays, the
+ * by-id map, and the next-window-data block. Registered on ctx->window_shutdown_fn so
  * eli_destroy_context can call it.
  *
  * @param ctx  Context whose window state is freed (non-NULL).
@@ -69,17 +77,14 @@ static inline float eli_window_effective_font_size(const eli_context *ctx)
 static inline void eli_window_shutdown_context(eli_context *ctx)
 {
     for (int i = 0; i < ctx->windows_count; i++) {
-        eli_window *win = ctx->windows[i];
-        if (win == NULL)
-            continue;
-        eli_draw_list_clear(&win->draw_list);
-        eli_mem_free(win->name);
-        eli_mem_free(win);
+        if (ctx->windows[i] != NULL)
+            eli_window_free(ctx->windows[i]);
     }
     eli_mem_free(ctx->windows);
     ctx->windows = NULL;
     ctx->windows_count = 0;
     ctx->windows_capacity = 0;
+    eli_storage_clear(&ctx->windows_by_id);
 
     eli_mem_free(ctx->windows_focus_order);
     ctx->windows_focus_order = NULL;
@@ -131,7 +136,9 @@ static inline void eli_clear_next_window_data(eli_context *ctx)
  * ------------------------------------------------------------------------- */
 
 /**
- * Find a window in the pool by its id.
+ * Find a window in the pool by its id: O(log windows) binary search of the
+ * context's id -> window map (Dear ImGui's WindowsById), which
+ * eli_window_get_or_create keeps in step with the pool.
  *
  * @param ctx  Context (non-NULL).
  * @param id   Window id to find.
@@ -139,10 +146,7 @@ static inline void eli_clear_next_window_data(eli_context *ctx)
  */
 static inline eli_window *eli_find_window_by_id(const eli_context *ctx, eli_id id)
 {
-    for (int i = 0; i < ctx->windows_count; i++)
-        if (ctx->windows[i]->id == id)
-            return ctx->windows[i];
-    return NULL;
+    return (eli_window *)eli_storage_get_void_ptr(&ctx->windows_by_id, id, NULL);
 }
 
 /**
@@ -185,6 +189,19 @@ static inline eli_window *eli_window_get_or_create(eli_context *ctx, const char 
     }
     memcpy(win->name, name, name_len + 1);
 
+    /* Reserve the pool slot and the map entry before publishing the window, so
+     * an allocation failure leaves the registry unchanged. */
+    ctx->windows = (eli_window **)eli_window_grow_ptr_array(
+        (void **)ctx->windows, &ctx->windows_capacity, ctx->windows_count + 1);
+    int map_slot = (ctx->windows_capacity > ctx->windows_count)
+                       ? eli_storage_find_or_insert(&ctx->windows_by_id, id)
+                       : -1;
+    if (map_slot < 0) {
+        eli_mem_free(win->name);
+        eli_mem_free(win);
+        return NULL;
+    }
+
     win->id = id;
     win->pos = eli_make_vec2(ELI_WINDOW_DEFAULT_POS_X, ELI_WINDOW_DEFAULT_POS_Y);
     win->size = eli_make_vec2(0.0f, 0.0f);
@@ -197,8 +214,7 @@ static inline eli_window *eli_window_get_or_create(eli_context *ctx, const char 
     if (ctx->window_shutdown_fn == NULL)
         ctx->window_shutdown_fn = eli_window_shutdown_context;
 
-    ctx->windows = (eli_window **)eli_window_grow_ptr_array(
-        (void **)ctx->windows, &ctx->windows_capacity, ctx->windows_count + 1);
+    ctx->windows_by_id.data[map_slot].val_p = win;
     ctx->windows[ctx->windows_count++] = win;
     return win;
 }
@@ -207,19 +223,21 @@ static inline eli_window *eli_window_get_or_create(eli_context *ctx, const char 
  * Focus order (z-order)
  * ------------------------------------------------------------------------- */
 
-/** @return the index of `win` in the focus-order list, or -1 if absent. */
+/**
+ * @return the index of `win` in the focus-order list, or -1 if absent. O(1):
+ *         windows never leave the list and every insert/move reindexes the
+ *         shifted entries, so the cached win->focus_order is exact.
+ */
 static inline int eli_window_focus_index(const eli_context *ctx, const eli_window *win)
 {
-    for (int i = 0; i < ctx->windows_focus_order_count; i++)
-        if (ctx->windows_focus_order[i] == win)
-            return i;
-    return -1;
+    (void)ctx;
+    return win->focus_order;
 }
 
-/** Refresh the cached focus_order index on every window in the focus list. */
-static inline void eli_window_reindex_focus_order(eli_context *ctx)
+/** Refresh the cached focus_order index on focus-list entries [from, count). */
+static inline void eli_window_reindex_focus_order(eli_context *ctx, int from)
 {
-    for (int i = 0; i < ctx->windows_focus_order_count; i++)
+    for (int i = from; i < ctx->windows_focus_order_count; i++)
         ctx->windows_focus_order[i]->focus_order = i;
 }
 
@@ -245,7 +263,7 @@ static inline void eli_window_add_to_focus_order(eli_context *ctx, eli_window *w
         grown[i] = grown[i - 1];
     grown[at] = win;
     ctx->windows_focus_order_count++;
-    eli_window_reindex_focus_order(ctx);
+    eli_window_reindex_focus_order(ctx, at);
 }
 
 /**
@@ -274,7 +292,7 @@ static inline void eli_window_focus(eli_context *ctx, eli_window *win)
     for (int i = idx; i < ctx->windows_focus_order_count - 1; i++)
         ctx->windows_focus_order[i] = ctx->windows_focus_order[i + 1];
     ctx->windows_focus_order[ctx->windows_focus_order_count - 1] = root;
-    eli_window_reindex_focus_order(ctx);
+    eli_window_reindex_focus_order(ctx, idx);
 }
 
 /* ---------------------------------------------------------------------------

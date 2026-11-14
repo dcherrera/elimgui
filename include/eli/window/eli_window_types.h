@@ -164,7 +164,13 @@ typedef struct eli_window {
     /* Hierarchy + focus. */
     struct eli_window *parent_window;
     struct eli_window *root_window;
-    int   focus_order;           /* index within the context focus-order list */
+    int   focus_order;           /* index within the context focus-order list (-1: absent) */
+
+    /* Render-order scratch rebuilt by eli_window_render each frame: a root's
+     * active descendants, chained in pool order. */
+    struct eli_window *render_children_head;
+    struct eli_window *render_children_tail;
+    struct eli_window *render_next;
 
     /* Docking (Phase 34). dock_id is the node this window wants to attach to
      * (0 == floating); it persists across frames. dock_node is the node resolved

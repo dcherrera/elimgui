@@ -541,7 +541,7 @@ static inline eli_window *eli_window_find_hovered(eli_context *ctx)
             continue;
 
         eli_window *root = win->root_window ? win->root_window : win;
-        int z = eli_window_focus_index(ctx, root);
+        int z = root->focus_order;
         int depth = eli_window_hover_depth(win);
         if (z > best_z || (z == best_z && depth >= best_depth)) {
             best_z = z;
@@ -596,6 +596,41 @@ static inline void eli_window_push_render_list(eli_context *ctx, eli_window *win
 }
 
 /**
+ * Append every active window's draw list in z-order: roots back-to-front by
+ * focus order, each followed by its active descendants in pool (creation)
+ * order. O(windows): one pass chains descendants behind their root, one walks
+ * the focus list.
+ */
+static inline void eli_window_push_render_windows(eli_context *ctx)
+{
+    int frame = ctx->frame_count;
+    for (int i = 0; i < ctx->windows_count; i++) {
+        ctx->windows[i]->render_children_head = NULL;
+        ctx->windows[i]->render_children_tail = NULL;
+    }
+    for (int i = 0; i < ctx->windows_count; i++) {
+        eli_window *w = ctx->windows[i];
+        eli_window *root = w->root_window ? w->root_window : w;
+        if (w == root || w->last_frame_active != frame)
+            continue;
+        w->render_next = NULL;
+        if (root->render_children_tail != NULL)
+            root->render_children_tail->render_next = w;
+        else
+            root->render_children_head = w;
+        root->render_children_tail = w;
+    }
+    for (int i = 0; i < ctx->windows_focus_order_count; i++) {
+        eli_window *root = ctx->windows_focus_order[i];
+        if (root->last_frame_active != frame)
+            continue;
+        eli_window_push_render_list(ctx, root);
+        for (eli_window *w = root->render_children_head; w != NULL; w = w->render_next)
+            eli_window_push_render_list(ctx, w);
+    }
+}
+
+/**
  * Assemble the frame's draw data from every active window's draw list, ordered
  * back-to-front by focus order (with each root's child windows following it), and
  * publish it on the context so eli_get_draw_data returns it. Call after all
@@ -619,18 +654,7 @@ static inline void eli_window_render(void)
     if (ctx->background_draw_list != NULL && ctx->background_draw_list->idx_count > 0)
         eli_window_push_render_draw_list(ctx, ctx->background_draw_list);
 
-    for (int i = 0; i < ctx->windows_focus_order_count; i++) {
-        eli_window *root = ctx->windows_focus_order[i];
-        if (root->last_frame_active != ctx->frame_count)
-            continue;
-        eli_window_push_render_list(ctx, root);
-        for (int j = 0; j < ctx->windows_count; j++) {
-            eli_window *w = ctx->windows[j];
-            if (w != root && w->last_frame_active == ctx->frame_count &&
-                (w->root_window ? w->root_window : w) == root)
-                eli_window_push_render_list(ctx, w);
-        }
-    }
+    eli_window_push_render_windows(ctx);
 
     /* Foreground draw list (Phase 27 util) renders in front of every window. */
     if (ctx->foreground_draw_list != NULL && ctx->foreground_draw_list->idx_count > 0)
