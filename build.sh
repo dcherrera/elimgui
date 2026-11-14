@@ -124,6 +124,7 @@ build_sdl3_example() {
         -I"${SCRIPT_DIR}/include" -I"${SCRIPT_DIR}/vendor" -I"${SCRIPT_DIR}/backends" \
         "${SDL3_EXAMPLE_DIR}/main.c" "${SDL3_EXAMPLE_DIR}/shell.c" "${SDL3_EXAMPLE_DIR}/perf_fixture.c" \
         "${SDL3_EXAMPLE_DIR}/tasks.c" "${SDL3_EXAMPLE_DIR}/selftest.c" \
+        "${SDL3_EXAMPLE_DIR}/atlas_selftest.c" \
         ${sdl_flags} -o "${out}" || return 1
     echo "Built: ${out#"${SCRIPT_DIR}/"}"
 }
