@@ -127,6 +127,7 @@ build_sdl3_example() {
         "${SDL3_EXAMPLE_DIR}/main.c" "${SDL3_EXAMPLE_DIR}/shell.c" "${SDL3_EXAMPLE_DIR}/perf_fixture.c" \
         "${SDL3_EXAMPLE_DIR}/tasks.c" "${SDL3_EXAMPLE_DIR}/selftest.c" \
         "${SDL3_EXAMPLE_DIR}/swapchain_selftest.c" \
+        "${SDL3_EXAMPLE_DIR}/atlas_selftest.c" \
         ${sdl_flags} ${objc_flags} -o "${out}" || return 1
     echo "Built: ${out#"${SCRIPT_DIR}/"}"
 }

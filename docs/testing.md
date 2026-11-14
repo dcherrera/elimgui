@@ -247,6 +247,8 @@ current suite/test counts (62 suites, 337 tests total as of Phase 32).
 | `test_font_atlas` | 9 | Default font load, `eli_font_atlas_build`, `get_tex_data_as_rgba32`, glyph lookup |
 | `test_font_text` | 7 | `eli_calc_text_size`, multi-line text metrics, `eli_draw_list_add_text` vertex output |
 | `test_text_wrap` | 7 | O(n) word wrap vs. a verbatim copy of the old O(n²) loop (fixed + fuzzed UTF-8, bit-identical widths), `eli_text_wrapped` geometry and linear glyph lookups, `add_text_ex` `wrap_width` |
+| `test_font_pages` | 11 | On-demand glyphs (== baked glyph and texels), missing-codepoint cache, backend hooks + dirty upload, LRU recycle, soft cap, idle free, two-level lookup, text switching page textures, allocations through the eli_mem seam |
+| `test_font_fallback` | 8 | Merge mode (missing codepoints only, baseline, cell-advance fit, baked == on-demand), tofu box default, `fallback_char`, custom glyph ranges |
 
 ### Cross-subsystem integration
 
