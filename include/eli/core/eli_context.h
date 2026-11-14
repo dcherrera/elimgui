@@ -262,6 +262,7 @@ static inline void eli_style_set_defaults(eli_style *style)
     style->window_min_size = eli_make_vec2(32.0f, 32.0f);
     style->window_title_align = eli_make_vec2(0.0f, 0.5f);
     style->window_menu_button_position = ELI_DIR_LEFT;
+    style->close_button_size = 14.0f;
     style->child_rounding = 0.0f;
     style->child_border_size = 1.0f;
     style->popup_rounding = 0.0f;
@@ -293,7 +294,7 @@ static inline void eli_style_set_defaults(eli_style *style)
     style->separator_text_border_size = 3.0f;
     style->separator_text_align = eli_make_vec2(0.0f, 0.5f);
     style->separator_text_padding = eli_make_vec2(20.0f, 3.0f);
-    style->display_window_padding = eli_make_vec2(19.0f, 19.0f);
+    style->display_window_padding = eli_make_vec2(64.0f, 64.0f); /* clamp keeps 64 px on screen */
     style->display_safe_area_padding = eli_make_vec2(3.0f, 3.0f);
     style->docking_separator_size = 2.0f;
     style->mouse_cursor_scale = 1.0f;

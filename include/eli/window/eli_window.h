@@ -31,9 +31,6 @@
 #include "eli_window_settings.h"
 #include "eli_window_query.h"
 
-/* Side length (px) of the title-bar close button box. */
-#define ELI_WINDOW_CLOSE_BUTTON_SIZE 14.0f
-
 /* ---------------------------------------------------------------------------
  * Condition helper
  * ------------------------------------------------------------------------- */
@@ -75,18 +72,48 @@ static inline size_t eli_window_visible_label_len(const char *name)
 }
 
 /**
- * Render a window's background, border, title bar, title text, and (when a
- * p_open pointer is supplied) a close button that clears *p_open when clicked.
+ * Draw and run the title-bar close button (style.close_button_size): a hovered
+ * fill (active while pressed) behind a text-coloured cross; a click clears
+ * *p_open.
+ */
+static inline void eli_window_close_button(eli_context *ctx, eli_window *win,
+                                           const eli_style *style, bool *p_open)
+{
+    eli_draw_list *dl = &win->draw_list;
+    eli_rect box = eli_window_close_button_rect(win, style);
+    eli_vec2 cmin = eli_rect_min(box), cmax = eli_rect_max(box);
+    bool hovered = ctx->hovered_window == win && eli_is_mouse_hovering_rect(cmin, cmax, false);
+    if (hovered) {
+        eli_col fill = ctx->io.mouse_down[ELI_MOUSE_BUTTON_LEFT] ? ELI_COL_BUTTON_ACTIVE
+                                                                 : ELI_COL_BUTTON_HOVERED;
+        eli_draw_list_add_rect_filled(dl, cmin, cmax, eli_get_color_u32(fill, 1.0f),
+                                      style->frame_rounding, ELI_DRAW_ROUND_CORNERS_ALL);
+    }
+    float inset = box.w * 0.25f;
+    eli_vec2 a = eli_make_vec2(cmin.x + inset, cmin.y + inset);
+    eli_vec2 b = eli_make_vec2(cmax.x - inset, cmax.y - inset);
+    eli_col32 xcol = eli_get_color_u32(ELI_COL_TEXT, 1.0f);
+    eli_draw_list_add_line(dl, a, b, xcol, 1.0f);
+    eli_draw_list_add_line(dl, eli_make_vec2(b.x, a.y), eli_make_vec2(a.x, b.y), xcol, 1.0f);
+    if (hovered && eli_is_mouse_clicked(ELI_MOUSE_BUTTON_LEFT))
+        *p_open = false;
+}
+
+/**
+ * Render a window's background, resize grip, border, title bar, title text, and
+ * (when a p_open pointer is supplied) a close button that clears *p_open when
+ * clicked.
  *
  * @param ctx      Context (non-NULL).
  * @param win      Window to decorate (non-NULL).
  * @param style    Active style (non-NULL).
  * @param p_open   Optional open flag; a close button is drawn when non-NULL.
  * @param bg_alpha Background alpha override (< 0 to use the theme alpha).
+ * @param grip_col Resize grip colour slot, or < 0 for no grip.
  */
 static inline void eli_window_render_decorations(eli_context *ctx, eli_window *win,
                                                  const eli_style *style, bool *p_open,
-                                                 float bg_alpha)
+                                                 float bg_alpha, int grip_col)
 {
     eli_draw_list *dl = &win->draw_list;
     float rounding = style->window_rounding;
@@ -128,20 +155,10 @@ static inline void eli_window_render_decorations(eli_context *ctx, eli_window *w
                                       ELI_DRAW_ROUND_CORNERS_ALL);
     }
 
-    if (win->title_bar_height > 0.0f && p_open != NULL) {
-        float b = ELI_WINDOW_CLOSE_BUTTON_SIZE;
-        eli_vec2 cmin = eli_make_vec2(win->title_bar_rect.x + win->title_bar_rect.w - b -
-                                          style->frame_padding.x,
-                                      win->title_bar_rect.y + style->frame_padding.y);
-        eli_vec2 cmax = eli_make_vec2(cmin.x + b, cmin.y + b);
-        bool hovered = ctx->hovered_window == win && eli_is_mouse_hovering_rect(cmin, cmax, false);
-        eli_col32 xcol = eli_get_color_u32(hovered ? ELI_COL_BUTTON_HOVERED : ELI_COL_TEXT, 1.0f);
-        eli_draw_list_add_line(dl, cmin, cmax, xcol, 1.0f);
-        eli_draw_list_add_line(dl, eli_make_vec2(cmax.x, cmin.y), eli_make_vec2(cmin.x, cmax.y),
-                               xcol, 1.0f);
-        if (hovered && eli_is_mouse_clicked(ELI_MOUSE_BUTTON_LEFT))
-            *p_open = false;
-    }
+    if (win->title_bar_height > 0.0f && p_open != NULL)
+        eli_window_close_button(ctx, win, style, p_open);
+    if (grip_col >= 0)
+        eli_window_render_resize_grip(ctx, win, grip_col);
 
     float border = style->window_border_size;
     if (win->parent_window != NULL)
@@ -185,6 +202,50 @@ static inline void eli_window_apply_next_data(eli_context *ctx, eli_window *win,
     }
     if (d->has_bg_alpha)
         *out_bg_alpha = d->bg_alpha_val;
+}
+
+/**
+ * Resolve a window's size_full for this frame (auto-resize, first-use default
+ * from content, size constraints, style minimum) and report the size limits the
+ * user resize must respect.
+ *
+ * @param ctx       Context (non-NULL).
+ * @param win       Window (non-NULL), with flags and title_bar_height set.
+ * @param style     Active style (non-NULL).
+ * @param out_min   Receives the minimum size.
+ * @param out_max   Receives the maximum size (negative axis = unbounded).
+ */
+static inline void eli_window_resolve_size(const eli_context *ctx, eli_window *win,
+                                           const eli_style *style, eli_vec2 *out_min,
+                                           eli_vec2 *out_max)
+{
+    eli_vec2 pad = win->window_padding;
+    if (win->flags & ELI_WINDOW_AUTO_RESIZE) {
+        win->size_full.x = win->content_size.x + pad.x * 2.0f;
+        win->size_full.y = win->content_size.y + pad.y * 2.0f + win->title_bar_height;
+    } else {
+        if (win->size_full.x <= 0.0f)
+            win->size_full.x = eli_max_f(win->content_size.x + pad.x * 2.0f, style->window_min_size.x);
+        if (win->size_full.y <= 0.0f)
+            win->size_full.y = eli_max_f(win->content_size.y + pad.y * 2.0f + win->title_bar_height,
+                                         style->window_min_size.y);
+    }
+    eli_vec2 mn = eli_make_vec2(style->window_min_size.x, win->title_bar_height);
+    eli_vec2 mx = eli_make_vec2(-1.0f, -1.0f);
+    if (ctx->next_window_data && ctx->next_window_data->has_size_constraint) {
+        eli_vec2 cmn = ctx->next_window_data->size_constraint_min;
+        mx = ctx->next_window_data->size_constraint_max;
+        win->size_full.x = eli_max_f(win->size_full.x, cmn.x);
+        win->size_full.y = eli_max_f(win->size_full.y, cmn.y);
+        if (mx.x >= 0.0f) win->size_full.x = eli_min_f(win->size_full.x, mx.x);
+        if (mx.y >= 0.0f) win->size_full.y = eli_min_f(win->size_full.y, mx.y);
+        mn = eli_make_vec2(eli_max_f(mn.x, cmn.x), eli_max_f(mn.y, cmn.y));
+    }
+    mn.y = eli_max_f(mn.y, style->window_min_size.y);
+    win->size_full.x = eli_max_f(win->size_full.x, style->window_min_size.x);
+    win->size_full.y = eli_max_f(win->size_full.y, win->title_bar_height);
+    *out_min = mn;
+    *out_max = mx;
 }
 
 /**
@@ -242,9 +303,13 @@ static inline bool eli_begin_ex(const char *name, eli_id id, bool *p_open,
         ctx->dock_begin_window_fn(ctx, win);
     bool win_docked = (win->dock_node != NULL);
 
-    win->title_bar_height = (eli_window_has_title_bar(win) && !win_docked)
-                                ? eli_window_effective_font_size(ctx) + style->frame_padding.y * 2.0f
-                                : 0.0f;
+    win->has_close_button = (p_open != NULL);
+    win->title_bar_height = 0.0f;
+    if (eli_window_has_title_bar(win) && !win_docked) {
+        win->title_bar_height = eli_window_effective_font_size(ctx) + style->frame_padding.y * 2.0f;
+        if (p_open != NULL) /* the bar grows to fit a larger close button */
+            win->title_bar_height = eli_max_f(win->title_bar_height, style->close_button_size);
+    }
 
     bool pos_pending = false;
     eli_vec2 pos_val = win->pos, pivot = eli_make_vec2(0.0f, 0.0f);
@@ -255,28 +320,10 @@ static inline bool eli_begin_ex(const char *name, eli_id id, bool *p_open,
     win->content_size = win->content_size_explicit_valid ? win->content_size_explicit
                                                          : win->content_size_measured;
 
-    /* Resolve size_full: auto-resize or first-use default from content. */
-    eli_vec2 pad = win->window_padding;
-    if (flags & ELI_WINDOW_AUTO_RESIZE) {
-        win->size_full.x = win->content_size.x + pad.x * 2.0f;
-        win->size_full.y = win->content_size.y + pad.y * 2.0f + win->title_bar_height;
-    } else {
-        if (win->size_full.x <= 0.0f)
-            win->size_full.x = eli_max_f(win->content_size.x + pad.x * 2.0f, style->window_min_size.x);
-        if (win->size_full.y <= 0.0f)
-            win->size_full.y = eli_max_f(win->content_size.y + pad.y * 2.0f + win->title_bar_height,
-                                         style->window_min_size.y);
-    }
-    if (ctx->next_window_data && ctx->next_window_data->has_size_constraint) {
-        eli_vec2 mn = ctx->next_window_data->size_constraint_min;
-        eli_vec2 mx = ctx->next_window_data->size_constraint_max;
-        win->size_full.x = eli_max_f(win->size_full.x, mn.x);
-        win->size_full.y = eli_max_f(win->size_full.y, mn.y);
-        if (mx.x >= 0.0f) win->size_full.x = eli_min_f(win->size_full.x, mx.x);
-        if (mx.y >= 0.0f) win->size_full.y = eli_min_f(win->size_full.y, mx.y);
-    }
-    win->size_full.x = eli_max_f(win->size_full.x, style->window_min_size.x);
-    win->size_full.y = eli_max_f(win->size_full.y, win->title_bar_height);
+    /* Resolve size_full, then apply this frame's user resize (it shows now). */
+    eli_vec2 size_min, size_max;
+    eli_window_resolve_size(ctx, win, style, &size_min, &size_max);
+    int grip_col = eli_window_update_manual_resize(ctx, win, size_min, size_max);
 
     /* Collapsed windows shrink to just the title bar and skip their body. */
     if (win->collapsed && eli_window_has_title_bar(win)) {
@@ -289,6 +336,8 @@ static inline bool eli_begin_ex(const char *name, eli_id id, bool *p_open,
 
     if (pos_pending)
         win->pos = eli_vec2_sub(pos_val, eli_make_vec2(pivot.x * win->size.x, pivot.y * win->size.y));
+    else if (parent == NULL && !win_docked)
+        eli_window_clamp_to_display(ctx, win);
 
     /* Docking geometry override: a docked window fills its node body and drops
      * its title bar. Non-selected tabs emit nothing, so return early after the
@@ -367,7 +416,7 @@ static inline bool eli_begin_ex(const char *name, eli_id id, bool *p_open,
         win->draw_list.tex_uv_white_pixel = ctx->font->container_atlas->tex_uv_white_pixel;
         eli_draw_list_push_texture_id(&win->draw_list, ctx->font->container_atlas->tex_id);
     }
-    eli_window_render_decorations(ctx, win, style, p_open, bg_alpha);
+    eli_window_render_decorations(ctx, win, style, p_open, bg_alpha, grip_col);
     eli_window_render_scrollbars(win, style);
 
     /* Docking: the visible docked window renders the node's shared tab strip and
@@ -379,7 +428,6 @@ static inline bool eli_begin_ex(const char *name, eli_id id, bool *p_open,
      * Skipped for docked windows, which have no title bar of their own. */
     if (!win_docked) {
         eli_window_handle_title_move(ctx, win);
-        eli_window_handle_resize(ctx, win, style);
         eli_window_handle_title_collapse(ctx, win);
     }
 
@@ -506,8 +554,8 @@ static inline eli_window *eli_window_find_hovered(eli_context *ctx)
 
 /**
  * Begin-of-frame window update: reset the window stack, continue/finish a title
- * drag, determine the hovered window from last frame's geometry, and apply
- * mouse-wheel scrolling. Call after eli_new_frame and eli_input_update_begin_frame.
+ * drag, determine the hovered window from last frame's geometry, raise the
+ * window under a click, and apply mouse-wheel scrolling. Call after eli_new_frame and eli_input_update_begin_frame.
  *
  * Thread-safe: no
  * Reentrant: no
@@ -524,6 +572,7 @@ static inline void eli_window_new_frame(void)
 
     eli_window_update_moving(ctx);
     ctx->hovered_window = eli_window_find_hovered(ctx);
+    eli_window_focus_on_click(ctx);
     eli_window_update_wheel(ctx);
 }
 
