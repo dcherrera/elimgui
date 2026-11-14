@@ -222,21 +222,35 @@ static inline void eli_window_reindex_focus_order(eli_context *ctx)
         ctx->windows_focus_order[i]->focus_order = i;
 }
 
-/** Append a window to the front (top) of the focus order if not already present. */
+/**
+ * Add a window to the focus order if not already present: at the front (top),
+ * or at the back for an ELI_WINDOW_NO_BRING_TO_FRONT_ON_FOCUS window (a
+ * background window never covers windows created before it).
+ */
 static inline void eli_window_add_to_focus_order(eli_context *ctx, eli_window *win)
 {
     if (eli_window_focus_index(ctx, win) >= 0)
         return;
-    ctx->windows_focus_order = (eli_window **)eli_window_grow_ptr_array(
+    eli_window **grown = (eli_window **)eli_window_grow_ptr_array(
         (void **)ctx->windows_focus_order, &ctx->windows_focus_order_capacity,
         ctx->windows_focus_order_count + 1);
-    ctx->windows_focus_order[ctx->windows_focus_order_count++] = win;
+    ctx->windows_focus_order = grown;
+    if (ctx->windows_focus_order_capacity <= ctx->windows_focus_order_count)
+        return; /* growth failed */
+    int at = ctx->windows_focus_order_count;
+    if (win->flags & ELI_WINDOW_NO_BRING_TO_FRONT_ON_FOCUS)
+        at = 0;
+    for (int i = ctx->windows_focus_order_count; i > at; i--)
+        grown[i] = grown[i - 1];
+    grown[at] = win;
+    ctx->windows_focus_order_count++;
     eli_window_reindex_focus_order(ctx);
 }
 
 /**
- * Bring a window to the front of the z-order and make it the focused (nav)
- * window. Child windows focus their root window.
+ * Make a window the focused (nav) window and bring it to the front of the
+ * z-order, unless its root has ELI_WINDOW_NO_BRING_TO_FRONT_ON_FOCUS (focused,
+ * z-order unchanged). Child windows raise their root window.
  *
  * @param ctx  Context (non-NULL).
  * @param win  Window to focus (NULL clears focus).
@@ -253,6 +267,8 @@ static inline void eli_window_focus(eli_context *ctx, eli_window *win)
         eli_window_add_to_focus_order(ctx, root);
         return;
     }
+    if (root->flags & ELI_WINDOW_NO_BRING_TO_FRONT_ON_FOCUS)
+        return;
     /* Move to the end (front). */
     for (int i = idx; i < ctx->windows_focus_order_count - 1; i++)
         ctx->windows_focus_order[i] = ctx->windows_focus_order[i + 1];
@@ -338,6 +354,29 @@ static inline void eli_window_update_layout(eli_context *ctx, eli_window *win,
     win->clip_rect = win->inner_rect;
 
     (void)ctx;
+}
+
+/**
+ * The title-bar close button's box: style.close_button_size square, centred
+ * vertically in the title bar, frame_padding.x in from its right end.
+ *
+ * @param win    Window with a title bar (non-NULL).
+ * @param style  Active style (non-NULL).
+ * @return       The box in screen coordinates.
+ */
+static inline eli_rect eli_window_close_button_rect(const eli_window *win, const eli_style *style)
+{
+    float b = style->close_button_size;
+    const eli_rect *t = &win->title_bar_rect;
+    return eli_make_rect(t->x + t->w - style->frame_padding.x - b, t->y + (t->h - b) * 0.5f, b, b);
+}
+
+/** @return true if the mouse is over the window's close button (when it has one). */
+static inline bool eli_window_mouse_over_close_button(const eli_context *ctx, const eli_window *win)
+{
+    if (!win->has_close_button || win->title_bar_height <= 0.0f)
+        return false;
+    return eli_rect_contains(eli_window_close_button_rect(win, &ctx->style), ctx->io.mouse_pos);
 }
 
 /** Clamp a window's current scroll to its scroll range. */

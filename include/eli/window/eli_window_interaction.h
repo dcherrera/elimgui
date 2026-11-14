@@ -3,9 +3,10 @@
 /**
  * @file eli_window_interaction.h
  * @brief Window interaction behaviors: dragging the title bar to move a window,
- *        dragging the bottom-right grip to resize, mouse-wheel scrolling of the
- *        hovered window, and toggling collapse. These are driven by input state
- *        and invoked by the per-frame update and by eli_begin.
+ *        raising the window under a click, clamping a window so its title bar
+ *        stays on screen, mouse-wheel scrolling of the hovered window, and
+ *        toggling collapse. These are driven by input state and invoked by the
+ *        per-frame update and by eli_begin. Resizing is in eli_window_resize.h.
  *
  * @status Phase 7 window interaction in use.
  * @issues None
@@ -15,9 +16,7 @@
 #define ELI_WINDOW_ELI_WINDOW_INTERACTION_H
 
 #include "eli_window_internal.h"
-
-/* Side length (px) of the resize grip hit-box at the window's bottom-right. */
-#define ELI_WINDOW_RESIZE_GRIP_SIZE 18.0f
+#include "eli_window_resize.h"
 
 /** @return the per-wheel-notch scroll step in pixels for a window. */
 static inline float eli_window_wheel_step(const eli_context *ctx, const eli_window *win)
@@ -151,6 +150,11 @@ static inline void eli_window_handle_title_move(eli_context *ctx, eli_window *wi
     if (!eli_is_mouse_clicked(ELI_MOUSE_BUTTON_LEFT))
         return;
 
+    /* A press that started a resize or hit the close button is not a move. */
+    if (eli_get_active_id() == eli_window_resize_id(win) ||
+        eli_window_mouse_over_close_button(ctx, win))
+        return;
+
     eli_vec2 tl = eli_rect_min(win->title_bar_rect);
     eli_vec2 br = eli_rect_max(win->title_bar_rect);
     if (!eli_window_has_title_bar(win))
@@ -162,42 +166,39 @@ static inline void eli_window_handle_title_move(eli_context *ctx, eli_window *wi
 }
 
 /**
- * Resize a window by dragging its bottom-right grip. Enabled only for movable,
- * non-collapsed top-level windows without ELI_WINDOW_NO_RESIZE. Adjusts
- * size_full by the mouse delta while the grip is held. Called from eli_begin.
+ * Raise and focus the window under a left click, anywhere in it (title bar or
+ * body). A window with ELI_WINDOW_NO_BRING_TO_FRONT_ON_FOCUS is focused but
+ * keeps its z-order (eli_window_focus). Called once per frame, after the hovered
+ * window is found, so this frame's hover is unchanged.
  *
  * @param ctx  Context (non-NULL).
- * @param win  Window under test (non-NULL).
- * @param style Active style (non-NULL).
  */
-static inline void eli_window_handle_resize(eli_context *ctx, eli_window *win,
-                                            const eli_style *style)
+static inline void eli_window_focus_on_click(eli_context *ctx)
 {
-    if (win->flags & (ELI_WINDOW_NO_RESIZE | ELI_WINDOW_AUTO_RESIZE))
+    if (ctx->hovered_window != NULL && eli_is_mouse_clicked(ELI_MOUSE_BUTTON_LEFT))
+        eli_window_focus(ctx, ctx->hovered_window);
+}
+
+/**
+ * Keep a top-level window reachable: at least style.display_window_padding of
+ * it stays inside the display on each axis, and its top edge (the title bar)
+ * never goes above the display. Not called for a position the app set this
+ * frame, so app-placed windows (e.g. drawn off-screen on purpose) are left alone.
+ *
+ * @param ctx  Context (non-NULL).
+ * @param win  Top-level window whose pos/size are final for this frame (non-NULL).
+ */
+static inline void eli_window_clamp_to_display(const eli_context *ctx, eli_window *win)
+{
+    eli_vec2 display = ctx->io.display_size;
+    if (display.x <= 0.0f || display.y <= 0.0f)
         return;
-    if (win->collapsed)
-        return;
-
-    const eli_io *io = &ctx->io;
-    float g = ELI_WINDOW_RESIZE_GRIP_SIZE;
-    eli_vec2 br = eli_rect_max(win->outer_rect);
-    eli_vec2 grip_min = eli_make_vec2(br.x - g, br.y - g);
-
-    bool over_grip = eli_is_mouse_hovering_rect(grip_min, br, false) && ctx->hovered_window == win;
-    eli_id resize_id = win->id ^ 0x52455A31u; /* "REZ1" salt for the grip id */
-
-    if (over_grip && eli_is_mouse_clicked(ELI_MOUSE_BUTTON_LEFT))
-        eli_set_active_id(resize_id);
-
-    if (eli_get_active_id() == resize_id) {
-        if (io->mouse_down[ELI_MOUSE_BUTTON_LEFT]) {
-            win->size_full = eli_vec2_add(win->size_full, io->mouse_delta);
-            win->size_full.x = eli_max_f(win->size_full.x, style->window_min_size.x);
-            win->size_full.y = eli_max_f(win->size_full.y, style->window_min_size.y);
-        } else {
-            eli_clear_active_id();
-        }
-    }
+    eli_vec2 pad = ctx->style.display_window_padding;
+    float vis_x = eli_min_f(pad.x, win->size.x);
+    float vis_y = eli_min_f(pad.y, win->size.y);
+    win->pos.x = eli_clamp_f(win->pos.x, vis_x - win->size.x, eli_max_f(vis_x - win->size.x,
+                                                                        display.x - vis_x));
+    win->pos.y = eli_clamp_f(win->pos.y, 0.0f, eli_max_f(0.0f, display.y - vis_y));
 }
 
 #endif /* ELI_WINDOW_ELI_WINDOW_INTERACTION_H */

@@ -153,6 +153,13 @@ typedef struct eli_window {
 
     eli_vec2 window_padding;
     float    title_bar_height;
+    bool     has_close_button;   /* eli_begin got a p_open this frame */
+
+    /* Manual resize (eli_window_resize.h): the edges held by the current drag
+     * (ELI_WINDOW_EDGE_* bits, 0 when none) and the mouse offset from those edges
+     * at the press, so the edges track the pointer exactly. */
+    int      resize_edges;
+    eli_vec2 resize_grab_offset;
 
     /* Hierarchy + focus. */
     struct eli_window *parent_window;

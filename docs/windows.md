@@ -69,7 +69,9 @@ eli_end();
 ```
 
 Passing a non-NULL `p_open` draws a close button in the title bar and clears
-`*p_open` when it is clicked.
+`*p_open` when it is clicked. The button is a `style.close_button_size` square
+(default 14), filled with `ELI_COL_BUTTON_HOVERED` (`_ACTIVE` while pressed) when
+hovered; the title bar grows to fit a larger button.
 
 The window's id is the CRC-32 hash of `name` (honoring `##`/`###` label rules
 from the ID system), so `"Cfg##1"` and `"Cfg##2"` are distinct windows that show
@@ -82,7 +84,7 @@ the same title `Cfg`.
 | Flag | Effect |
 |------|--------|
 | `ELI_WINDOW_NO_TITLEBAR` | No title bar (and no title-bar height). |
-| `ELI_WINDOW_NO_RESIZE` | Disable the bottom-right resize grip. |
+| `ELI_WINDOW_NO_RESIZE` | Disable edge/corner resize and the drawn grip. |
 | `ELI_WINDOW_NO_MOVE` | Disable title-bar dragging. |
 | `ELI_WINDOW_NO_SCROLLBAR` | Never show scrollbars. |
 | `ELI_WINDOW_NO_SCROLL_WITH_MOUSE` | Ignore the mouse wheel. |
@@ -92,6 +94,7 @@ the same title `Cfg`.
 | `ELI_WINDOW_HORIZONTAL_SCROLLBAR` | Allow a horizontal scrollbar. |
 | `ELI_WINDOW_ALWAYS_VERTICAL_SCROLLBAR` | Always reserve the vertical scrollbar. |
 | `ELI_WINDOW_NO_FOCUS_ON_APPEARING` | Don't grab focus when first shown. |
+| `ELI_WINDOW_NO_BRING_TO_FRONT_ON_FOCUS` | Focus never raises it; it joins the z-order at the back. |
 | `ELI_WINDOW_NO_MOUSE_INPUTS` | Window is not hit-tested for hover. |
 
 ## Next-window settings
@@ -192,11 +195,20 @@ The mouse wheel scrolls the hovered window in `eli_window_new_frame`, stepped by
 
 - **Move**: press-and-drag the title bar (unless `ELI_WINDOW_NO_MOVE`). The drag
   is armed in `eli_begin` and tracked in `eli_window_new_frame`.
-- **Resize**: drag the bottom-right grip (unless `ELI_WINDOW_NO_RESIZE` /
-  `ELI_WINDOW_AUTO_RESIZE`).
+- **Resize**: drag any edge (a 4 px band inside it), a corner, or the drawn
+  bottom-right grip (`ELI_COL_RESIZE_GRIP`, `_HOVERED`, `_ACTIVE`), unless
+  `ELI_WINDOW_NO_RESIZE` / `ELI_WINDOW_AUTO_RESIZE`. The matching resize cursor is
+  set in `io.mouse_cursor`. The size respects `window_min_size` and
+  `eli_set_next_window_size_constraints`; the opposite edge stays put.
+- **Clamp**: a top-level window keeps `style.display_window_padding` (default
+  64 px) on screen on each axis and its title bar never goes above the display.
+  A position the app sets this frame (`eli_set_next_window_pos` whose condition
+  applies) is not clamped.
 - **Collapse**: double-click the title bar (unless `ELI_WINDOW_NO_COLLAPSE`).
-- **Focus / z-order**: clicking a window, or `eli_set_next_window_focus`, brings
-  it to the front; the top-most window under the mouse is the hovered one.
+- **Focus / z-order**: a click anywhere in a window (title bar or body), or
+  `eli_set_next_window_focus`, focuses it and brings it to the front (not with
+  `ELI_WINDOW_NO_BRING_TO_FRONT_ON_FOCUS`); the top-most window under the mouse is
+  the hovered one.
 
 ## Compiling example
 

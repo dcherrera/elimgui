@@ -36,6 +36,7 @@ typedef struct eli_style {
     eli_vec2 window_min_size;
     eli_vec2 window_title_align;
     eli_dir window_menu_button_position;
+    float close_button_size;          /* title-bar close button box side (px) */
     float child_rounding;
     float child_border_size;
     float popup_rounding;
