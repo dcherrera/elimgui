@@ -179,10 +179,48 @@ static inline void eli_draw_list_path_arc_to(eli_draw_list *list, eli_vec2 cente
     }
 }
 
+/** Steps per full turn used by eli_draw_list_path_arc_to_fast. */
+#define ELI_DRAW_ARC_FAST_STEPS 12
+
+/**
+ * Return the unit-circle table for arc_to_fast, building it on first use: entry
+ * k is (cos, sin) of k/12 of a turn, k in [0, 12]. Computed from the same angle
+ * expression the per-point trig used, so table-driven arcs are bit-identical.
+ * Entry 12 is kept apart from entry 0 (float 2*pi is not exactly a full turn).
+ *
+ * @return  Pointer to ELI_DRAW_ARC_FAST_STEPS + 1 entries (never NULL).
+ *
+ * Thread-safe: no (lazily initializes a static table)
+ * Reentrant: no
+ */
+static inline const eli_vec2 *eli_draw_arc_fast_lut(void)
+{
+    static eli_vec2 table[ELI_DRAW_ARC_FAST_STEPS + 1];
+    static bool built = false;
+    if (!built) {
+        for (int a = 0; a <= ELI_DRAW_ARC_FAST_STEPS; a++) {
+            float angle = ((float)a / (float)ELI_DRAW_ARC_FAST_STEPS) * (2.0f * ELI_PI);
+            table[a] = eli_make_vec2(cosf(angle), sinf(angle));
+        }
+        built = true;
+    }
+    return table;
+}
+
+/** Unit vector at step `a` of 12: the table in [0, 12], direct trig outside it. */
+static inline eli_vec2 eli_draw__arc_fast_unit(const eli_vec2 *lut, int a)
+{
+    if (a >= 0 && a <= ELI_DRAW_ARC_FAST_STEPS)
+        return lut[a];
+    float angle = ((float)a / (float)ELI_DRAW_ARC_FAST_STEPS) * (2.0f * ELI_PI);
+    return eli_make_vec2(cosf(angle), sinf(angle));
+}
+
 /**
  * Append a quarter-resolution arc using the 12-o'clock division (0: east,
  * 3: south, 6: west, 9: north, 12: east). Points are emitted at each 1/12 step
- * from `a_min_of_12` to `a_max_of_12`, inclusive.
+ * from `a_min_of_12` to `a_max_of_12`, inclusive, from a precomputed unit-circle
+ * table (multiply-adds only, no per-point trig).
  *
  * @param list         Target draw list.
  * @param center       Arc center.
@@ -197,11 +235,12 @@ static inline void eli_draw_list_path_arc_to_fast(eli_draw_list *list, eli_vec2 
         eli_draw_path_push(list, center);
         return;
     }
+    const eli_vec2 *lut = eli_draw_arc_fast_lut();
     int step = (a_max_of_12 >= a_min_of_12) ? 1 : -1;
     for (int a = a_min_of_12;; a += step) {
-        float angle = ((float)a / 12.0f) * (2.0f * ELI_PI);
-        eli_draw_path_push(list, eli_make_vec2(center.x + cosf(angle) * radius,
-                                               center.y + sinf(angle) * radius));
+        eli_vec2 unit = eli_draw__arc_fast_unit(lut, a);
+        eli_draw_path_push(list, eli_make_vec2(center.x + unit.x * radius,
+                                               center.y + unit.y * radius));
         if (a == a_max_of_12)
             break;
     }
