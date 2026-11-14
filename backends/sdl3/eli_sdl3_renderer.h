@@ -3,19 +3,32 @@
 /**
  * @file eli_sdl3_renderer.h
  * @brief SDL3 renderer backend: eli_draw_data -> SDL_RenderGeometryRaw, plus
- *        RGBA texture helpers and the font-atlas upload.
+ *        RGBA and single-channel texture helpers, the font-atlas pages and
+ *        present-surface control (vsync, Metal drawable count, swapchain release
+ *        while hidden).
  *
  * Header-only, `static inline`. Include after <eli/elimgui.h>. Uses SDL_Renderer
  * (D2): works on Metal, OpenGL, GLES2, Vulkan, D3D and the software renderer.
  * Draw data is in points; the renderer applies SDL_SetRenderScale(framebuffer
  * scale) itself, so the app never scales. The app owns clear and present.
  *
- *     eli_sdl3_renderer_init(renderer);
+ *     eli_sdl3_renderer_config cfg = { .drawable_count = 2, .vsync = ELI_SDL3_VSYNC_ON,
+ *                                      .release_when_hidden = true };
+ *     eli_sdl3_renderer_init_ex(renderer, &cfg);      // or eli_sdl3_renderer_init(renderer)
  *     eli_sdl3_renderer_create_fonts_texture(atlas);
+ *     ... each SDL event: eli_sdl3_renderer_process_event(&e); ...
  *     ... each frame: eli_sdl3_renderer_render_draw_data(eli_get_draw_data()); ...
  *     eli_sdl3_renderer_shutdown();
  *
  * Texture ids are `SDL_Texture *` cast to eli_texture_id (uintptr_t).
+ *
+ * Font pages are single-channel: an SDL_PIXELFORMAT_INDEX8 texture (an R8 texture
+ * on the GPU, 1 byte per texel) whose 256-entry palette maps coverage i to white
+ * with alpha i, so vertex color tints it exactly like the old white-RGBA atlas at
+ * a quarter of the memory. A renderer without INDEX8 gets RGBA32 instead.
+ * create_fonts_texture installs the atlas's backend hooks, so on-demand pages get
+ * a texture the moment they are allocated; render_draw_data calls
+ * eli_font_atlas_update on the current context's atlas before drawing.
  *
  * @status In use (desktop example).
  * @issues SDL3 has no 8-bit vertex color path, so colors are expanded to
@@ -29,12 +42,38 @@
 
 #include <eli/elimgui.h>
 
+#include "eli_sdl3_metal.h"
+
+/** Vsync choice for eli_sdl3_renderer_config (KEEP = leave the renderer's setting). */
+typedef enum eli_sdl3_vsync {
+    ELI_SDL3_VSYNC_KEEP = 0,
+    ELI_SDL3_VSYNC_OFF,
+    ELI_SDL3_VSYNC_ON,
+    ELI_SDL3_VSYNC_ADAPTIVE   /* late frames tear instead of waiting (where supported) */
+} eli_sdl3_vsync;
+
+/**
+ * Present-surface options (zero-initialized = SDL's defaults, nothing released).
+ * Each Metal drawable is one window-sized IOSurface (2560x1600 px = 15.6 MiB).
+ */
+typedef struct eli_sdl3_renderer_config {
+    int drawable_count;           /* Metal swapchain depth, 2 or 3; 0 = keep (3) */
+    eli_sdl3_vsync vsync;
+    bool release_when_hidden;     /* shrink the swapchain to 1x1 px while hidden or minimised */
+    bool release_when_occluded;   /* ... and while fully covered (the last frame stays on
+                                     screen until the next present) */
+} eli_sdl3_renderer_config;
+
 /** Renderer backend state. */
 typedef struct eli_sdl3_renderer_state {
     SDL_Renderer *renderer;
     SDL_FColor *colors;           /* per-list vertex color scratch (eli_mem) */
     int colors_capacity;
-    SDL_Texture *font_texture;
+    SDL_Texture *font_texture;    /* page 0 of the attached atlas, or an app-set texture */
+    bool font_texture_is_page;    /* font_texture belongs to the atlas (not destroyed here) */
+    eli_sdl3_renderer_config config;
+    void *metal_layer;            /* CAMetalLayer (init_ex; NULL on other renderers) */
+    bool surface_released;        /* the Metal drawables are shrunk to 1x1 px */
 } eli_sdl3_renderer_state;
 
 ELI_GLOBAL(eli_sdl3_renderer_state, g_eli_sdl3_renderer, {0});
@@ -61,6 +100,111 @@ static inline bool eli_sdl3_renderer_init(SDL_Renderer *renderer)
     if (io)
         io->backend_flags |= ELI_BACKEND_FLAGS_RENDERER_HAS_VTX_OFFSET;
     return true;
+}
+
+/* ---------------------------------------------------------------------------
+ * Present surface: vsync, drawable count, release while hidden
+ * ------------------------------------------------------------------------- */
+
+/** @return true when the config wants the swapchain released for these window flags. */
+static inline bool eli_sdl3__surface_should_release(const eli_sdl3_renderer_config *cfg,
+                                                    SDL_WindowFlags flags)
+{
+    if (cfg->release_when_hidden && (flags & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED)))
+        return true;
+    return cfg->release_when_occluded && (flags & SDL_WINDOW_OCCLUDED);
+}
+
+/**
+ * Shrink the Metal drawables to 1x1 px, or give them back the window's pixel size,
+ * to match the window's visibility. A pixel-size change while released re-grows
+ * the drawables (SDL resizes the layer), so a released surface is shrunk again.
+ * No-op on renderers without a CAMetalLayer.
+ */
+static inline void eli_sdl3__surface_update(void)
+{
+    eli_sdl3_renderer_state *st = &g_eli_sdl3_renderer;
+    void *layer = st->metal_layer;
+    SDL_Window *window = layer ? SDL_GetRenderWindow(st->renderer) : NULL;
+    if (!window || !(st->config.release_when_hidden || st->config.release_when_occluded))
+        return;
+    bool release = eli_sdl3__surface_should_release(&st->config, SDL_GetWindowFlags(window));
+    int w = 0, h = 0;
+    eli_sdl3_metal_drawable_size(layer, &w, &h);
+    if (release && (w != 1 || h != 1)) {
+        eli_sdl3_metal_set_drawable_size(layer, 1, 1);
+    } else if (!release && st->surface_released) {
+        SDL_GetWindowSizeInPixels(window, &w, &h);
+        eli_sdl3_metal_set_drawable_size(layer, w, h);
+    }
+    st->surface_released = release;
+}
+
+/**
+ * Attach the renderer backend (like eli_sdl3_renderer_init) and apply present-surface
+ * options: vsync, Metal drawable count, and the swapchain-release policy, which
+ * eli_sdl3_renderer_process_event then follows.
+ *
+ * @param renderer  The app's SDL renderer (must outlive shutdown).
+ * @param config    Options (NULL = all defaults, same as eli_sdl3_renderer_init).
+ * @return          false if renderer is NULL. An option the renderer refuses is
+ *                  logged and skipped (check eli_sdl3_renderer_drawable_count or
+ *                  SDL_PROP_RENDERER_VSYNC_NUMBER); a drawable count on a renderer
+ *                  without a CAMetalLayer is ignored.
+ *
+ * Thread-safe: no (main thread)  Reentrant: no
+ */
+static inline bool eli_sdl3_renderer_init_ex(SDL_Renderer *renderer, const eli_sdl3_renderer_config *config)
+{
+    if (!eli_sdl3_renderer_init(renderer))
+        return false;
+    if (!config)
+        return true;
+    g_eli_sdl3_renderer.config = *config;
+    if (config->vsync != ELI_SDL3_VSYNC_KEEP) {
+        int value = config->vsync == ELI_SDL3_VSYNC_ON ? 1 : config->vsync == ELI_SDL3_VSYNC_ADAPTIVE ? -1 : 0;
+        if (!SDL_SetRenderVSync(renderer, value))
+            SDL_Log("eli_sdl3: SDL_SetRenderVSync(%d) failed: %s", value, SDL_GetError());
+    }
+    void *layer = SDL_GetRenderMetalLayer(renderer);
+    g_eli_sdl3_renderer.metal_layer = layer;
+    if (config->drawable_count && layer && !eli_sdl3_metal_set_drawable_count(layer, config->drawable_count))
+        SDL_Log("eli_sdl3: drawable count %d refused (Metal takes 2 or 3)", config->drawable_count);
+    eli_sdl3__surface_update();
+    return true;
+}
+
+/**
+ * Follow the window's visibility for the swapchain-release policy of
+ * eli_sdl3_renderer_init_ex. Feed every SDL event (cheap: only the renderer
+ * window's own window events do anything).
+ *
+ * @param e  The event.
+ *
+ * Thread-safe: no (main thread)  Reentrant: no
+ */
+static inline void eli_sdl3_renderer_process_event(const SDL_Event *e)
+{
+    eli_sdl3_renderer_state *st = &g_eli_sdl3_renderer;
+    if (!e || !st->metal_layer || e->type < SDL_EVENT_WINDOW_FIRST || e->type > SDL_EVENT_WINDOW_LAST)
+        return;
+    SDL_Window *window = SDL_GetRenderWindow(st->renderer);
+    if (!window || e->window.windowID != SDL_GetWindowID(window))
+        return;
+    eli_sdl3__surface_update();
+}
+
+/** @return true while the swapchain is released (render_draw_data draws nothing then). */
+static inline bool eli_sdl3_renderer_surface_released(void)
+{
+    return g_eli_sdl3_renderer.surface_released;
+}
+
+/** @return the Metal drawable count in effect, or 0 on renderers without a CAMetalLayer. */
+static inline int eli_sdl3_renderer_drawable_count(void)
+{
+    SDL_Renderer *r = g_eli_sdl3_renderer.renderer;
+    return r ? eli_sdl3_metal_drawable_count(SDL_GetRenderMetalLayer(r)) : 0;
 }
 
 /* ---------------------------------------------------------------------------
@@ -122,43 +266,183 @@ static inline void eli_sdl3_texture_destroy(eli_texture_id id)
         SDL_DestroyTexture((SDL_Texture *)(uintptr_t)id);
 }
 
-/** Destroy the font texture uploaded by eli_sdl3_renderer_create_fonts_texture. */
-static inline void eli_sdl3_renderer_destroy_fonts_texture(void)
+/** @return true when `r` can create SDL_PIXELFORMAT_INDEX8 textures. */
+static inline bool eli_sdl3__renderer_has_index8(SDL_Renderer *r)
 {
-    eli_sdl3_texture_destroy((eli_texture_id)(uintptr_t)g_eli_sdl3_renderer.font_texture);
-    g_eli_sdl3_renderer.font_texture = NULL;
+    const SDL_PixelFormat *formats = (const SDL_PixelFormat *)SDL_GetPointerProperty(
+        SDL_GetRendererProperties(r), SDL_PROP_RENDERER_TEXTURE_FORMATS_POINTER, NULL);
+    for (int i = 0; formats && formats[i] != SDL_PIXELFORMAT_UNKNOWN; i++)
+        if (formats[i] == SDL_PIXELFORMAT_INDEX8)
+            return true;
+    return false;
+}
+
+/** Give an INDEX8 texture the coverage palette: index i -> white with alpha i. */
+static inline bool eli_sdl3__set_alpha_palette(SDL_Texture *tex)
+{
+    SDL_Palette *pal = SDL_CreatePalette(256);
+    if (!pal)
+        return false;
+    SDL_Color colors[256];
+    for (int i = 0; i < 256; i++)
+        colors[i] = (SDL_Color){ 255, 255, 255, (Uint8)i };
+    bool ok = SDL_SetPaletteColors(pal, colors, 0, 256) && SDL_SetTexturePalette(tex, pal);
+    SDL_DestroyPalette(pal); /* the texture keeps its own reference */
+    return ok;
+}
+
+/** Upload single-channel rows into `tex` (expanded to white+alpha if it is RGBA32). */
+static inline bool eli_sdl3__upload_alpha8(SDL_Texture *tex, const SDL_Rect *rect,
+                                           const unsigned char *alpha8, int pitch)
+{
+    if (tex->format == SDL_PIXELFORMAT_INDEX8)
+        return SDL_UpdateTexture(tex, rect, alpha8, pitch);
+    int w = rect ? rect->w : tex->w, h = rect ? rect->h : tex->h;
+    Uint32 *rgba = (Uint32 *)SDL_malloc((size_t)w * (size_t)h * sizeof(*rgba));
+    if (!rgba)
+        return false;
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+            rgba[(size_t)y * w + x] = ((Uint32)alpha8[(size_t)y * pitch + x] << 24) | 0x00FFFFFFu;
+    bool ok = SDL_UpdateTexture(tex, rect, rgba, w * 4);
+    SDL_free(rgba);
+    return ok;
 }
 
 /**
- * Upload a font atlas (building it if needed) and set its texture id. Replaces a
- * previously uploaded atlas texture. CPU pixels are kept; call
- * eli_font_atlas_release_cpu_pixels afterwards to free them.
+ * Create a static single-channel coverage texture on renderer `r`: INDEX8 with
+ * the coverage palette (1 byte per texel), else RGBA32. Linear filtering, blend.
  *
- * @param atlas  Atlas to upload.
+ * @param r       Renderer to create it on.
+ * @param w, h    Size in texels.
+ * @param alpha8  w*h coverage bytes (pitch w), or NULL for uninitialized.
+ * @return        Texture id, or 0 on failure (logged).
+ *
+ * Thread-safe: no  Reentrant: no
+ */
+static inline eli_texture_id eli_sdl3_texture_create_alpha8_on(SDL_Renderer *r, int w, int h,
+                                                               const unsigned char *alpha8)
+{
+    bool index8 = eli_sdl3__renderer_has_index8(r);
+    SDL_Texture *tex = SDL_CreateTexture(r, index8 ? SDL_PIXELFORMAT_INDEX8 : SDL_PIXELFORMAT_RGBA32,
+                                         SDL_TEXTUREACCESS_STATIC, w, h);
+    if (!tex || (index8 && !eli_sdl3__set_alpha_palette(tex))) {
+        SDL_Log("eli_sdl3: alpha8 texture (%dx%d) failed: %s", w, h, SDL_GetError());
+        if (tex)
+            SDL_DestroyTexture(tex);
+        return 0;
+    }
+    if (alpha8 && !eli_sdl3__upload_alpha8(tex, NULL, alpha8, w))
+        SDL_Log("eli_sdl3: alpha8 texture upload failed: %s", SDL_GetError());
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_LINEAR);
+    return (eli_texture_id)(uintptr_t)tex;
+}
+
+/**
+ * Update a region of a texture from eli_sdl3_texture_create_alpha8_on.
+ *
+ * @param id      Texture id.
+ * @param rect    Region in texels, or NULL for the whole texture.
+ * @param alpha8  Coverage bytes of the region's first row.
+ * @param pitch   Bytes per row of `alpha8`.
+ * @return        true on success.
+ *
+ * Thread-safe: no  Reentrant: no
+ */
+static inline bool eli_sdl3_texture_update_alpha8(eli_texture_id id, const SDL_Rect *rect,
+                                                  const unsigned char *alpha8, int pitch)
+{
+    SDL_Texture *tex = (SDL_Texture *)(uintptr_t)id;
+    return tex && alpha8 && eli_sdl3__upload_alpha8(tex, rect, alpha8, pitch);
+}
+
+/* Atlas backend hooks: user_data is the SDL_Renderer the pages live on. */
+static inline eli_texture_id eli_sdl3__atlas_create(void *user, int w, int h,
+                                                    const unsigned char *alpha8)
+{
+    return eli_sdl3_texture_create_alpha8_on((SDL_Renderer *)user, w, h, alpha8);
+}
+
+static inline void eli_sdl3__atlas_update(void *user, eli_texture_id id, int x, int y, int w,
+                                          int h, const unsigned char *alpha8, int pitch)
+{
+    (void)user;
+    SDL_Rect rect = { x, y, w, h };
+    if (!eli_sdl3_texture_update_alpha8(id, &rect, alpha8, pitch))
+        SDL_Log("eli_sdl3: atlas page update failed: %s", SDL_GetError());
+}
+
+static inline void eli_sdl3__atlas_destroy(void *user, eli_texture_id id)
+{
+    (void)user;
+    eli_sdl3_texture_destroy(id);
+}
+
+/** @return the current context's atlas when its pages live on this backend's renderer. */
+static inline eli_font_atlas *eli_sdl3__owned_atlas(void)
+{
+    eli_io *io = eli_get_io();
+    eli_font_atlas *atlas = io ? io->fonts : NULL;
+    if (atlas && g_eli_sdl3_renderer.renderer &&
+        atlas->backend.user_data == (void *)g_eli_sdl3_renderer.renderer)
+        return atlas;
+    return NULL;
+}
+
+/**
+ * Destroy the font textures: the attached atlas's page textures (pages keep their
+ * pixels and the hooks stay, so the next update recreates them), or an app-set
+ * font_texture that is not an atlas page.
+ *
+ * Thread-safe: no  Reentrant: no
+ */
+static inline void eli_sdl3_renderer_destroy_fonts_texture(void)
+{
+    eli_font_atlas *atlas = eli_sdl3__owned_atlas();
+    if (atlas)
+        eli_font_atlas_release_textures(atlas);
+    else if (!g_eli_sdl3_renderer.font_texture_is_page)
+        eli_sdl3_texture_destroy((eli_texture_id)(uintptr_t)g_eli_sdl3_renderer.font_texture);
+    g_eli_sdl3_renderer.font_texture = NULL;
+    g_eli_sdl3_renderer.font_texture_is_page = false;
+}
+
+/**
+ * Attach a font atlas (building it if needed): install its backend hooks on this
+ * renderer and create single-channel textures for its pages, now and for every
+ * page it allocates later. Sets the atlas's tex_id (page 0). CPU pixels are kept;
+ * on a baked atlas call eli_font_atlas_release_cpu_pixels afterwards to free them.
+ * The atlas owns its page textures: destroying or rebuilding it frees them.
+ *
+ * @param atlas  Atlas to attach (should be the context's io.fonts).
  * @return       true on success.
  *
  * Thread-safe: no  Reentrant: no
  */
 static inline bool eli_sdl3_renderer_create_fonts_texture(eli_font_atlas *atlas)
 {
-    unsigned char *pixels = NULL;
-    int w = 0, h = 0, bpp = 0;
-    eli_font_atlas_get_tex_data_as_rgba32(atlas, &pixels, &w, &h, &bpp);
-    if (!pixels || w <= 0 || h <= 0)
+    SDL_Renderer *r = g_eli_sdl3_renderer.renderer;
+    if (!atlas || !r)
         return false;
-    eli_sdl3_renderer_destroy_fonts_texture();
-    eli_texture_id id = eli_sdl3_texture_create_rgba(w, h, pixels);
-    if (!id)
+    if (!eli_font_atlas_is_built(atlas) && !eli_font_atlas_build(atlas))
         return false;
-    g_eli_sdl3_renderer.font_texture = (SDL_Texture *)(uintptr_t)id;
-    eli_font_atlas_set_tex_id(atlas, id);
-    return true;
+    eli_font_atlas_backend hooks = { r, eli_sdl3__atlas_create, eli_sdl3__atlas_update,
+                                     eli_sdl3__atlas_destroy };
+    if (!g_eli_sdl3_renderer.font_texture_is_page)
+        eli_sdl3_texture_destroy((eli_texture_id)(uintptr_t)g_eli_sdl3_renderer.font_texture);
+    eli_font_atlas_set_backend(atlas, &hooks);
+    g_eli_sdl3_renderer.font_texture = (SDL_Texture *)(uintptr_t)atlas->tex_id;
+    g_eli_sdl3_renderer.font_texture_is_page = true;
+    return atlas->tex_id != 0;
 }
 
-/** Release the font texture and the color scratch. */
+/** Release the font page textures (detaching the atlas hooks) and the color scratch. */
 static inline void eli_sdl3_renderer_shutdown(void)
 {
+    eli_font_atlas *atlas = eli_sdl3__owned_atlas();
     eli_sdl3_renderer_destroy_fonts_texture();
+    eli_font_atlas_set_backend(atlas, NULL);
     eli_mem_free(g_eli_sdl3_renderer.colors);
     memset(&g_eli_sdl3_renderer, 0, sizeof(g_eli_sdl3_renderer));
 }
@@ -236,7 +520,7 @@ static inline void eli_sdl3__render_list(SDL_Renderer *r, const eli_draw_list *l
 /**
  * Render a frame's draw data with the attached SDL renderer. Saves and restores
  * the renderer's viewport, clip rect and scale. The app clears before and
- * presents after.
+ * presents after. Draws nothing while the swapchain is released (hidden window).
  *
  * @param dd  Draw data from eli_get_draw_data() (NULL/invalid/zero size: no-op).
  *
@@ -245,7 +529,8 @@ static inline void eli_sdl3__render_list(SDL_Renderer *r, const eli_draw_list *l
 static inline void eli_sdl3_renderer_render_draw_data(const eli_draw_data *dd)
 {
     SDL_Renderer *r = g_eli_sdl3_renderer.renderer;
-    if (!r || !dd || !dd->valid || dd->display_size.x <= 0.0f || dd->display_size.y <= 0.0f)
+    if (!r || !dd || !dd->valid || dd->display_size.x <= 0.0f || dd->display_size.y <= 0.0f ||
+        g_eli_sdl3_renderer.surface_released)
         return;
     SDL_Rect old_viewport, old_clip;
     bool had_viewport = SDL_RenderViewportSet(r), had_clip = SDL_RenderClipEnabled(r);
@@ -254,6 +539,11 @@ static inline void eli_sdl3_renderer_render_draw_data(const eli_draw_data *dd)
     SDL_GetRenderClipRect(r, &old_clip);
     SDL_GetRenderScale(r, &old_sx, &old_sy);
 
+    eli_font_atlas *atlas = eli_sdl3__owned_atlas();
+    if (atlas) { /* upload new glyphs, free idle pages, advance the LRU clock */
+        eli_font_atlas_update(atlas);
+        g_eli_sdl3_renderer.font_texture = (SDL_Texture *)(uintptr_t)atlas->tex_id;
+    }
     SDL_SetRenderViewport(r, NULL);
     SDL_SetRenderScale(r, dd->framebuffer_scale.x, dd->framebuffer_scale.y);
     for (int li = 0; li < dd->cmd_lists_count; li++) {

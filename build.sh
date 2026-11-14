@@ -105,6 +105,8 @@ sdl3_pkg_flags() {
 build_sdl3_example() {
     local mode="$1" out flags sdl_flags host_cc="${CC_HOST:-cc}"
     sdl_flags="$(sdl3_pkg_flags)" || { echo "SDL3 not found (pkg-config sdl3)"; return 1; }
+    local objc_flags=""
+    [[ "$(uname -s)" == "Darwin" ]] && objc_flags="-lobjc"   # eli_sdl3_metal.h (CAMetalLayer)
     mkdir -p "${SDL3_EXAMPLE_DIR}/build"
     if [[ "${mode}" == "debug" ]]; then
         out="${SDL3_EXAMPLE_DIR}/build/elimgui_sdl3_debug"
@@ -124,7 +126,9 @@ build_sdl3_example() {
         -I"${SCRIPT_DIR}/include" -I"${SCRIPT_DIR}/vendor" -I"${SCRIPT_DIR}/backends" \
         "${SDL3_EXAMPLE_DIR}/main.c" "${SDL3_EXAMPLE_DIR}/shell.c" "${SDL3_EXAMPLE_DIR}/perf_fixture.c" \
         "${SDL3_EXAMPLE_DIR}/tasks.c" "${SDL3_EXAMPLE_DIR}/selftest.c" \
-        ${sdl_flags} -o "${out}" || return 1
+        "${SDL3_EXAMPLE_DIR}/swapchain_selftest.c" \
+        "${SDL3_EXAMPLE_DIR}/atlas_selftest.c" \
+        ${sdl_flags} ${objc_flags} -o "${out}" || return 1
     echo "Built: ${out#"${SCRIPT_DIR}/"}"
 }
 

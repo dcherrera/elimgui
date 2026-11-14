@@ -52,7 +52,7 @@ include/eli/
 ├── elimgui.h        # umbrella — one include pulls in the whole library
 ├── core/            # types, enums, IO, style struct, context, frame lifecycle
 ├── draw/            # draw lists, primitives, paths, beziers, channels
-├── font/            # atlas (stb_truetype), embedded font, glyph ranges, text
+├── font/            # atlas pages (on-demand, fallback chains), embedded font, glyph ranges, text
 ├── input/           # mouse, keyboard, text, shortcuts, clipboard
 ├── id/              # ID hashing/stack, active/hot id, storage
 ├── style/           # themes, style stacks, color utilities
