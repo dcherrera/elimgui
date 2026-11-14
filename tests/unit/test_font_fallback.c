@@ -146,7 +146,7 @@ ELI_TEST(missing_glyph_draws_a_tofu_box_not_a_question_mark) {
     eli_font_atlas *atlas = plain_atlas(13.0f, &f);
     const eli_font_glyph *g = eli_font_find_glyph(f, 0x4E00);
     ELI_ASSERT_EQ(g->kind, ELI_FONT_GLYPH_TOFU);
-    ELI_ASSERT_FLT_NEAR(g->advance_x, eli_font_find_glyph(f, '0')->advance_x, 1e-4);
+    ELI_ASSERT_FLT_NEAR(g->advance_x, eli_font_find_glyph(f, '?')->advance_x, 1e-4);
 
     eli_draw_list list;
     eli_draw_list_init(&list, 0);

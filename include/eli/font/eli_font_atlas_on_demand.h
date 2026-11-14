@@ -209,7 +209,8 @@ static inline float eli_font__config_advance_of(eli_font_atlas *atlas, int ci, u
 
 /**
  * Reset a font and fill its metrics from its primary config: size, ascent,
- * descent, line height, cell advance ('M') and the tofu box (as wide as '0').
+ * descent, line height, cell advance ('M') and the tofu box (as wide as '?', which
+ * missing glyphs drew as before, so layouts do not move; else '0', else half the size).
  */
 static inline void eli_font__init_metrics(eli_font_atlas *atlas, eli_font *font)
 {
@@ -227,7 +228,9 @@ static inline void eli_font__init_metrics(eli_font_atlas *atlas, eli_font *font)
     font->tex_uv_white_pixel = atlas->tex_uv_white_pixel;
     font->cell_advance_x = eli_font__config_advance_of(atlas, ci, 'M');
 
-    float tofu = eli_font__config_advance_of(atlas, ci, '0');
+    float tofu = eli_font__config_advance_of(atlas, ci, '?');
+    if (tofu <= 0.0f)
+        tofu = eli_font__config_advance_of(atlas, ci, '0');
     if (tofu <= 0.0f)
         tofu = cfg->pixel_snap_h ? (float)((int)(cfg->size_pixels * 0.5f + 0.5f))
                                  : cfg->size_pixels * 0.5f;

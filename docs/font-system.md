@@ -143,7 +143,7 @@ eli_font_atlas_add_font_from_memory_ttf(atlas, symbols, symbols_size, 12.0f, &fb
 ### Missing glyphs and custom glyphs
 
 A codepoint no source has draws a **tofu box** (an outline inset in a cell as wide
-as `'0'`), not `'?'`. `eli_font_set_fallback_char(font, '?')` restores a glyph
+as `'?'`, so layouts measured with the old `'?'` fallback do not move), not `'?'`. `eli_font_set_fallback_char(font, '?')` restores a glyph
 fallback. `eli_font_add_custom_glyph_range(font, lo, hi, advance)` with
 `eli_font_set_custom_glyph_fn(font, fn, user)` draws those codepoints through a
 callback instead of any face (box drawing, spinners, icons): it gets the draw list
