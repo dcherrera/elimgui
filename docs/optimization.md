@@ -128,6 +128,30 @@ command's `elem_count` exactly where the per-glyph path left them.
 - **Cross-frame buffer reuse.** `eli_draw_list_reset` retains all heap buffers, so
   steady-state frames allocate nothing in the draw path.
 
+## Hot paths: word wrap and arc table
+
+`tests/bench/bench_hotpath.c` times the wrapped-text and arc paths natively; the
+same file builds to wasm32 through `node tests/bench/bench_hotpath.mjs [include-dir]`
+(JAClibc software trig, the browser case). Best of 5, µs per iteration, same
+machine, previous headers vs current:
+
+| workload | native before | native after | wasm before | wasm after |
+|----------|---------------|--------------|-------------|------------|
+| frame, 10 wrapped 250-char paragraphs | 160 | 13.4 | ~195 | 21.7 |
+| frame, one ~1000-char wrapped paragraph | 72 | 5.7 | ~89 | 9.2 |
+| 1000 filled + 1000 stroked rounded rects | ~57 | 52 | ~220 | ~100 |
+
+- **Word wrap.** The wrap loop re-measured the line prefix at every byte (O(L²)
+  per line) and ran twice (measure, then render). Now one pass keeps a running
+  width and the render pass replays cached line ends: glyph lookups for the
+  10-paragraph frame drop from 129,764 to 4,514. Line breaks and widths are
+  bit-identical to the old loop (`tests/unit/test_text_wrap.c` fuzzes it against
+  a verbatim copy).
+- **Arc table.** `path_arc_to_fast` reads `eli_draw_arc_fast_lut` instead of 2
+  trig calls per point (16 per rounded rect). Geometry is bit-identical
+  (`tests/unit/test_draw_arc_fast.c`). Native libm trig is cheap, so the native
+  gain is small; on wasm it halves rounded-rect cost.
+
 ## Remaining opportunities
 
 - **`-Oz` build** halves `web/demo.wasm` (189 KB → 109 KB) with no source change;
@@ -138,6 +162,11 @@ command's `elem_count` exactly where the per-glyph path left them.
 - **Anti-aliased geometry** is deliberately not generated (the backend smooths),
   keeping vertex counts deterministic and low — a size/quality trade-off to
   revisit only if a backend needs CPU-side AA.
+- **Circles** (`add_circle[_filled]`, `add_ngon`) still call `cosf`/`sinf` per
+  point via `path_arc_to`, plus `acosf` for auto segment counts. Their angles
+  (`i/(N-1) * a_max`) never match a fixed table bit for bit, so a table there
+  shifts vertices by float rounding; a per-segment-count unit-circle cache would
+  stay exact.
 - **Text glyph lookup** (`eli_font_find_glyph`) is per-codepoint; a hot-ASCII
   fast path could shave the text loop further if profiling on WASM shows it hot.
 ```

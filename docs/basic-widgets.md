@@ -65,7 +65,7 @@ created widget first reports hovered on the **second** frame it is submitted.
 | `eli_text(fmt, ...)` / `eli_text_v` | printf-style text. |
 | `eli_text_colored(col, fmt, ...)` / `_v` | Text in an explicit `eli_vec4` color. |
 | `eli_text_disabled(fmt, ...)` / `_v` | Text in the disabled-text color. |
-| `eli_text_wrapped(fmt, ...)` / `_v` | Greedy word-wrap to the content-region width. |
+| `eli_text_wrapped(fmt, ...)` / `_v` | Greedy word-wrap to the content-region width (one O(n) layout pass; the render pass replays the cached line breaks). |
 | `eli_label_text(label, fmt, ...)` / `_v` | A value with a right-hand label. |
 | `eli_bullet_text(fmt, ...)` / `_v` | A bullet glyph followed by text. |
 | `eli_bullet(void)` | A standalone bullet, advancing one line. |

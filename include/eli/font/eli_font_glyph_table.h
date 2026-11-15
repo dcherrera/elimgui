@@ -200,6 +200,12 @@ static inline const eli_font_glyph *eli_font_find_glyph_no_fallback(const eli_fo
     return g;
 }
 
+/* Test instrumentation: define ELI_FONT_GLYPH_LOOKUP_HOOK() before including
+ * elimgui to count glyph lookups (text-measure complexity tests). No-op otherwise. */
+#ifndef ELI_FONT_GLYPH_LOOKUP_HOOK
+#define ELI_FONT_GLYPH_LOOKUP_HOOK() ((void)0)
+#endif
+
 /**
  * Look up a glyph by codepoint, falling back to the font's fallback glyph (the
  * tofu box unless fallback_char names a glyph the font has).
@@ -213,6 +219,7 @@ static inline const eli_font_glyph *eli_font_find_glyph_no_fallback(const eli_fo
  */
 static inline const eli_font_glyph *eli_font_find_glyph(const eli_font *font, uint32_t codepoint)
 {
+    ELI_FONT_GLYPH_LOOKUP_HOOK();
     const eli_font_glyph *g = eli_font_find_glyph_no_fallback(font, codepoint);
     if (g || !font)
         return g;

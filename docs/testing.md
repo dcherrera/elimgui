@@ -162,6 +162,7 @@ current suite/test counts (62 suites, 337 tests total as of Phase 32).
 |-------|-------|-----------------|
 | `test_draw_list` | 7 | Init opens single command, clip-rect stack push/pop/intersect, clip change splits command, texture stack, prim reserve + write, buffer growth across 100 primitives, `clone_output` deep copies |
 | `test_draw_prim` | 8 | Exact vertex/index counts and positions: filled rect, line, open/closed polyline, convex-fill, filled circle, stroked circle, multi-color rect; transparent-color no-op |
+| `test_draw_arc_fast` | 3 | `path_arc_to_fast` table points and rounded rects bit-identical to per-point trig; no trig calls at steady state |
 | `test_draw_channels` | 2 | Channel split/merge preserves draw order; set-current directs geometry to the correct channel |
 
 ### Layout calculations
@@ -245,6 +246,7 @@ current suite/test counts (62 suites, 337 tests total as of Phase 32).
 |-------|-------|-----------------|
 | `test_font_atlas` | 9 | Default font load, `eli_font_atlas_build`, `get_tex_data_as_rgba32`, glyph lookup |
 | `test_font_text` | 7 | `eli_calc_text_size`, multi-line text metrics, `eli_draw_list_add_text` vertex output |
+| `test_text_wrap` | 7 | O(n) word wrap vs. a verbatim copy of the old O(n²) loop (fixed + fuzzed UTF-8, bit-identical widths), `eli_text_wrapped` geometry and linear glyph lookups, `add_text_ex` `wrap_width` |
 | `test_font_pages` | 11 | On-demand glyphs (== baked glyph and texels), missing-codepoint cache, backend hooks + dirty upload, LRU recycle, soft cap, idle free, two-level lookup, text switching page textures, allocations through the eli_mem seam |
 | `test_font_fallback` | 8 | Merge mode (missing codepoints only, baseline, cell-advance fit, baked == on-demand), tofu box default, `fallback_char`, custom glyph ranges |
 

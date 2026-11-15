@@ -131,8 +131,10 @@ void eli_draw_list_path_rect(list, a, b, rounding, flags);
 
 `path_arc_to`/`elliptical_arc_to` accept `num_segments <= 0` for automatic
 tessellation. `path_arc_to_fast` uses the 12-o'clock convention (0: east,
-3: south, 6: west, 9: north). Bezier `num_segments == 0` auto-tessellates
-adaptively.
+3: south, 6: west, 9: north) and reads a 13-entry unit-circle table
+(`eli_draw_arc_fast_lut`, built once) instead of calling `cosf`/`sinf` per point;
+steps outside [0, 12] fall back to direct trig. Rounded rects (frames, scrollbars,
+tabs) go through it. Bezier `num_segments == 0` auto-tessellates adaptively.
 
 ---
 

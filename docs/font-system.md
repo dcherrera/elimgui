@@ -201,6 +201,24 @@ eli_draw_list_add_text_ex(draw_list, font, font->font_size,
 - The optional `cpu_fine_clip_rect` (`min.x, min.y, max.x, max.y`) skips glyphs
   that fall fully outside it.
 
+### Word wrap
+
+```c
+/* Wrap at 300 px: lines stack one font line height apart. */
+eli_vec2 block = eli_font_calc_text_size_wrapped(font, font->font_size, text, NULL, 300.0f);
+eli_draw_list_add_text_ex(draw_list, font, font->font_size, eli_make_vec2(x, y),
+                          ELI_COL32_WHITE, text, NULL, 300.0f, NULL);
+```
+
+- `wrap_width <= 0` breaks only on `'\n'`.
+- Greedy: a line breaks at its last space once it grows past `wrap_width`; the
+  space is dropped and the next line starts after it. A word wider than the line
+  overflows. `'\n'` always breaks.
+- `eli_font_calc_word_wrap_line(font, size, line_start, text_end, wrap_width,
+  &width)` returns one line's end; `eli_text_wrapped` and `add_text_ex` share it.
+  It keeps a running width (one glyph lookup per codepoint), so wrapping is O(n)
+  instead of re-measuring each line prefix at every byte.
+
 ## Font stack
 
 The current font lives on the active context. These operate on
@@ -233,7 +251,6 @@ Native unit tests build with `-DELI_TEST_HOSTED` (host libc) and also need
 
 - `add_text[_ex]` expects page 0 bound (windows push `atlas->tex_id`); glyphs on
   other pages switch the texture for their quads and restore it after the run.
-- `wrap_width` is currently accepted but unwrapped (reserved for a later pass).
 - The embedded ProggyClean blob (`eli_font_proggy.h`) is the big-data exception
   to the per-file size guideline. Its `eli_font_stb_decompress` also expands any
   stb-compressed TTF passed to `add_font_from_memory_compressed_ttf`.
