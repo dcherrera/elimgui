@@ -11,9 +11,34 @@ host libc in hosted test builds).  Host applications can install a custom alloca
 at startup — for pool allocation, leak tracking, or a sanitizer — and restore the
 default by passing `NULL`.
 
-All elimgui code that needs heap memory calls `eli_mem_alloc()` / `eli_mem_free()`
-rather than `malloc`/`free` directly, so a single call to `eli_set_allocator_functions()`
-redirects the entire library.
+All elimgui code that needs heap memory calls `eli_mem_alloc()` / `eli_mem_calloc()` /
+`eli_mem_realloc()` / `eli_mem_free()` rather than libc directly, so a single call to
+`eli_set_allocator_functions()` redirects the entire library: context, font atlas
+(including stb_truetype's scratch), windows, draw lists, storage, tables, tab bars,
+plots, docking, settings, logging, clipboard and drag-drop.
+
+Allocations are not absent; they are amortized. Buffers grow geometrically while the
+UI grows (new windows, longer text, more vertices) and are reused after, so
+steady-state frames allocate nothing. Everything is returned to the allocator when
+the context is destroyed (module-level buffers such as the table/tab pools, plot
+scratch, settings store and log buffer are released by the context's shutdown hooks).
+
+### Coverage
+
+`tests/unit/test_mem_coverage.c` redefines `malloc`/`calloc`/`realloc`/`free` before
+including elimgui, so any direct libc call from library code is counted as a bypass,
+and checks every category allocates through a tracking allocator and frees every
+block on destroy. `tests/bench/bench_alloc_seam.c` counts the same for a
+representative app (40 windows with child panes, table, tab bar, plot, dock space,
+overlays, ini save):
+
+| | before | after |
+|---|---|---|
+| allocation calls the host allocator sees | 265 | 1564 |
+| allocation calls bypassing it (malloc/calloc/realloc) | 1294 | 0 |
+| coverage | 17.0% | 100% |
+| frees bypassing it | 1268 | 0 |
+| allocations per steady-state frame | 0 | 0 |
 
 ## Public API
 
@@ -80,6 +105,30 @@ Allocates `sz` bytes using the current allocator.  Returns `NULL` immediately wh
 
 ---
 
+### `eli_mem_calloc`
+
+```c
+void *eli_mem_calloc(size_t count, size_t size);
+```
+
+Zeroed array allocation through the current allocator. Returns `NULL` when either
+argument is 0, when `count * size` overflows, or on failure.
+
+---
+
+### `eli_mem_realloc`
+
+```c
+void *eli_mem_realloc(void *ptr, size_t old_size, size_t new_size);
+```
+
+Resizes a seam block. The allocator pair has no realloc hook, so this allocates the
+new block, copies `min(old_size, new_size)` bytes and frees the old one; callers pass
+the old size they already track (array capacity). On failure the old block is left
+untouched and `NULL` is returned. `new_size == 0` frees `ptr`.
+
+---
+
 ### `eli_mem_free`
 
 ```c
@@ -142,11 +191,14 @@ int main(void)
 
 ## Gotchas
 
-- **Single-TU state**: The allocator state uses file-scope statics, one copy per
-  translation unit.  In the typical elimgui usage pattern (a single `.c` entry file
-  that includes the whole library), this is correct.  Multi-TU hosts that need a
-  shared allocator must call `eli_set_allocator_functions()` in every TU that
-  independently includes `eli_mem.h`.
+- **Single-TU state**: The allocator state is declared with `ELI_GLOBAL`: one copy
+  per translation unit by default (the single-TU WASM build), one shared copy under
+  `ELI_SHARED_STATE`.  Multi-TU hosts without `ELI_SHARED_STATE` must call
+  `eli_set_allocator_functions()` in every TU that includes `eli_mem.h`.
+
+- **Ownership across the API**: strings elimgui hands back for the caller to free
+  (`eli_save_ini_settings_to_memory`, host file reads) come from the seam; free them
+  with `eli_mem_free`, not `free`.
 
 - **Alloc(0) returns NULL**: Unlike some libc implementations that return a unique
   pointer for zero-byte allocations, `eli_mem_alloc(0)` always returns `NULL`.

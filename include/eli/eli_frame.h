@@ -26,12 +26,15 @@
 #include "window/eli_window.h"
 #include "widgets/eli_widgets.h"
 #include "util/eli_util.h"
+#include "util/eli_settings.h"
+#include "util/eli_logging.h"
 #include "docking/eli_dock.h"
 #include "interaction/eli_interaction.h"
 
 /**
- * Release all widget-subsystem heap state (table pool, tab-bar pool, and the
- * pending drag-drop payload). Registered as the context's widget_shutdown_fn by
+ * Release all widget-subsystem heap state (table pool, tab-bar pool, plot
+ * scratch, settings store, log buffer, pending drag-drop payload, clipboard
+ * fallback). Registered as the context's widget_shutdown_fn by
  * eli_frame_begin so eli_destroy_context can reach it without a core->widget
  * include cycle.
  *
@@ -45,6 +48,9 @@ static inline void eli_frame__shutdown_widgets(struct eli_context *ctx)
     (void)ctx;
     eli_table_shutdown();
     eli_tab_shutdown();
+    eli_plot_shutdown();
+    eli_settings_clear();
+    eli_log_shutdown();
     eli_clear_drag_drop();
     eli_clipboard_shutdown();
 }

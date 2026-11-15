@@ -18,6 +18,7 @@ settings, scrolling, interaction, queries, and child windows).
 - [Child windows](#child-windows)
 - [Scrolling](#scrolling)
 - [Interaction](#interaction)
+- [Window registry](#window-registry)
 - [Compiling example](#compiling-example)
 
 ## Frame flow
@@ -209,6 +210,33 @@ The mouse wheel scrolls the hovered window in `eli_window_new_frame`, stepped by
   `eli_set_next_window_focus`, focuses it and brings it to the front (not with
   `ELI_WINDOW_NO_BRING_TO_FRONT_ON_FOCUS`); the top-most window under the mouse is
   the hovered one.
+
+## Window registry
+
+Per-frame window bookkeeping is linear in the window count:
+
+- **By-id lookup** (`eli_find_window_by_id`, run by every `eli_begin`) is a binary
+  search of `ctx->windows_by_id`, an `eli_storage` map from window id to window
+  (Dear ImGui's `WindowsById`). `eli_window_get_or_create` reserves the pool slot
+  and the map entry before publishing a window, so an allocation failure leaves
+  the registry unchanged and `eli_begin` returns false.
+- **Focus index**: `win->focus_order` is the window's index in the focus list
+  (-1 when absent). Windows never leave the list and every insert/raise reindexes
+  the shifted entries, so `eli_window_focus_index` and hovered-window detection
+  read it in O(1).
+- **Render order**: `eli_window_render` chains each active child behind its root
+  in one pass over the pool, then walks the focus list once. Same order as
+  before: roots back-to-front, each followed by its descendants in creation order.
+
+`tests/bench/bench_window_registry.c` (N roots, each with a child pane, mouse over
+the stack), µs per full frame, 3 runs, before → after:
+
+| windows | lookup (ns) | frame (µs) |
+|---------|-------------|------------|
+| 128 | 25–50 → 6–7 | 22–48 → 14–17 |
+| 512 | 126–303 → 9–11 | 246–753 → 63–74 |
+| 2048 | 523–1477 → 12–14 | 4049–12270 → 272–323 |
+| 4096 | 1252–3021 → 14–16 | 17665–23719 → 585–702 |
 
 ## Compiling example
 

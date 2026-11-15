@@ -9,7 +9,7 @@
  * Mirrors Dear ImGui's ImGuiStorage: pairs are held in a single array kept
  * sorted by key, so lookups are O(log n) binary search and inserts shift the
  * tail. Values share a union (int/float/void*); bool is stored as int 0/1.
- * Memory grows geometrically via the libc seam and is released by
+ * Memory grows geometrically through the eli_mem allocator seam and is released by
  * eli_storage_clear.
  *
  * @status Phase 5 state storage in use.
@@ -22,29 +22,10 @@
 #include "../core/eli_platform.h"
 #include "../core/eli_types.h"
 #include "../core/eli_context.h"
+#include "eli_storage_types.h"
 
 /** Initial capacity used the first time a storage grows. */
 #define ELI_STORAGE_INIT_CAPACITY 8
-
-/** One key/value entry. The value union is selected by the accessor used. */
-typedef struct eli_storage_pair {
-    eli_id key;
-    union {
-        int   val_i;
-        float val_f;
-        void *val_p;
-    };
-} eli_storage_pair;
-
-/**
- * Sorted key/value map. Zero-initialize (all fields 0/NULL) before first use;
- * the accessors grow it on demand. Release with eli_storage_clear.
- */
-typedef struct eli_storage {
-    eli_storage_pair *data;
-    int size;
-    int capacity;
-} eli_storage;
 
 /* ---------------------------------------------------------------------------
  * Internal helpers
@@ -80,7 +61,8 @@ static inline bool eli_storage_reserve(eli_storage *st, int needed)
     if (new_cap < needed)
         new_cap = needed;
     eli_storage_pair *grown =
-        (eli_storage_pair *)realloc(st->data, (size_t)new_cap * sizeof(*grown));
+        (eli_storage_pair *)eli_mem_realloc(st->data, (size_t)st->capacity * sizeof(*grown),
+                                            (size_t)new_cap * sizeof(*grown));
     if (grown == NULL)
         return false;
     st->data = grown;
@@ -124,7 +106,7 @@ static inline void eli_storage_clear(eli_storage *st)
 {
     if (st == NULL)
         return;
-    free(st->data);
+    eli_mem_free(st->data);
     st->data = NULL;
     st->size = 0;
     st->capacity = 0;

@@ -73,7 +73,7 @@ Header-only, but organized into small, focused files by category (nothing over ~
 - **Header-only** — No separate compilation units. `#include` and go.
 - **WASM-first** — No POSIX assumptions. All platform interaction goes through JAClibc's JS interop layer.
 - **No Emscripten** — Direct `clang --target=wasm32` compilation with `-nostdlib`. The resulting binary contains only what's needed.
-- **No hidden allocations** — User controls all memory.
+- **Allocations you can see and replace** — Every heap allocation goes through the overridable allocator (`eli_set_allocator_functions`). Buffers grow while the UI grows and are reused after, so steady-state frames allocate nothing.
 - **Immediate mode** — No retained widget state except what's explicitly stored.
 - **ImGui-familiar API** — Same patterns, different prefix (`eli_` instead of `ImGui::`).
 

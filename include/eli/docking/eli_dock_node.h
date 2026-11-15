@@ -76,10 +76,10 @@ static inline void eli_dock_shutdown_context(eli_context *ctx)
         eli_dock_node *node = ctx->dock_nodes[i];
         if (node == NULL)
             continue;
-        free(node->window_ids);
-        free(node);
+        eli_mem_free(node->window_ids);
+        eli_mem_free(node);
     }
-    free(ctx->dock_nodes);
+    eli_mem_free(ctx->dock_nodes);
     ctx->dock_nodes = NULL;
     ctx->dock_nodes_count = 0;
     ctx->dock_nodes_capacity = 0;
@@ -120,7 +120,7 @@ static inline eli_dock_node *eli_dock_node_get_or_create(eli_context *ctx, eli_i
         return node;
     }
 
-    node = (eli_dock_node *)calloc(1, sizeof(*node));
+    node = (eli_dock_node *)eli_mem_calloc(1, sizeof(*node));
     if (node == NULL)
         return NULL;
     node->id = id;
@@ -136,9 +136,11 @@ static inline eli_dock_node *eli_dock_node_get_or_create(eli_context *ctx, eli_i
     if (ctx->dock_nodes_count >= ctx->dock_nodes_capacity) {
         int cap = ctx->dock_nodes_capacity ? ctx->dock_nodes_capacity * 2 : 8;
         eli_dock_node **grown =
-            (eli_dock_node **)realloc(ctx->dock_nodes, (size_t)cap * sizeof(*grown));
+            (eli_dock_node **)eli_mem_realloc(ctx->dock_nodes,
+                                              (size_t)ctx->dock_nodes_capacity * sizeof(*grown),
+                                              (size_t)cap * sizeof(*grown));
         if (grown == NULL) {
-            free(node);
+            eli_mem_free(node);
             return NULL;
         }
         ctx->dock_nodes = grown;
@@ -158,8 +160,8 @@ static inline void eli_dock__free_node(eli_context *ctx, eli_dock_node *node)
         ctx->dock_nodes_count--;
         break;
     }
-    free(node->window_ids);
-    free(node);
+    eli_mem_free(node->window_ids);
+    eli_mem_free(node);
 }
 
 /* ---------------------------------------------------------------------------
@@ -182,7 +184,9 @@ static inline void eli_dock_node_add_window(eli_dock_node *node, eli_id wid)
         return;
     if (node->window_count >= node->window_capacity) {
         int cap = node->window_capacity ? node->window_capacity * 2 : 4;
-        eli_id *grown = (eli_id *)realloc(node->window_ids, (size_t)cap * sizeof(*grown));
+        eli_id *grown = (eli_id *)eli_mem_realloc(node->window_ids,
+                                                  (size_t)node->window_capacity * sizeof(*grown),
+                                                  (size_t)cap * sizeof(*grown));
         if (grown == NULL)
             return;
         node->window_ids = grown;
@@ -342,7 +346,7 @@ static inline void eli_dock__redock_windows(eli_context *ctx, eli_id from, eli_i
 /** Absorb `other` into `node`, adopting its split/children/windows, then free it. */
 static inline void eli_dock__adopt(eli_context *ctx, eli_dock_node *node, eli_dock_node *other)
 {
-    free(node->window_ids);
+    eli_mem_free(node->window_ids);
     node->window_ids = other->window_ids;
     node->window_count = other->window_count;
     node->window_capacity = other->window_capacity;
@@ -366,7 +370,7 @@ static inline void eli_dock__adopt(eli_context *ctx, eli_dock_node *node, eli_do
         ctx->dock_nodes_count--;
         break;
     }
-    free(other);
+    eli_mem_free(other);
 }
 
 /** @return true if a child leaf is empty and eligible to be pruned. */
@@ -397,7 +401,7 @@ static inline void eli_dock_node_gc(eli_context *ctx)
                 eli_dock_node *other = node->child[1 - c];
                 if (child == NULL || other == NULL || !eli_dock__child_is_prunable(child))
                     continue;
-                free(child->window_ids);
+                eli_mem_free(child->window_ids);
                 for (int k = 0; k < ctx->dock_nodes_count; k++) {
                     if (ctx->dock_nodes[k] != child)
                         continue;
@@ -405,7 +409,7 @@ static inline void eli_dock_node_gc(eli_context *ctx)
                     ctx->dock_nodes_count--;
                     break;
                 }
-                free(child);
+                eli_mem_free(child);
                 node->child[0] = node->child[1] = NULL;
                 eli_dock__adopt(ctx, node, other);
                 changed = true;

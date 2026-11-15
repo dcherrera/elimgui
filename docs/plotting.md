@@ -202,9 +202,10 @@ Colors must be non-zero (non-transparent) for geometry to be emitted. Call
 ## Implementation notes
 
 - **Header-only**: everything is `static inline` in `eli_plot.h`.
-- **No hidden allocations**: `eli_plot__emit_lines` makes one `malloc` call for
-  the `eli_vec2` point array, sized to `values_count * sizeof(eli_vec2)`, and
-  frees it before returning.
+- **Allocations**: `eli_plot__emit_lines` writes the `eli_vec2` points into a
+  persistent scratch buffer that grows (through `eli_mem_realloc`) to the
+  largest `values_count` seen; steady-state frames allocate nothing. The buffer
+  is released by `eli_plot_shutdown` when the context is destroyed.
 - **Auto-scale walk**: `eli_plot__compute_scale` performs a single O(N) walk
   over all samples using the getter. Auto-scale is only computed when at least
   one of the two bounds is `ELI_PLOT_SCALE_AUTO`.

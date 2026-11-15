@@ -18,6 +18,7 @@
 #include "eli_widget_behavior.h"
 
 #include "../core/eli_platform.h"
+#include "../util/eli_mem.h"
 
 #include <stdio.h>
 
@@ -123,9 +124,23 @@ ELI_GLOBAL(eli_vec2 *, g_eli_plot_line_pts, NULL);
 ELI_GLOBAL(int, g_eli_plot_line_pts_cap, 0);
 
 /**
+ * Release the plot line-point scratch buffer. Called from the context's widget
+ * shutdown hook so the buffer goes back to the allocator that produced it.
+ *
+ * Thread-safe: no
+ * Reentrant: no
+ */
+static inline void eli_plot_shutdown(void)
+{
+    eli_mem_free(g_eli_plot_line_pts);
+    g_eli_plot_line_pts = NULL;
+    g_eli_plot_line_pts_cap = 0;
+}
+
+/**
  * Emit the line-strip geometry for values_count samples into the window draw
- * list. One heap allocation holds the sample-coordinate array; it is freed
- * before the function returns. The hovered segment (idx_hovered → idx_hovered+1)
+ * list. The sample coordinates go in a persistent scratch buffer that only grows
+ * (no per-frame allocation). The hovered segment (idx_hovered → idx_hovered+1)
  * is overdrawn with col_hovered at 2 px thickness.
  *
  * @param dl            Window draw list (non-NULL, caller checks).
@@ -159,10 +174,11 @@ static inline void eli_plot__emit_lines(eli_draw_list *dl,
     /* Scratch line-point buffer, reused across frames and grown on demand.
      * Per-frame malloc/free here churns the allocator every repaint (this runs
      * on every plotted line, every frame); a persistent grown buffer avoids
-     * that churn entirely. Not freed — it lives for the program's duration. */
+     * that churn entirely. Released by eli_plot_shutdown on context destroy. */
     if (values_count > g_eli_plot_line_pts_cap) {
-        eli_vec2 *grown = (eli_vec2 *)realloc(g_eli_plot_line_pts,
-                                              (size_t)values_count * sizeof(*grown));
+        eli_vec2 *grown = (eli_vec2 *)eli_mem_realloc(
+            g_eli_plot_line_pts, (size_t)g_eli_plot_line_pts_cap * sizeof(*grown),
+            (size_t)values_count * sizeof(*grown));
         if (grown == NULL)
             return;
         g_eli_plot_line_pts = grown;

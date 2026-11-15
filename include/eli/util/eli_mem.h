@@ -13,7 +13,11 @@
  * per-TU statics by default (single-TU WASM build), one shared copy across TUs
  * under ELI_SHARED_STATE.
  *
- * @status Complete — allocator swap, query, alloc, and free implemented.
+ * Every heap allocation in elimgui goes through eli_mem_alloc / eli_mem_calloc /
+ * eli_mem_realloc / eli_mem_free; no library header calls libc's allocator
+ * directly (enforced by tests/unit/test_mem_coverage.c).
+ *
+ * @status Complete — allocator swap, query, alloc, calloc, realloc, and free implemented.
  * @issues None
  * @todo None
  */
@@ -149,6 +153,28 @@ static inline void *eli_mem_alloc(size_t sz)
     if (sz == 0)
         return NULL;
     return eli_s_alloc_func(sz, eli_s_alloc_userdata);
+}
+
+/**
+ * Allocate a zeroed array of count elements of size bytes each through the
+ * currently installed allocator (calloc semantics on top of eli_mem_alloc).
+ *
+ * @param count  Number of elements.
+ * @param size   Size of one element in bytes.
+ * @return       Zeroed block of count * size bytes, or NULL if either is 0,
+ *               the product overflows size_t, or allocation fails.
+ *
+ * Thread-safe: depends on the installed allocator
+ * Reentrant:   depends on the installed allocator
+ */
+static inline void *eli_mem_calloc(size_t count, size_t size)
+{
+    if (count == 0 || size == 0 || count > (size_t)-1 / size)
+        return NULL;
+    void *p = eli_mem_alloc(count * size);
+    if (p != NULL)
+        memset(p, 0, count * size);
+    return p;
 }
 
 /**

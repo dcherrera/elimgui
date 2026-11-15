@@ -124,12 +124,12 @@ static inline void eli_util__shutdown_draw_lists(struct eli_context *ctx)
 {
     if (ctx->background_draw_list != NULL) {
         eli_draw_list_clear(ctx->background_draw_list);
-        free(ctx->background_draw_list);
+        eli_mem_free(ctx->background_draw_list);
         ctx->background_draw_list = NULL;
     }
     if (ctx->foreground_draw_list != NULL) {
         eli_draw_list_clear(ctx->foreground_draw_list);
-        free(ctx->foreground_draw_list);
+        eli_mem_free(ctx->foreground_draw_list);
         ctx->foreground_draw_list = NULL;
     }
 }
@@ -141,7 +141,7 @@ static inline eli_draw_list *eli_util__get_or_create_draw_list(eli_context *ctx,
     if (*slot != NULL)
         return *slot;
 
-    eli_draw_list *dl = (eli_draw_list *)malloc(sizeof(*dl));
+    eli_draw_list *dl = (eli_draw_list *)eli_mem_alloc(sizeof(*dl));
     if (dl == NULL)
         return NULL;
     eli_draw_list_init(dl, ELI_DRAW_LIST_NONE);

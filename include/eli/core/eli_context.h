@@ -23,6 +23,7 @@
 #include "eli_io.h"
 #include "eli_style_types.h"
 #include "../util/eli_mem.h"
+#include "../id/eli_storage_types.h"
 
 /* Draw data is produced by the draw phase; the context only holds a pointer.
  * eli_draw_list is likewise forward-declared: windows own one and the context
@@ -54,7 +55,6 @@ typedef struct eli_draw_list eli_draw_list;
 /* Opaque handles defined by later phases; the context stores pointers to them.
  * C11 permits these identical typedefs to be repeated by the owning phase. */
 typedef struct eli_font    eli_font;
-typedef struct eli_storage eli_storage;
 
 /* Window handles defined by the window phase (Phase 7). The context holds the
  * window registry, the current window stack, and the next-window settings; the
@@ -137,6 +137,7 @@ typedef struct eli_context {
     eli_window **windows;                 /* window pool (creation order) */
     int          windows_count;
     int          windows_capacity;
+    eli_storage  windows_by_id;           /* window id -> eli_window* (by-id lookup) */
     eli_window **windows_focus_order;     /* root windows, back-to-front (last = top) */
     int          windows_focus_order_count;
     int          windows_focus_order_capacity;
@@ -329,7 +330,7 @@ static inline void eli_style_set_defaults(eli_style *style)
  */
 static inline eli_context *eli_create_context(void)
 {
-    eli_context *ctx = (eli_context *)calloc(1, sizeof(*ctx));
+    eli_context *ctx = (eli_context *)eli_mem_calloc(1, sizeof(*ctx));
     if (!ctx)
         return NULL;
 
@@ -405,7 +406,7 @@ static inline void eli_destroy_context(eli_context *ctx)
     eli_mem_free(ctx->io.input_events);
     eli_mem_free(ctx->io.input_queue_characters);
 
-    free(ctx);
+    eli_mem_free(ctx);
 }
 
 /**

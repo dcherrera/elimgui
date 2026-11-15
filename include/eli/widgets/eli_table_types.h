@@ -23,6 +23,7 @@
 #include "../core/eli_platform.h"
 #include "../core/eli_types.h"
 #include "../core/eli_enums.h"
+#include "../util/eli_mem.h"
 
 /* ---------------------------------------------------------------------------
  * Capacities
@@ -305,6 +306,7 @@ typedef struct eli_table {
 
     /* Sort specs handed to the caller (heap-owned `specs`). */
     eli_table_sort_specs sort_specs;
+    int                  sort_specs_capacity; /* allocated length of sort_specs.specs */
     bool                 sort_dirty;   /* sort changed; specs need rebuild */
 } eli_table;
 
@@ -342,15 +344,16 @@ static inline eli_table *eli_table__find_or_create(eli_id id)
 
     if (g_eli_table_pool_count >= g_eli_table_pool_capacity) {
         int new_cap = (g_eli_table_pool_capacity > 0) ? g_eli_table_pool_capacity * 2 : 8;
-        eli_table **grown = (eli_table **)realloc(g_eli_table_pool,
-                                                  (size_t)new_cap * sizeof(*grown));
+        eli_table **grown = (eli_table **)eli_mem_realloc(
+            g_eli_table_pool, (size_t)g_eli_table_pool_capacity * sizeof(*grown),
+            (size_t)new_cap * sizeof(*grown));
         if (grown == NULL)
             return NULL;
         g_eli_table_pool = grown;
         g_eli_table_pool_capacity = new_cap;
     }
 
-    eli_table *table = (eli_table *)calloc(1, sizeof(*table));
+    eli_table *table = (eli_table *)eli_mem_calloc(1, sizeof(*table));
     if (table == NULL)
         return NULL;
     table->id = id;
@@ -396,11 +399,11 @@ static inline void eli_table_shutdown(void)
 {
     for (int i = 0; i < g_eli_table_pool_count; i++) {
         if (g_eli_table_pool[i] != NULL) {
-            free(g_eli_table_pool[i]->sort_specs.specs);
-            free(g_eli_table_pool[i]);
+            eli_mem_free(g_eli_table_pool[i]->sort_specs.specs);
+            eli_mem_free(g_eli_table_pool[i]);
         }
     }
-    free(g_eli_table_pool);
+    eli_mem_free(g_eli_table_pool);
     g_eli_table_pool = NULL;
     g_eli_table_pool_count = 0;
     g_eli_table_pool_capacity = 0;

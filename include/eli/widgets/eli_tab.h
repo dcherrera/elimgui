@@ -20,7 +20,7 @@
  *         eli_end_tab_bar();
  *     }
  *
- * The pool is heap-allocated through the libc seam and must be released once at
+ * The pool is heap-allocated through the eli_mem seam and must be released once at
  * teardown via eli_tab_shutdown(). eli_tab_new_frame() defensively resets the
  * current-bar stack at the start of a frame.
  *
@@ -35,11 +35,12 @@
 #include "eli_widget_behavior.h"
 
 #include "../core/eli_platform.h"
+#include "../util/eli_mem.h"
 
 /* ---------------------------------------------------------------------------
  * Module-private pool + current-bar stack
  *
- * Tab bars persist across frames in a heap pool keyed by id (grown via the libc
+ * Tab bars persist across frames in a heap pool keyed by id (grown via the eli_mem
  * seam, freed by eli_tab_shutdown). The active-bar stack holds pool indices, not
  * pointers, so a nested eli_begin_tab_bar that reallocates the pool cannot leave a
  * dangling parent reference.
@@ -63,7 +64,9 @@ static inline eli_tab_bar *eli_tab__pool_find_or_create(eli_id id)
 
     if (g_eli_tab_bar_pool_count >= g_eli_tab_bar_pool_capacity) {
         int cap = g_eli_tab_bar_pool_capacity ? g_eli_tab_bar_pool_capacity * 2 : 4;
-        eli_tab_bar *grown = (eli_tab_bar *)realloc(g_eli_tab_bar_pool, (size_t)cap * sizeof(*grown));
+        eli_tab_bar *grown = (eli_tab_bar *)eli_mem_realloc(
+            g_eli_tab_bar_pool, (size_t)g_eli_tab_bar_pool_capacity * sizeof(*grown),
+            (size_t)cap * sizeof(*grown));
         if (grown == NULL)
             return NULL;
         g_eli_tab_bar_pool = grown;
@@ -95,10 +98,10 @@ static inline eli_tab_bar *eli_tab__current(void)
 static inline void eli_tab_shutdown(void)
 {
     for (int i = 0; i < g_eli_tab_bar_pool_count; i++) {
-        free(g_eli_tab_bar_pool[i].tabs);
+        eli_mem_free(g_eli_tab_bar_pool[i].tabs);
         g_eli_tab_bar_pool[i].tabs = NULL;
     }
-    free(g_eli_tab_bar_pool);
+    eli_mem_free(g_eli_tab_bar_pool);
     g_eli_tab_bar_pool = NULL;
     g_eli_tab_bar_pool_count = 0;
     g_eli_tab_bar_pool_capacity = 0;
@@ -141,7 +144,8 @@ static inline eli_tab_item *eli_tab__add_tab(eli_tab_bar *bar, eli_id id)
 {
     if (bar->tab_count >= bar->tab_capacity) {
         int cap = bar->tab_capacity ? bar->tab_capacity * 2 : 4;
-        eli_tab_item *grown = (eli_tab_item *)realloc(bar->tabs, (size_t)cap * sizeof(*grown));
+        eli_tab_item *grown = (eli_tab_item *)eli_mem_realloc(
+            bar->tabs, (size_t)bar->tab_capacity * sizeof(*grown), (size_t)cap * sizeof(*grown));
         if (grown == NULL)
             return NULL;
         bar->tabs = grown;
