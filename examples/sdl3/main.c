@@ -12,7 +12,8 @@
  * Usage: elimgui_sdl3 [--frames N] [--screenshot out.bmp] [--font file.ttf]
  *                     [--font-size PX] [--driver NAME] [--idle-report SECONDS]
  *                     [--focus-input] [--skip-unchanged] [--drawables 2|3] [--no-vsync]
- *                     [--release-hidden] [--hide-after S] [--warm-frames N] [--on-demand]
+ *                     [--release-hidden] [--hide-after S] [--warm-frames N] [--redraw-every S]
+ *                     [--release-idle MS] [--on-demand]
  *   --frames N         build and render N frames, then exit 0 (CI / sanitizer runs)
  *   --screenshot F     save the last rendered frame as a BMP
  *   --font F           use a TTF instead of the embedded ProggyClean
@@ -33,7 +34,9 @@
  *   --release-hidden   shrink the swapchain to 1x1 px while hidden/minimised
  *   --hide-after S     hide the window S seconds after start (swapchain-release probe)
  *   --warm-frames N    build the first N frames back to back (fills the drawable pool)
- *   --swapchain-selftest  check drawable count, vsync, release/restore on hide/show and
+ *   --redraw-every S   ask for a frame every S seconds (a periodic redraw's GPU memory)
+ *   --release-idle MS  release the swapchain after MS ms without a frame (visible window)
+ *   --swapchain-selftest  check drawable count, vsync, release when idle, release/restore on hide/show and
  *                      timers paused while hidden; print PASS/FAIL, exit with failures
  *
  * @status In use (spec §17).
@@ -79,6 +82,8 @@ typedef struct example_options {
     bool release_hidden;
     double hide_after_s;        /* 0 = never */
     long warm_frames;
+    double redraw_every_s;      /* 0 = off */
+    int release_idle_ms;        /* 0 = off */
     bool on_demand;
     bool atlas_selftest;
 } example_options;
@@ -162,6 +167,10 @@ static bool example_parse_args(int argc, char **argv, example_options *opt)
             opt->hide_after_s = strtod(argv[++i], NULL);
         else if (!strcmp(a, "--warm-frames") && has_value)
             opt->warm_frames = strtol(argv[++i], NULL, 10);
+        else if (!strcmp(a, "--redraw-every") && has_value)
+            opt->redraw_every_s = strtod(argv[++i], NULL);
+        else if (!strcmp(a, "--release-idle") && has_value)
+            opt->release_idle_ms = (int)strtol(argv[++i], NULL, 10);
         else if (!strcmp(a, "--on-demand"))
             opt->on_demand = true;
         else if (!strcmp(a, "--atlas-selftest"))
@@ -172,7 +181,7 @@ static bool example_parse_args(int argc, char **argv, example_options *opt)
                             "[--focus-input] [--skip-unchanged] [--hidden] "
                             "[--input-selftest] [--swapchain-selftest] [--drawables 2|3] "
                             "[--no-vsync] [--release-hidden] [--hide-after S] "
-                            "[--warm-frames N] [--on-demand] [--atlas-selftest]\n", argv[0]);
+                            "[--warm-frames N] [--redraw-every S] [--release-idle MS] [--on-demand] [--atlas-selftest]\n", argv[0]);
             return false;
         }
     }
@@ -250,6 +259,7 @@ static bool example_init(example_app *app, const example_options *opt)
         .drawable_count = opt->drawables,
         .vsync = opt->no_vsync ? ELI_SDL3_VSYNC_OFF : ELI_SDL3_VSYNC_ON,
         .release_when_hidden = opt->release_hidden,
+        .release_when_idle_ms = opt->release_idle_ms,
     };
     if (!eli_sdl3_platform_init(app->window) || !eli_sdl3_renderer_init_ex(app->renderer, &surface))
         return false;
@@ -286,8 +296,10 @@ static bool example_wait_events(example_app *app, const example_options *opt, in
     int wait_ms = lib_ms;
     if (cap_ms >= 0 && (wait_ms < 0 || cap_ms < wait_ms))
         wait_ms = cap_ms;
+    wait_ms = eli_sdl3_renderer_idle_wait_ms(wait_ms);   /* --release-idle */
     SDL_Event e;
     bool got = (wait_ms < 0) ? SDL_WaitEvent(&e) : SDL_WaitEventTimeout(&e, wait_ms);
+    eli_sdl3_renderer_idle_step();
     bool running = true;
     *need_frame = got || (lib_ms >= 0 && wait_ms == lib_ms);
     while (got) {
@@ -490,6 +502,8 @@ int main(int argc, char **argv)
         bool done = false, need_frame = true;
         if (opt.frames > 0 || (long)g_example_stats.frames_built < opt.warm_frames)
             eli_request_redraw();          /* --frames / --warm-frames: render back to back */
+        if (opt.redraw_every_s > 0.0)
+            eli_request_redraw_after((float)opt.redraw_every_s);
         int cap = example_idle_probe_step(&probe, &opt, &done);
         if (done)
             break;
