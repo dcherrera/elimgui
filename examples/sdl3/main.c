@@ -428,7 +428,10 @@ static void example_present(example_app *app, const example_options *opt, bool l
         (double)(SDL_GetPerformanceCounter() - t0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
     if (last && opt->screenshot)
         example_save_screenshot(app, opt->screenshot);
+    Uint64 t1 = SDL_GetPerformanceCounter();
     SDL_RenderPresent(app->renderer);
+    g_example_stats.last_present_ms =
+        (double)(SDL_GetPerformanceCounter() - t1) * 1000.0 / (double)SDL_GetPerformanceFrequency();
 }
 
 /**

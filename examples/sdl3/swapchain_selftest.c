@@ -121,6 +121,9 @@ static void swapchain_check_idle(SDL_Window *window, SDL_Renderer *renderer, voi
 {
     eli_sdl3_renderer_set_release_when_idle_ms(SWAPCHAIN_IDLE_MS);
     frame();
+    SDL_Delay(50);
+    frame();
+    double steady_ms = g_example_stats.last_submit_ms + g_example_stats.last_present_ms;
     int wait = eli_sdl3_renderer_idle_wait_ms(-1);
     swapchain_check(wait > 0 && wait <= SWAPCHAIN_IDLE_MS, "idle: an endless wait wakes for the release");
     swapchain_check(eli_sdl3_renderer_idle_wait_ms(0) == 0, "idle: a due frame is not delayed");
@@ -135,6 +138,8 @@ static void swapchain_check_idle(SDL_Window *window, SDL_Renderer *renderer, voi
                     "idle: a frame regrows it to the window's pixel size");
     swapchain_check(g_example_stats.last_submit_ms >= SWAPCHAIN_IDLE_SUBMIT_MS,
                     "idle: the regrown frame draws");
+    SDL_Log("swapchain-selftest: idle: submit + present %.2f ms regrown, %.2f ms steady",
+            g_example_stats.last_submit_ms + g_example_stats.last_present_ms, steady_ms);
     eli_sdl3_renderer_set_release_when_idle_ms(0);
 }
 
