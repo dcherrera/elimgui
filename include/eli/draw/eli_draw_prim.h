@@ -42,14 +42,18 @@ static inline void eli_draw_normalize2f(float *x, float *y)
  * ------------------------------------------------------------------------- */
 
 /**
- * Stroke a polyline through `points`. Each segment becomes a quad (four
- * vertices, six indices); no vertices are shared between segments.
+ * Stroke a polyline through `points` with shared vertices: two per point (the
+ * point pushed out either side along the joint normal) and six indices per
+ * segment. Interior joints are mitered: the normal is the mean of the two
+ * segments' normals scaled by 1 / |mean|^2, capped at 100 (Dear ImGui's
+ * IM_FIXNORMAL2F) so a hairpin cannot spike. Ends are square, as before.
+ * Half the vertices of one quad per segment, and corners close without gaps.
  *
  * @param list        Target draw list.
  * @param points      Point array.
  * @param num_points  Number of points (>= 2).
  * @param col         Line color (fully transparent is a no-op).
- * @param flags       ELI_DRAW_CLOSED to connect last point to first.
+ * @param flags       ELI_DRAW_CLOSED to connect last point to first (needs >= 3).
  * @param thickness   Line thickness in pixels.
  *
  * Thread-safe: no
@@ -62,33 +66,69 @@ static inline void eli_draw_list_add_polyline(eli_draw_list *list, const eli_vec
     if (num_points < 2 || (col & ELI_COL32_A_MASK) == 0)
         return;
 
-    bool closed = (flags & ELI_DRAW_CLOSED) != 0;
+    bool closed = (flags & ELI_DRAW_CLOSED) != 0 && num_points >= 3;
     int count = closed ? num_points : num_points - 1;
     eli_vec2 uv = list->tex_uv_white_pixel;
-    if (!eli_draw_list_prim_reserve(list, count * 6, count * 4))
+    if (!eli_draw_list_prim_reserve(list, count * 6, num_points * 2))
         return;
 
+    float half = thickness * 0.5f;
+    eli_draw_idx base = (eli_draw_idx)list->vtx_current_idx;
+    /* Normal of segment i (points i -> i + 1): the direction turned a quarter. */
+    float prev_nx = 0.0f, prev_ny = 0.0f;   /* the previous segment's normal */
+    for (int i = 0; i < num_points; i++) {
+        float nx = 0.0f, ny = 0.0f;   /* this point's segment (i -> i + 1), if any */
+        bool has_next = closed || i + 1 < num_points;
+        if (has_next) {
+            eli_vec2 p1 = points[i], p2 = points[(i + 1) % num_points];
+            float dx = p2.x - p1.x, dy = p2.y - p1.y;
+            eli_draw_normalize2f(&dx, &dy);
+            nx = dy;
+            ny = -dx;
+        }
+        if (i == 0) {
+            if (closed) {   /* the closing segment (last -> first) */
+                eli_vec2 p1 = points[num_points - 1], p2 = points[0];
+                float dx = p2.x - p1.x, dy = p2.y - p1.y;
+                eli_draw_normalize2f(&dx, &dy);
+                prev_nx = dy;
+                prev_ny = -dx;
+            } else {
+                prev_nx = nx;
+                prev_ny = ny;
+            }
+        }
+        if (!has_next) {   /* an open line's last point: its segment's normal */
+            nx = prev_nx;
+            ny = prev_ny;
+        }
+        float mx = (prev_nx + nx) * 0.5f, my = (prev_ny + ny) * 0.5f;
+        float d2 = mx * mx + my * my;
+        if (d2 > 0.000001f) {
+            float inv = 1.0f / d2;
+            if (inv > 100.0f)
+                inv = 100.0f;
+            mx *= inv;
+            my *= inv;
+        }
+        mx *= half;
+        my *= half;
+        eli_vec2 p = points[i];
+        eli_draw_list_prim_write_vtx(list, eli_make_vec2(p.x + mx, p.y + my), uv, col);
+        eli_draw_list_prim_write_vtx(list, eli_make_vec2(p.x - mx, p.y - my), uv, col);
+        prev_nx = nx;
+        prev_ny = ny;
+    }
     for (int i1 = 0; i1 < count; i1++) {
-        int i2 = ((i1 + 1) == num_points) ? 0 : (i1 + 1);
-        eli_vec2 p1 = points[i1];
-        eli_vec2 p2 = points[i2];
-        float dx = p2.x - p1.x;
-        float dy = p2.y - p1.y;
-        eli_draw_normalize2f(&dx, &dy);
-        dx *= thickness * 0.5f;
-        dy *= thickness * 0.5f;
-
-        eli_draw_idx base = (eli_draw_idx)list->vtx_current_idx;
-        eli_draw_list_prim_write_vtx(list, eli_make_vec2(p1.x + dy, p1.y - dx), uv, col);
-        eli_draw_list_prim_write_vtx(list, eli_make_vec2(p2.x + dy, p2.y - dx), uv, col);
-        eli_draw_list_prim_write_vtx(list, eli_make_vec2(p2.x - dy, p2.y + dx), uv, col);
-        eli_draw_list_prim_write_vtx(list, eli_make_vec2(p1.x - dy, p1.y + dx), uv, col);
-        eli_draw_list_prim_write_idx(list, base);
-        eli_draw_list_prim_write_idx(list, (eli_draw_idx)(base + 1));
-        eli_draw_list_prim_write_idx(list, (eli_draw_idx)(base + 2));
-        eli_draw_list_prim_write_idx(list, base);
-        eli_draw_list_prim_write_idx(list, (eli_draw_idx)(base + 2));
-        eli_draw_list_prim_write_idx(list, (eli_draw_idx)(base + 3));
+        int i2 = (i1 + 1) % num_points;
+        eli_draw_idx a = (eli_draw_idx)(base + 2 * i1), b = (eli_draw_idx)(a + 1);
+        eli_draw_idx c = (eli_draw_idx)(base + 2 * i2), d = (eli_draw_idx)(c + 1);
+        eli_draw_list_prim_write_idx(list, a);
+        eli_draw_list_prim_write_idx(list, c);
+        eli_draw_list_prim_write_idx(list, d);
+        eli_draw_list_prim_write_idx(list, a);
+        eli_draw_list_prim_write_idx(list, d);
+        eli_draw_list_prim_write_idx(list, b);
     }
 }
 

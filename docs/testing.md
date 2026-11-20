@@ -190,6 +190,7 @@ current suite/test counts (62 suites, 337 tests total as of Phase 32).
 | `test_window_lifecycle` | 7 | Create/retrieve same instance, `set_next_window_pos`/size, pivot center, work-region insets, collapse (body skip + size clamp), `ELI_WINDOW_NO_TITLEBAR`, draw data gathers active windows |
 | `test_window_interaction` | 4 | Hover/focus z-order, title-bar drag moves window, child-window create/end, child ID stability |
 | `test_window_registry` | 7 | By-id lookup for every window, render order and focus index vs. reference nested-loop/linear-scan versions, hovered = topmost, window-creation OOM leaves the registry unchanged |
+| `test_draw_memory` | 10 | Text reserves in chunks (a 100 000-byte clipped run, 2-byte glyphs, wrapped geometry unchanged), draw lists shrink after a spike and never reallocate when steady, unused windows free their draw lists (and keep them with compaction off), polyline miter joins, hairpin cap and shared closed vertices |
 | `test_window_scroll` | 5 | Scroll range from content, set + clamp, `set_scroll_from_pos_y`, mouse-wheel scrolls hovered window, horizontal scrollbar flag |
 
 ### Widget behavior

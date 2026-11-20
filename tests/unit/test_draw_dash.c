@@ -49,16 +49,18 @@ static float test_dist(eli_vec2 a, eli_vec2 b)
     return sqrtf(dx * dx + dy * dy);
 }
 
-/** Group the list's quads into dashes. */
+/** Group the list's polyline segments into dashes. A segment is six indices
+ *  (a, c, d, a, d, b): a/b are its first point's pair, c/d its second's, and a
+ *  point is the middle of its pair. */
 static test_dashes test_read_dashes(const eli_draw_list *dl)
 {
     test_dashes d;
     memset(&d, 0, sizeof(d));
-    for (uint32_t q = 0; q + 3 < dl->vtx_count; q += 4) {
-        eli_vec2 p1 = test_mid(eli_make_vec2(dl->vtx[q].x, dl->vtx[q].y),
-                               eli_make_vec2(dl->vtx[q + 3].x, dl->vtx[q + 3].y));
-        eli_vec2 p2 = test_mid(eli_make_vec2(dl->vtx[q + 1].x, dl->vtx[q + 1].y),
-                               eli_make_vec2(dl->vtx[q + 2].x, dl->vtx[q + 2].y));
+    for (uint32_t i = 0; i + 5 < dl->idx_count; i += 6) {
+        const eli_draw_vert *a = &dl->vtx[dl->idx[i]], *c = &dl->vtx[dl->idx[i + 1]];
+        const eli_draw_vert *dd = &dl->vtx[dl->idx[i + 2]], *b = &dl->vtx[dl->idx[i + 5]];
+        eli_vec2 p1 = test_mid(eli_make_vec2(a->x, a->y), eli_make_vec2(b->x, b->y));
+        eli_vec2 p2 = test_mid(eli_make_vec2(c->x, c->y), eli_make_vec2(dd->x, dd->y));
         bool joins = d.count > 0 && test_dist(d.end[d.count - 1], p1) < 1e-3f;
         if (!joins) {
             if (d.count == TEST_DASH_MAX)
@@ -82,7 +84,8 @@ ELI_TEST(dash_straight_line_counts_and_positions)
     eli_draw_list dl;
     eli_draw_list_init(&dl, ELI_DRAW_LIST_NONE);
 
-    /* 100 px, dash 10 gap 5: dashes start at 0, 15, ... 90 -> 7 dashes, one quad each. */
+    /* 100 px, dash 10 gap 5: dashes start at 0, 15, ... 90 -> 7 dashes of one
+     * segment: 2 points (4 vertices) and 6 indices each. */
     eli_draw_list_path_line_to(&dl, eli_make_vec2(0, 0));
     eli_draw_list_path_line_to(&dl, eli_make_vec2(100, 0));
     eli_draw_list_path_stroke_dashed(&dl, ELI_COL32_WHITE, 0, 1.0f, 10.0f, 5.0f);
@@ -113,7 +116,8 @@ ELI_TEST(dash_phase_carries_round_a_corner)
     eli_draw_list_path_line_to(&dl, eli_make_vec2(10, 10));
     eli_draw_list_path_stroke_dashed(&dl, ELI_COL32_WHITE, 0, 1.0f, 12.0f, 4.0f);
 
-    ELI_ASSERT_EQ(dl.vtx_count, 12u);
+    /* 3 points + 2 points, two vertices each. */
+    ELI_ASSERT_EQ(dl.vtx_count, 10u);
     test_dashes d = test_read_dashes(&dl);
     ELI_ASSERT_EQ(d.count, 2);
     ELI_ASSERT_EQ(d.segs[0], 2);
@@ -172,11 +176,13 @@ ELI_TEST(dash_closed_square_whole_periods)
     /* The last dash ends on the left side, 5.33 px above the start point. */
     ELI_ASSERT_FLT_NEAR(d.end[4].x, 0.0f, 1e-2);
     ELI_ASSERT_FLT_NEAR(d.end[4].y, 5.0f * stretch, 1e-2);
-    int quads = 0;
-    for (int k = 0; k < d.count; k++)
-        quads += d.segs[k];
-    ELI_ASSERT_EQ(dl.vtx_count, (uint32_t)(quads * 4));
-    ELI_ASSERT_EQ(dl.idx_count, (uint32_t)(quads * 6));
+    int segs = 0, points = 0;
+    for (int k = 0; k < d.count; k++) {
+        segs += d.segs[k];
+        points += d.segs[k] + 1;
+    }
+    ELI_ASSERT_EQ(dl.vtx_count, (uint32_t)(points * 2));
+    ELI_ASSERT_EQ(dl.idx_count, (uint32_t)(segs * 6));
     eli_draw_list_clear(&dl);
 }
 

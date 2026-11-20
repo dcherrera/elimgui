@@ -246,12 +246,41 @@ static inline eli_vec2 eli_font_calc_text_size_wrapped(const eli_font *font, flo
  * Text rendering
  * ------------------------------------------------------------------------- */
 
+/**
+ * Glyph quads reserved at a time by eli_draw_list_add_text_ex. Text reserves in
+ * chunks as quads are emitted, not one quad per input byte up front: a long run
+ * that is mostly clipped (or mostly multi-byte UTF-8, or whitespace) no longer
+ * grows the draw list to its byte count. Override before including elimgui.
+ */
+#ifndef ELI_FONT_TEXT_RESERVE_CHUNK
+#define ELI_FONT_TEXT_RESERVE_CHUNK 256
+#endif
+
 /** Run state for eli_draw_list_add_text_ex while it switches page textures. */
 typedef struct eli_font__text_run {
     eli_draw_list *list;
     int idx_pending;     /* indices written but not yet charged to the command */
+    int quads_left;      /* glyph quads reserved and not yet written */
     bool pushed;         /* a page texture was pushed onto the list's stack */
 } eli_font__text_run;
+
+/**
+ * Make room for the next glyph quad: reserve up to ELI_FONT_TEXT_RESERVE_CHUNK
+ * quads, never more than one per byte left (`bytes_left` counts the current
+ * glyph). @return false when the reserve failed and the caller must stop.
+ */
+static inline bool eli_font__text_reserve(eli_font__text_run *run, int bytes_left)
+{
+    if (run->quads_left > 0)
+        return true;
+    int n = bytes_left < ELI_FONT_TEXT_RESERVE_CHUNK ? bytes_left : ELI_FONT_TEXT_RESERVE_CHUNK;
+    if (n < 1)
+        n = 1;
+    if (!eli_draw_list_prim_reserve_capacity(run->list, n * 6, n * 4))
+        return false;
+    run->quads_left = n;
+    return true;
+}
 
 /** Charge the run's pending indices to the current command. */
 static inline void eli_font__text_flush(eli_font__text_run *run)
@@ -286,10 +315,10 @@ static inline void eli_font__draw_tofu(eli_draw_list *list, eli_vec2 a, eli_vec2
                            eli_make_vec2(b.x - ix, b.y - iy), col, 0.0f, 0, t);
 }
 
-/** Draw a tofu/custom glyph in its cell; false when the run's reserve failed after. */
-static inline bool eli_font__text_draw_special(eli_font__text_run *run, const eli_font *font,
+/** Draw a tofu/custom glyph in its cell. */
+static inline void eli_font__text_draw_special(eli_font__text_run *run, const eli_font *font,
                                                const eli_font_glyph *g, eli_vec2 a, eli_vec2 b,
-                                               float scale, eli_col32 col, int bytes_left)
+                                               float scale, eli_col32 col)
 {
     eli_font__text_flush(run);
     if (g->kind == ELI_FONT_GLYPH_TOFU)
@@ -297,17 +326,17 @@ static inline bool eli_font__text_draw_special(eli_font__text_run *run, const el
     else if (font->custom_glyph_fn)
         font->custom_glyph_fn(run->list, font, g->codepoint, a, b, col,
                               font->custom_glyph_user_data);
-    /* The shape used its own reserve; reserve again for the rest of the run. */
-    return eli_draw_list_prim_reserve_capacity(run->list, bytes_left * 6, bytes_left * 4);
+    /* The shape wrote into the reserved room: the next glyph reserves again. */
+    run->quads_left = 0;
 }
 
 /**
  * Emit glyphs for one run of text starting at `pos`; '\n' returns the pen to pos.x
- * one line down. Switches page textures through `run` and re-reserves after a
- * tofu/custom glyph for the bytes left up to `reserve_end` (the end of the whole
- * add_text_ex text, so later wrapped lines stay covered).
+ * one line down. Switches page textures through `run` and reserves quads in
+ * chunks bounded by the bytes left up to `reserve_end` (the end of the whole
+ * add_text_ex text).
  *
- * @return false when a re-reserve failed and the caller must stop.
+ * @return false when a reserve failed and the caller must stop.
  */
 static inline bool eli_font__emit_glyph_run(eli_font__text_run *run, const eli_font *font,
                                             float scale, float line_h, eli_vec2 pos,
@@ -344,20 +373,21 @@ static inline bool eli_font__emit_glyph_run(eli_font__text_run *run, const eli_f
             const eli_vec4 *c = cpu_fine_clip_rect;
             bool skip = c && (x1 < c->x || x0 > c->z || y1 < c->y || y0 > c->w);
             if (!skip && special) {
-                if (!eli_font__text_draw_special(run, font, g, eli_make_vec2(x0, y0),
-                                                 eli_make_vec2(x1, y1), scale, col,
-                                                 (int)(reserve_end - s)))
-                    return false;
+                eli_font__text_draw_special(run, font, g, eli_make_vec2(x0, y0),
+                                            eli_make_vec2(x1, y1), scale, col);
             } else if (!skip) {
                 eli_texture_id tex = atlas && g->page < atlas->pages_count
                                          ? atlas->pages[g->page].tex_id
                                          : list->cmd_texture_id;
                 if (tex != list->cmd_texture_id)
                     eli_font__text_set_texture(run, tex);
+                if (!eli_font__text_reserve(run, (int)(reserve_end - s) + 1))
+                    return false;
                 eli_draw_list_prim_rect_uv(list, eli_make_vec2(x0, y0), eli_make_vec2(x1, y1),
                                            eli_make_vec2(g->u0, g->v0), eli_make_vec2(g->u1, g->v1),
                                            col);
                 run->idx_pending += 6;
+                run->quads_left--;
             }
         }
         x += adv;
@@ -399,16 +429,12 @@ static inline void eli_draw_list_add_text_ex(eli_draw_list *list, const eli_font
     float scale = font_size / font->font_size;
     float line_h = font->line_height * scale;
 
-    /* Batch the geometry reservation for the whole run: at most one quad (4
-     * vertices, 6 indices) per input byte, since a UTF-8 sequence spans >= 1
-     * byte and newlines/carriage-returns/invisible glyphs emit nothing. A single
-     * up-front capacity reserve amortizes the per-glyph reallocation probing; the
-     * exact index total is charged to the command once at the end, so elem_count
-     * and the vtx/idx counts land exactly where the per-glyph path would have. */
-    int byte_count = (int)(text_end - text_begin);
-    if (!eli_draw_list_prim_reserve_capacity(list, byte_count * 6, byte_count * 4))
-        return;
-    eli_font__text_run run = { list, 0, false };
+    /* Glyph quads reserve in chunks as they are emitted (eli_font__text_reserve):
+     * at most ELI_FONT_TEXT_RESERVE_CHUNK quads and never more than the bytes
+     * left, so clipped, multi-byte and whitespace text costs no capacity. The
+     * exact index total is charged to the command as the run flushes, so
+     * elem_count and the vtx/idx counts land where the per-glyph path would have. */
+    eli_font__text_run run = { list, 0, 0, false };
 
     if (wrap_width <= 0.0f) {
         eli_font__emit_glyph_run(&run, font, scale, line_h, pos, col, text_begin, text_end,

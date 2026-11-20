@@ -93,6 +93,11 @@ typedef struct eli_io {
      * timeout may go idle (immediate-mode convergence). Default 2. */
     int config_redraw_settle_frames;
 
+    /* A window not begun for this many frames gives back its draw-list buffers
+     * (they regrow on its next begin; its position, size and state stay).
+     * Default 600; 0 never compacts. */
+    int config_memory_compact_frames;
+
     /* macOS conventions: ELI_MOD_SHORTCUT = Cmd, Cmd/Alt text navigation. Default
      * true when built for __APPLE__; the SDL3 backend sets it per platform and the
      * web glue sets it from the browser's platform. */

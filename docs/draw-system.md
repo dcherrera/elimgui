@@ -102,8 +102,12 @@ void eli_draw_list_add_bezier_quadratic(list, p1, p2, p3, col, thickness, num_se
 **Deterministic counts** (non-AA):
 
 - Filled rect (no rounding): **4 vertices, 6 indices**.
-- Stroked line/segment: each segment → **4 vertices, 6 indices**.
-- Open polyline of *n* points → *n−1* segments; closed → *n* segments.
+- Stroked line/segment: **2 vertices per point** (shared by the segments that meet
+  there), **6 indices per segment**. A single line is 4 vertices, 6 indices.
+- Open polyline of *n* points → *n−1* segments, *2n* vertices; closed (*n* ≥ 3) →
+  *n* segments, *2n* vertices. Interior joints are mitered (the mean of the two
+  segment normals scaled by 1/|mean|², capped at 100, as Dear ImGui's
+  `IM_FIXNORMAL2F`), so corners close without a notch; ends are square.
 - Convex fill of *n* points → **n vertices, (n−2)·3 indices**.
 - Filled circle/ngon with `num_segments = N` → **N vertices, (N−2)·3 indices**.
 - Circle/ngon supports `num_segments <= 0` to auto-pick a count from the radius
@@ -239,7 +243,7 @@ void eli_draw_list_add_circle_dashed(list, center, radius, col, num_segments, th
   length, so its phase carries round corners (a dash bends round a corner).
 - `ELI_DRAW_CLOSED` (always set by the rect / circle calls) stretches the pattern
   so the perimeter holds a whole number of periods: no partial dash at the seam.
-- Each dash is one polyline (four vertices per segment). `dash <= 0` or
+- Each dash is one open polyline (two vertices per point). `dash <= 0` or
   `gap <= 0` strokes solid.
 - Dash points are staged in the path buffer after the path itself: no
   allocation beyond the draw list's own growth.

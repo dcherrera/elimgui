@@ -23,6 +23,32 @@ steady-state frames allocate nothing. Everything is returned to the allocator wh
 the context is destroyed (module-level buffers such as the table/tab pools, plot
 scratch, settings store and log buffer are released by the context's shutdown hooks).
 
+### Giving memory back
+
+Buffers are kept between frames, but a one-off spike does not stay forever:
+
+- **Draw lists shrink after a spike.** `eli_draw_list_reset` (once per frame drawn)
+  tracks the high water of the last `ELI_DRAW_LIST_SHRINK_FRAMES` frames (600). At the
+  end of each such window, a command, vertex or index buffer of at least
+  `ELI_DRAW_LIST_SHRINK_MIN_BYTES` (64 KiB) that is more than 4x the high water is
+  reallocated to 2x it. Growth is 1.5x, so a list that draws the same every frame never
+  goes past 4x and never reallocates. Both macros can be overridden before including
+  elimgui; `ELI_DRAW_LIST_SHRINK_FRAMES 0` turns shrinking off.
+- **Unused windows give back their draw lists.** A window not begun for
+  `io.config_memory_compact_frames` frames (default 600; 0 = never) has its draw list's
+  buffers freed (`eli_draw_list_release_buffers`) at the next frame start; position,
+  size, scroll and state stay, and its next begin regrows the list (Dear ImGui's
+  `GcCompactTransientWindowBuffers`).
+- **Text reserves in chunks.** `eli_draw_list_add_text_ex` reserves room for glyph
+  quads as it emits them, `ELI_FONT_TEXT_RESERVE_CHUNK` (256) at a time and never more
+  than the bytes left, instead of one quad per byte up front. A long run that is mostly
+  clipped, multi-byte UTF-8 or whitespace no longer grows the list to its byte count,
+  and a run longer than 16 384 bytes is no longer refused whole by the 16-bit index
+  guard when only part of it is visible.
+
+`tests/unit/test_draw_memory.c` covers all three; `tests/probe/red_proof_memory.sh`
+mutates each and confirms the suite fails.
+
 ### Coverage
 
 `tests/unit/test_mem_coverage.c` redefines `malloc`/`calloc`/`realloc`/`free` before

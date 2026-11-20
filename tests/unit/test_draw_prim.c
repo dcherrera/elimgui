@@ -50,20 +50,28 @@ ELI_TEST(line_vertex_positions) {
     eli_draw_list dl;
     eli_draw_list_init(&dl, ELI_DRAW_LIST_NONE);
 
-    /* Horizontal line, thickness 2. Non-AA one-segment quad => 4 vtx, 6 idx.
-     * Endpoints are offset by (0.5,0.5); half-thickness normal is (0,1). */
+    /* Horizontal line, thickness 2. Non-AA one segment => 2 vtx per end, 6 idx.
+     * Endpoints are offset by (0.5,0.5); half-thickness normal is (0,1). Each
+     * point's pair is (point + normal side, point - normal side). */
     eli_draw_list_add_line(&dl, eli_make_vec2(0, 0), eli_make_vec2(10, 0), ELI_COL32_RED, 2.0f);
     ELI_ASSERT_EQ(dl.vtx_count, 4u);
     ELI_ASSERT_EQ(dl.idx_count, 6u);
 
     ELI_ASSERT_FLT_NEAR(dl.vtx[0].x, 0.5f, 1e-4);
     ELI_ASSERT_FLT_NEAR(dl.vtx[0].y, -0.5f, 1e-4);
-    ELI_ASSERT_FLT_NEAR(dl.vtx[1].x, 10.5f, 1e-4);
-    ELI_ASSERT_FLT_NEAR(dl.vtx[1].y, -0.5f, 1e-4);
+    ELI_ASSERT_FLT_NEAR(dl.vtx[1].x, 0.5f, 1e-4);
+    ELI_ASSERT_FLT_NEAR(dl.vtx[1].y, 1.5f, 1e-4);
     ELI_ASSERT_FLT_NEAR(dl.vtx[2].x, 10.5f, 1e-4);
-    ELI_ASSERT_FLT_NEAR(dl.vtx[2].y, 1.5f, 1e-4);
-    ELI_ASSERT_FLT_NEAR(dl.vtx[3].x, 0.5f, 1e-4);
+    ELI_ASSERT_FLT_NEAR(dl.vtx[2].y, -0.5f, 1e-4);
+    ELI_ASSERT_FLT_NEAR(dl.vtx[3].x, 10.5f, 1e-4);
     ELI_ASSERT_FLT_NEAR(dl.vtx[3].y, 1.5f, 1e-4);
+    /* Same winding as the old quad: (p1+, p2+, p2-), (p1+, p2-, p1-). */
+    ELI_ASSERT_EQ(dl.idx[0], 0);
+    ELI_ASSERT_EQ(dl.idx[1], 2);
+    ELI_ASSERT_EQ(dl.idx[2], 3);
+    ELI_ASSERT_EQ(dl.idx[3], 0);
+    ELI_ASSERT_EQ(dl.idx[4], 3);
+    ELI_ASSERT_EQ(dl.idx[5], 1);
 
     eli_draw_list_clear(&dl);
 }
@@ -74,14 +82,14 @@ ELI_TEST(polyline_open_and_closed_counts) {
 
     eli_vec2 pts[3] = {{0, 0}, {10, 0}, {10, 10}};
     eli_draw_list_add_polyline(&dl, pts, 3, ELI_COL32_WHITE, ELI_DRAW_NONE, 1.0f);
-    /* Open: 2 segments => 8 vtx, 12 idx. */
-    ELI_ASSERT_EQ(dl.vtx_count, 8u);
+    /* Open: 3 points, 2 segments => 6 vtx (shared), 12 idx. */
+    ELI_ASSERT_EQ(dl.vtx_count, 6u);
     ELI_ASSERT_EQ(dl.idx_count, 12u);
 
     eli_draw_list_reset(&dl);
     eli_draw_list_add_polyline(&dl, pts, 3, ELI_COL32_WHITE, ELI_DRAW_CLOSED, 1.0f);
-    /* Closed: 3 segments => 12 vtx, 18 idx. */
-    ELI_ASSERT_EQ(dl.vtx_count, 12u);
+    /* Closed: 3 points, 3 segments => 6 vtx, 18 idx. */
+    ELI_ASSERT_EQ(dl.vtx_count, 6u);
     ELI_ASSERT_EQ(dl.idx_count, 18u);
 
     eli_draw_list_clear(&dl);
@@ -123,9 +131,9 @@ ELI_TEST(circle_stroke_segment_count) {
     eli_draw_list dl;
     eli_draw_list_init(&dl, ELI_DRAW_LIST_NONE);
 
-    /* Explicit 12 segments, closed stroke => 12 segments => 48 vtx, 72 idx. */
+    /* Explicit 12 segments, closed stroke => 12 points => 24 vtx, 72 idx. */
     eli_draw_list_add_circle(&dl, eli_make_vec2(30, 30), 12.0f, ELI_COL32_GREEN, 12, 1.0f);
-    ELI_ASSERT_EQ(dl.vtx_count, 48u);
+    ELI_ASSERT_EQ(dl.vtx_count, 24u);
     ELI_ASSERT_EQ(dl.idx_count, 72u);
 
     eli_draw_list_clear(&dl);
