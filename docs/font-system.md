@@ -219,6 +219,25 @@ eli_draw_list_add_text_ex(draw_list, font, font->font_size, eli_make_vec2(x, y),
   It keeps a running width (one glyph lookup per codepoint), so wrapping is O(n)
   instead of re-measuring each line prefix at every byte.
 
+### Faux bold and single-line cuts (`eli_font_text_style.h`)
+
+```c
+eli_draw_list_add_text_bold(list, font, size, pos, col, text, NULL);   /* drawn twice, 1 px apart */
+float w = eli_font_calc_text_width_bold(font, size, text, NULL);       /* width + 1, 0 if empty */
+
+const char *cut;
+float cw = eli_text_cut_to_width(font, size, text, NULL, max_w, &cut); /* longest prefix that fits */
+float dw = eli_draw_list_add_text_ellipsis(list, font, size, pos, col, text, NULL, max_w);
+```
+
+- Faux bold needs no baked bold face (no atlas cost); `ELI_TEXT_BOLD_OFFSET` is
+  1 px and does not scale with the size.
+- The cut always falls on a UTF-8 codepoint boundary and stops at `'\n'`;
+  `cut` points into the caller's text (no copy, no heap).
+- The ellipsis draw: the whole first line when it fits, else the longest prefix
+  that leaves room for "…" ("..." when the font has no U+2026 glyph), then the
+  ellipsis. Text past a `'\n'` counts as cut.
+
 ## Font stack
 
 The current font lives on the active context. These operate on

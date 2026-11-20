@@ -3,7 +3,7 @@
 /**
  * @file eli_draw.h
  * @brief Aggregator for the elimgui draw category: draw types, the draw-list
- *        core, the path API, primitive shapes, and channel splitting.
+ *        core, the path API, primitive shapes, channel splitting, and dashed strokes.
  *
  * Include this to pull in the whole draw system:
  *     #include <eli/draw/eli_draw.h>
@@ -20,5 +20,6 @@
 #include "eli_draw_path.h"
 #include "eli_draw_prim.h"
 #include "eli_draw_channels.h"
+#include "eli_draw_dash.h"
 
 #endif /* ELI_DRAW_ELI_DRAW_H */
