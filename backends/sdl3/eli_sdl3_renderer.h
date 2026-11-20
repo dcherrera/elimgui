@@ -64,8 +64,10 @@ typedef struct eli_sdl3_renderer_config {
                                      screen until the next present) */
     int release_when_idle_ms;     /* visible, but no frame drawn for this long: shrink the
                                      swapchain to 1x1 px too (the last frame stays on screen;
-                                     the next draw regrows it); 0 = never. The app's loop
-                                     calls eli_sdl3_renderer_idle_wait_ms / _idle_step. */
+                                     the next draw regrows it) and drop to 2 drawables until
+                                     ELI_SDL3_QUICK_FRAMES frames come back to back; 0 = never.
+                                     The app's loop calls eli_sdl3_renderer_idle_wait_ms /
+                                     _idle_step. */
 } eli_sdl3_renderer_config;
 
 /** Renderer backend state. */
@@ -80,7 +82,15 @@ typedef struct eli_sdl3_renderer_state {
     bool surface_released;        /* the Metal drawables are shrunk to 1x1 px */
     bool idle_released;           /* ... because no frame was drawn for release_when_idle_ms */
     Uint64 last_draw_ms;          /* SDL_GetTicks at the last render_draw_data that drew */
+    int drawables_full;           /* the drawable count while rendering continuously */
+    bool drawables_reduced;       /* 2 drawables since the last idle release */
+    int quick_frames;             /* frames in a row < ELI_SDL3_QUICK_FRAME_MS apart */
 } eli_sdl3_renderer_state;
+
+/** Frames closer than this count as continuous rendering (idle release's drawable count). */
+#define ELI_SDL3_QUICK_FRAME_MS 50
+/** This many quick frames in a row give an idle-reduced swapchain its full drawable count. */
+#define ELI_SDL3_QUICK_FRAMES 8
 
 ELI_GLOBAL(eli_sdl3_renderer_state, g_eli_sdl3_renderer, {0});
 
@@ -176,6 +186,7 @@ static inline bool eli_sdl3_renderer_init_ex(SDL_Renderer *renderer, const eli_s
     g_eli_sdl3_renderer.metal_layer = layer;
     if (config->drawable_count && layer && !eli_sdl3_metal_set_drawable_count(layer, config->drawable_count))
         SDL_Log("eli_sdl3: drawable count %d refused (Metal takes 2 or 3)", config->drawable_count);
+    g_eli_sdl3_renderer.drawables_full = layer ? eli_sdl3_metal_drawable_count(layer) : 0;
     eli_sdl3__surface_update();
     return true;
 }
@@ -244,6 +255,10 @@ static inline bool eli_sdl3_renderer_idle_step(void)
         SDL_GetTicks() >= st->last_draw_ms + (Uint64)st->config.release_when_idle_ms) {
         eli_sdl3_metal_set_drawable_size(st->metal_layer, 1, 1);
         st->idle_released = true;
+        if (st->drawables_full > 2 && eli_sdl3_metal_set_drawable_count(st->metal_layer, 2)) {
+            st->drawables_reduced = true;   /* sparse frames regrow 2, not a full pool */
+            st->quick_frames = 0;
+        }
     }
     return st->idle_released;
 }
@@ -259,6 +274,24 @@ static inline void eli_sdl3_renderer_set_release_when_idle_ms(int ms)
     g_eli_sdl3_renderer.config.release_when_idle_ms = ms > 0 ? ms : 0;
 }
 
+/**
+ * Set the Metal drawable count (2 or 3) after init: the count used while rendering
+ * continuously (an idle release still drops to 2 until frames come quickly again).
+ * @return false on renderers without a CAMetalLayer or a refused count.
+ *
+ * Thread-safe: no (main thread)  Reentrant: no
+ */
+static inline bool eli_sdl3_renderer_set_drawable_count(int count)
+{
+    eli_sdl3_renderer_state *st = &g_eli_sdl3_renderer;
+    if (!st->metal_layer || !eli_sdl3_metal_set_drawable_count(st->metal_layer, count))
+        return false;
+    st->drawables_full = count;
+    st->drawables_reduced = false;
+    st->quick_frames = 0;
+    return true;
+}
+
 /** @return true while the swapchain is idle-released (release_when_idle_ms). */
 static inline bool eli_sdl3_renderer_idle_released(void)
 {
@@ -269,7 +302,14 @@ static inline bool eli_sdl3_renderer_idle_released(void)
 static inline void eli_sdl3__idle_wake(void)
 {
     eli_sdl3_renderer_state *st = &g_eli_sdl3_renderer;
-    st->last_draw_ms = SDL_GetTicks();
+    Uint64 now = SDL_GetTicks();
+    if (st->drawables_reduced) {   /* continuous rendering again: the full drawable count */
+        st->quick_frames = now - st->last_draw_ms < ELI_SDL3_QUICK_FRAME_MS ? st->quick_frames + 1 : 0;
+        if (st->quick_frames >= ELI_SDL3_QUICK_FRAMES &&
+            eli_sdl3_metal_set_drawable_count(st->metal_layer, st->drawables_full))
+            st->drawables_reduced = false;
+    }
+    st->last_draw_ms = now;
     if (!st->idle_released)
         return;
     st->idle_released = false;

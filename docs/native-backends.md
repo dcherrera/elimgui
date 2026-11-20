@@ -173,7 +173,11 @@ int wait = eli_sdl3_renderer_idle_wait_ms(eli_sdl3_wait_timeout_ms());  /* wakes
 eli_sdl3_renderer_idle_step();          /* releases when the delay has passed */
 ```
 
-`eli_sdl3_renderer_set_release_when_idle_ms` changes the delay after init. The
+An idle release also drops a 3-drawable swapchain to 2; it gets 3 back once
+`ELI_SDL3_QUICK_FRAMES` (8) frames come less than `ELI_SDL3_QUICK_FRAME_MS` (50 ms) apart,
+so a sparse redraw regrows 2 window-sized surfaces, not a full pool, and scrolling or
+typing still renders with 3. `eli_sdl3_renderer_set_release_when_idle_ms` changes the delay
+after init; `eli_sdl3_renderer_set_drawable_count` the continuous-rendering count. The
 full-size drawable pool also holds about 53 MiB of GPU memory owned by the process
 (footprint's "Owned physical footprint (unmapped) (graphics)") whenever frames keep
 coming, even one every 8 s; releasing the pool returns it as well. Measured with the

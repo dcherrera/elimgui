@@ -6,8 +6,8 @@
  *        controls checked through the real backend and a real window.
  *
  * Checks: Metal drawable count 2 and vsync on as configured; a visible window with
- * no frame for release_when_idle_ms releases its swapchain and the next frame
- * regrows it and draws; while the window is
+ * no frame for release_when_idle_ms releases its swapchain (and drops to 2 drawables
+ * until frames come back to back) and the next frame regrows it and draws; while the window is
  * hidden (then minimised) the swapchain is released to 1x1 px and a frame draws
  * nothing, and on show/restore it comes back at the window's pixel size; a timed
  * redraw is dropped from the wait timeout while hidden (unless the app opts out)
@@ -140,7 +140,23 @@ static void swapchain_check_idle(SDL_Window *window, SDL_Renderer *renderer, voi
                     "idle: the regrown frame draws");
     SDL_Log("swapchain-selftest: idle: submit + present %.2f ms regrown, %.2f ms steady",
             g_example_stats.last_submit_ms + g_example_stats.last_present_ms, steady_ms);
-    eli_sdl3_renderer_set_release_when_idle_ms(0);
+
+    /* With 3 drawables configured: an idle release drops to 2 until frames come quickly. */
+    eli_sdl3_renderer_set_drawable_count(3);
+    frame();
+    SDL_Delay(SWAPCHAIN_IDLE_MS + 50);
+    eli_sdl3_renderer_idle_step();
+    swapchain_check(eli_sdl3_renderer_drawable_count() == 2, "idle: released with 2 drawables (3 set)");
+    frame();
+    SDL_Delay(100);
+    frame();
+    swapchain_check(eli_sdl3_renderer_drawable_count() == 2, "idle: sparse frames keep 2 drawables");
+    eli_sdl3_renderer_set_release_when_idle_ms(0);   /* the back-to-back frames below */
+    for (int i = 0; i < 12; i++)
+        frame();
+    swapchain_check(eli_sdl3_renderer_drawable_count() == 3,
+                    "idle: frames back to back give the 3 drawables back");
+    eli_sdl3_renderer_set_drawable_count(2);   /* the configuration the other checks expect */
 }
 
 /** Minimise/restore: release and restore like hide/show. */
