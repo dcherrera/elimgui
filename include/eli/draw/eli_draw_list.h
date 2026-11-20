@@ -66,6 +66,41 @@ static inline void *eli_draw_buf_grow(void *data, int *capacity, int need, size_
     return grown;
 }
 
+/**
+ * Frames a draw list's high water is gathered over before its buffers may
+ * shrink (eli_draw_list_reset counts one per reset, i.e. per frame drawn).
+ * Override before including elimgui; 0 disables shrinking.
+ */
+#ifndef ELI_DRAW_LIST_SHRINK_FRAMES
+#define ELI_DRAW_LIST_SHRINK_FRAMES 600
+#endif
+
+/** A buffer smaller than this many bytes never shrinks (not worth a realloc). */
+#ifndef ELI_DRAW_LIST_SHRINK_MIN_BYTES
+#define ELI_DRAW_LIST_SHRINK_MIN_BYTES (64u * 1024u)
+#endif
+
+/**
+ * Shrink one buffer after a spike: when its capacity is more than 4x the high
+ * water `hw` and at least ELI_DRAW_LIST_SHRINK_MIN_BYTES, reallocate it to 2x the
+ * high water (the 1.5x growth never leaves a steady list above 4x, so a list that
+ * draws the same every frame never shrinks and never reallocates). Returns the
+ * (possibly moved) buffer; on a failed realloc the buffer and capacity stay.
+ */
+static inline void *eli_draw_buf_shrink(void *data, uint32_t *capacity, uint32_t hw,
+                                        size_t elem_size)
+{
+    size_t bytes = (size_t)*capacity * elem_size;
+    if (bytes < ELI_DRAW_LIST_SHRINK_MIN_BYTES || (uint64_t)*capacity <= (uint64_t)hw * 4u)
+        return data;
+    uint32_t want = hw * 2u < 8u ? 8u : hw * 2u;
+    void *p = eli_mem_realloc(data, bytes, (size_t)want * elem_size);
+    if (p == NULL)
+        return data;
+    *capacity = want;
+    return p;
+}
+
 /* ---------------------------------------------------------------------------
  * Clip rect helpers
  * ------------------------------------------------------------------------- */
@@ -230,8 +265,33 @@ static inline void eli_draw_list_clear(eli_draw_list *list)
 }
 
 /**
+ * Free a draw list's heap buffers but keep its configuration (flags, fringe and
+ * tessellation settings, fullscreen clip, white texel): the list is empty with no
+ * open command, and eli_draw_list_reset makes it usable again (its buffers then
+ * regrow). For lists that will sit unused for a while (a window not drawn).
+ *
+ * @param list  Draw list to release (must have been initialized).
+ *
+ * Thread-safe: no
+ * Reentrant: no
+ */
+static inline void eli_draw_list_release_buffers(eli_draw_list *list)
+{
+    eli_draw_list keep = *list;
+    eli_draw_list_clear(list);
+    list->flags = keep.flags;
+    list->fringe_scale = keep.fringe_scale;
+    list->circle_segment_max_error = keep.circle_segment_max_error;
+    list->clip_rect_fullscreen = keep.clip_rect_fullscreen;
+    list->cmd_clip_rect = keep.clip_rect_fullscreen;
+    list->tex_uv_white_pixel = keep.tex_uv_white_pixel;
+}
+
+/**
  * Reset a draw list for reuse without freeing its buffers: clears geometry and
  * commands, resets the path/clip/texture stacks, and opens a fresh command.
+ * Every ELI_DRAW_LIST_SHRINK_FRAMES resets, buffers more than 4x the high water
+ * of those frames shrink to 2x it (memory a one-off spike grew is given back).
  *
  * @param list  Draw list to reset (must have been initialized).
  *
@@ -240,6 +300,24 @@ static inline void eli_draw_list_clear(eli_draw_list *list)
  */
 static inline void eli_draw_list_reset(eli_draw_list *list)
 {
+    /* The frame just drawn joins the high water; every ELI_DRAW_LIST_SHRINK_FRAMES
+     * frames the live buffers give back what a spike left (eli_draw_buf_shrink). */
+    if (list->cmd_count > list->hw_cmd_count)
+        list->hw_cmd_count = list->cmd_count;
+    if (list->vtx_count > list->hw_vtx_count)
+        list->hw_vtx_count = list->vtx_count;
+    if (list->idx_count > list->hw_idx_count)
+        list->hw_idx_count = list->idx_count;
+    if (ELI_DRAW_LIST_SHRINK_FRAMES > 0 && ++list->hw_frames >= ELI_DRAW_LIST_SHRINK_FRAMES) {
+        list->cmds = (eli_draw_cmd *)eli_draw_buf_shrink(
+            list->cmds, &list->cmd_capacity, list->hw_cmd_count + 1u, sizeof(*list->cmds));
+        list->vtx = (eli_draw_vert *)eli_draw_buf_shrink(
+            list->vtx, &list->vtx_capacity, list->hw_vtx_count, sizeof(*list->vtx));
+        list->idx = (eli_draw_idx *)eli_draw_buf_shrink(
+            list->idx, &list->idx_capacity, list->hw_idx_count, sizeof(*list->idx));
+        list->hw_cmd_count = list->hw_vtx_count = list->hw_idx_count = 0;
+        list->hw_frames = 0;
+    }
     list->cmd_count = 0;
     list->vtx_count = 0;
     list->idx_count = 0;

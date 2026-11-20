@@ -30,6 +30,7 @@ typedef struct example_stats {
     uint64_t frames_built;      /* frames built since start */
     double last_build_ms;       /* CPU time of the last eli_frame_begin..end */
     double last_submit_ms;      /* CPU time to submit draw data to SDL (excl. present) */
+    double last_present_ms;     /* CPU time of the last SDL_RenderPresent (drawable wait incl.) */
     float density;              /* window pixel density */
     const char *renderer_name;  /* SDL_GetRendererName */
 } example_stats;

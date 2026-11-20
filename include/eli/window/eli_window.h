@@ -553,6 +553,28 @@ static inline eli_window *eli_window_find_hovered(eli_context *ctx)
 }
 
 /**
+ * Give back the draw-list buffers of windows not begun for
+ * io.config_memory_compact_frames frames (Dear ImGui's GcCompactTransientWindowBuffers):
+ * a window shown once (a popup, a torn-off pane, a card scrolled away for good) no
+ * longer holds its high-water geometry. The window keeps its state; its next begin
+ * resets the list and the buffers regrow.
+ */
+static inline void eli_window_compact_unused(eli_context *ctx)
+{
+    int after = ctx->io.config_memory_compact_frames;
+    if (after <= 0)
+        return;
+    for (int i = 0; i < ctx->windows_count; i++) {
+        eli_window *win = ctx->windows[i];
+        eli_draw_list *dl = &win->draw_list;
+        if (win->last_frame_active < 0 || ctx->frame_count - win->last_frame_active <= after)
+            continue;
+        if (dl->cmds || dl->vtx || dl->idx || dl->path || dl->channels)
+            eli_draw_list_release_buffers(dl);
+    }
+}
+
+/**
  * Begin-of-frame window update: reset the window stack, continue/finish a title
  * drag, determine the hovered window from last frame's geometry, raise the
  * window under a click, and apply mouse-wheel scrolling. Call after eli_new_frame and eli_input_update_begin_frame.
@@ -570,6 +592,7 @@ static inline void eli_window_new_frame(void)
     ctx->current_window = NULL;
     ctx->render_draw_lists_count = 0;
 
+    eli_window_compact_unused(ctx);
     eli_window_update_moving(ctx);
     ctx->hovered_window = eli_window_find_hovered(ctx);
     eli_window_focus_on_click(ctx);

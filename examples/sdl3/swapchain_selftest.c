@@ -5,7 +5,9 @@
  * @brief SDL3 example, sixth TU: `--swapchain-selftest`, the present-surface
  *        controls checked through the real backend and a real window.
  *
- * Checks: Metal drawable count 2 and vsync on as configured; while the window is
+ * Checks: Metal drawable count 2 and vsync on as configured; a visible window with
+ * no frame for release_when_idle_ms releases its swapchain (and drops to 2 drawables
+ * until frames come back to back) and the next frame regrows it and draws; while the window is
  * hidden (then minimised) the swapchain is released to 1x1 px and a frame draws
  * nothing, and on show/restore it comes back at the window's pixel size; a timed
  * redraw is dropped from the wait timeout while hidden (unless the app opts out)
@@ -26,6 +28,7 @@
 
 #define SWAPCHAIN_WAIT_MS 3000   /* window state changes animate on macOS */
 #define SWAPCHAIN_IDLE_SUBMIT_MS 0.2   /* submit with nothing drawn: measured ~0.002 ms (drawing: >= 0.6) */
+#define SWAPCHAIN_IDLE_MS 200          /* release_when_idle_ms for the idle check */
 
 static int g_swapchain_failed;
 
@@ -113,6 +116,49 @@ static void swapchain_check_hide_show(SDL_Window *window, SDL_Renderer *renderer
     swapchain_check(eli_sdl3_wait_timeout_ms() == 500, "shown: timed redraw runs (wait 500 ms)");
 }
 
+/** Idle: no frame for release_when_idle_ms releases a visible swapchain; a frame regrows it. */
+static void swapchain_check_idle(SDL_Window *window, SDL_Renderer *renderer, void (*frame)(void))
+{
+    eli_sdl3_renderer_set_release_when_idle_ms(SWAPCHAIN_IDLE_MS);
+    frame();
+    SDL_Delay(50);
+    frame();
+    double steady_ms = g_example_stats.last_submit_ms + g_example_stats.last_present_ms;
+    int wait = eli_sdl3_renderer_idle_wait_ms(-1);
+    swapchain_check(wait > 0 && wait <= SWAPCHAIN_IDLE_MS, "idle: an endless wait wakes for the release");
+    swapchain_check(eli_sdl3_renderer_idle_wait_ms(0) == 0, "idle: a due frame is not delayed");
+    swapchain_check(!eli_sdl3_renderer_idle_step() && swapchain_drawable_full(window, renderer),
+                    "idle: not released before the delay");
+    SDL_Delay(SWAPCHAIN_IDLE_MS + 50);
+    swapchain_check(eli_sdl3_renderer_idle_step() && swapchain_drawable_is(renderer, 1, 1),
+                    "idle: released to 1x1 px after the delay (window visible)");
+    swapchain_check(eli_sdl3_renderer_idle_wait_ms(-1) == -1, "idle: released, the wait is endless again");
+    frame();
+    swapchain_check(!eli_sdl3_renderer_idle_released() && swapchain_drawable_full(window, renderer),
+                    "idle: a frame regrows it to the window's pixel size");
+    swapchain_check(g_example_stats.last_submit_ms >= SWAPCHAIN_IDLE_SUBMIT_MS,
+                    "idle: the regrown frame draws");
+    SDL_Log("swapchain-selftest: idle: submit + present %.2f ms regrown, %.2f ms steady",
+            g_example_stats.last_submit_ms + g_example_stats.last_present_ms, steady_ms);
+
+    /* With 3 drawables configured: an idle release drops to 2 until frames come quickly. */
+    eli_sdl3_renderer_set_drawable_count(3);
+    frame();
+    SDL_Delay(SWAPCHAIN_IDLE_MS + 50);
+    eli_sdl3_renderer_idle_step();
+    swapchain_check(eli_sdl3_renderer_drawable_count() == 2, "idle: released with 2 drawables (3 set)");
+    frame();
+    SDL_Delay(100);
+    frame();
+    swapchain_check(eli_sdl3_renderer_drawable_count() == 2, "idle: sparse frames keep 2 drawables");
+    eli_sdl3_renderer_set_release_when_idle_ms(0);   /* the back-to-back frames below */
+    for (int i = 0; i < 12; i++)
+        frame();
+    swapchain_check(eli_sdl3_renderer_drawable_count() == 3,
+                    "idle: frames back to back give the 3 drawables back");
+    eli_sdl3_renderer_set_drawable_count(2);   /* the configuration the other checks expect */
+}
+
 /** Minimise/restore: release and restore like hide/show. */
 static void swapchain_check_minimize(SDL_Window *window, SDL_Renderer *renderer, void (*frame)(void))
 {
@@ -141,6 +187,8 @@ int example_swapchain_selftest(SDL_Window *window, SDL_Renderer *renderer, void 
     Sint64 vsync = SDL_GetNumberProperty(SDL_GetRendererProperties(renderer), SDL_PROP_RENDERER_VSYNC_NUMBER, -9);
     swapchain_check(vsync == 1, "vsync on");
 
+    if (metal)
+        swapchain_check_idle(window, renderer, frame);
     swapchain_check_hide_show(window, renderer, metal, frame);
     if (metal)
         swapchain_check_minimize(window, renderer, frame);

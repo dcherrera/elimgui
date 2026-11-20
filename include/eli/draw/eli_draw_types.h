@@ -208,6 +208,12 @@ struct eli_draw_list {
     float fringe_scale;            /* 1.0 at 1x scale */
     float circle_segment_max_error;/* tessellation error for auto segment counts */
     uint32_t dropped_vtx_count;    /* vertices refused by the 16-bit index guard */
+
+    /* High water of the frames since the last shrink check (eli_draw_list_reset). */
+    uint32_t hw_cmd_count;
+    uint32_t hw_vtx_count;
+    uint32_t hw_idx_count;
+    int hw_frames;
 };
 
 /* ---------------------------------------------------------------------------

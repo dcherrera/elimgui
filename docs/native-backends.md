@@ -149,6 +149,7 @@ eli_sdl3_renderer_config cfg = {
     .vsync = ELI_SDL3_VSYNC_ON,          /* KEEP (0), OFF, ON, ADAPTIVE */
     .release_when_hidden = true,         /* hidden or minimised */
     .release_when_occluded = true,       /* fully covered */
+    .release_when_idle_ms = 2000,        /* visible, no frame for 2 s; 0 = never */
 };
 eli_sdl3_renderer_init_ex(renderer, &cfg);   /* refused options are logged, not fatal */
 ```
@@ -160,6 +161,36 @@ so on show the last frame is displayed until the next present (no blank flash). 
 pixel-size change while released (SDL regrows the layer) is shrunk again.
 `render_draw_data` draws nothing while released. Non-Metal renderers: release and
 drawable count are no-ops; vsync applies everywhere.
+
+**Idle release.** With `release_when_idle_ms` set, a visible window that has drawn no
+frame for that long releases its swapchain the same way (the last frame stays on
+screen); the next `render_draw_data` gives the drawables the window's pixel size back
+before drawing. The loop folds it into its wait and steps it after:
+
+```c
+int wait = eli_sdl3_renderer_idle_wait_ms(eli_sdl3_wait_timeout_ms());  /* wakes once to release */
+... SDL_WaitEvent / SDL_WaitEventTimeout(wait) ...
+eli_sdl3_renderer_idle_step();          /* releases when the delay has passed */
+```
+
+An idle release also drops a 3-drawable swapchain to 2; it gets 3 back once
+`ELI_SDL3_QUICK_FRAMES` (8) frames come less than `ELI_SDL3_QUICK_FRAME_MS` (50 ms) apart,
+so a sparse redraw regrows 2 window-sized surfaces, not a full pool, and scrolling or
+typing still renders with 3. `eli_sdl3_renderer_set_release_when_idle_ms` changes the delay
+after init; `eli_sdl3_renderer_set_drawable_count` the continuous-rendering count. The
+full-size drawable pool also holds about 53 MiB of GPU memory owned by the process
+(footprint's "Owned physical footprint (unmapped) (graphics)") whenever frames keep
+coming, even one every 8 s; releasing the pool returns it as well. Measured with the
+example (2560x1600 px, 15 s, footprint MiB):
+
+| Run | IOSurface | Graphics owned |
+|---|---|---|
+| `--redraw-every 3` | 62.5 | 53.1 |
+| `--redraw-every 3 --release-idle 1000` | 15.6 | 2.0 |
+| `--focus-input` (caret blink every 0.5 s, never idle 1 s) | 62.5 | 53.1 |
+| no timed redraw, `--release-idle 1000` | 15.6 | 1.1 |
+
+The first frame after an idle release allocates its drawables again.
 
 Timed redraws (caret blink, tooltip delay, key repeat, `eli_request_redraw_after`)
 pause while the window is unseen: `eli_sdl3_wait_timeout_ms` returns -1 instead of a
@@ -183,7 +214,8 @@ pool at 2 but cost frame rate when rendering continuously: 600 vsync'd frames of
 example took 5.0 s with 3 drawables (120 fps) and 6.8 s with 2 (88 fps). Keep 3 unless
 memory matters more than smooth continuous animation.
 
-`--swapchain-selftest` checks the drawable count and vsync, release/restore on hide/show
+`--swapchain-selftest` checks the drawable count and vsync, release when idle and the
+regrow on the next frame, release/restore on hide/show
 and minimise/restore, nothing drawn while released, and timers paused while hidden.
 `tests/probe/red_proof_sdl3.sh` mutates a source line and confirms the selftest fails.
 

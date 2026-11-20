@@ -87,8 +87,8 @@ static float idx_getter(void *data, int idx)
  *
  * With N=5 samples (no border, no hover, no font):
  *   frame bg  : add_rect_filled → 4 vtx, 6 idx
- *   polyline  : N-1 = 4 segs → 4*4 = 16 vtx, 4*6 = 24 idx
- *   Total delta: 20 vtx, 30 idx
+ *   polyline  : N = 5 points → 5*2 = 10 vtx (shared), N-1 = 4 segs → 24 idx
+ *   Total delta: 14 vtx, 30 idx
  * --------------------------------------------------------------------------- */
 
 ELI_TEST(plot_lines_emits_polyline_geometry) {
@@ -106,8 +106,8 @@ ELI_TEST(plot_lines_emits_polyline_geometry) {
                    ELI_PLOT_SCALE_AUTO, ELI_PLOT_SCALE_AUTO,
                    eli_make_vec2(200.0f, 100.0f), 0);
 
-    /* frame bg: 4 vtx / 6 idx  +  polyline 4 segs: 16 vtx / 24 idx */
-    ELI_ASSERT_EQ(dl->vtx_count - vtx_before, 20u);
+    /* frame bg: 4 vtx / 6 idx  +  polyline 5 points, 4 segs: 10 vtx / 24 idx */
+    ELI_ASSERT_EQ(dl->vtx_count - vtx_before, 14u);
     ELI_ASSERT_EQ(dl->idx_count - idx_before, 30u);
 
     eli_end();
@@ -133,7 +133,7 @@ ELI_TEST(plot_lines_fn_emits_same_geometry_as_array_variant) {
     eli_plot_lines_fn("##plfn", idx_getter, NULL, 5, 0, NULL,
                       0.0f, 4.0f, eli_make_vec2(200.0f, 100.0f));
 
-    ELI_ASSERT_EQ(dl->vtx_count - vtx_before, 20u);
+    ELI_ASSERT_EQ(dl->vtx_count - vtx_before, 14u);
     ELI_ASSERT_EQ(dl->idx_count - idx_before, 30u);
 
     eli_end();
@@ -151,11 +151,11 @@ ELI_TEST(plot_lines_fn_emits_same_geometry_as_array_variant) {
  *   pts[0] = (9,  126)  → y = inner_max.y  (value 0 → bottom)
  *   pts[1] = (207, 28)  → y = inner_min.y  (value 1 → top)
  *
- * After the frame-bg rect (4 vtx at baseline), the polyline emits 4 vtx:
- *   vtx[baseline+4].pos.y ≈ inner_max.y (near pt0)
- *   vtx[baseline+7].pos.y ≈ inner_max.y (near pt0, other side of strip)
- *   vtx[baseline+5].pos.y ≈ inner_min.y (near pt1)
- *   vtx[baseline+6].pos.y ≈ inner_min.y (near pt1, other side of strip)
+ * After the frame-bg rect (4 vtx at baseline), the polyline emits 2 vtx per point:
+ *   vtx[baseline+4].pos.y ≈ inner_max.y (pt0)
+ *   vtx[baseline+5].pos.y ≈ inner_max.y (pt0, other side of strip)
+ *   vtx[baseline+6].pos.y ≈ inner_min.y (pt1)
+ *   vtx[baseline+7].pos.y ≈ inner_min.y (pt1, other side of strip)
  *
  * Tolerance is 1.5 px to account for the 1 px thickness normal expansion.
  * --------------------------------------------------------------------------- */
@@ -179,13 +179,13 @@ ELI_TEST(plot_lines_auto_scale_maps_min_to_bottom_max_to_top) {
     float inner_min_y = 28.0f;
     float tol = 1.5f;
 
-    /* vtx[base+4] and [base+7] are the two vertices near pt0 (value=0, bottom). */
+    /* vtx[base+4] and [base+5] are the two vertices of pt0 (value=0, bottom). */
     ELI_ASSERT_FLT_NEAR(dl->vtx[base + 4].y, inner_max_y, tol);
-    ELI_ASSERT_FLT_NEAR(dl->vtx[base + 7].y, inner_max_y, tol);
+    ELI_ASSERT_FLT_NEAR(dl->vtx[base + 5].y, inner_max_y, tol);
 
-    /* vtx[base+5] and [base+6] are the two vertices near pt1 (value=1, top). */
-    ELI_ASSERT_FLT_NEAR(dl->vtx[base + 5].y, inner_min_y, tol);
+    /* vtx[base+6] and [base+7] are the two vertices of pt1 (value=1, top). */
     ELI_ASSERT_FLT_NEAR(dl->vtx[base + 6].y, inner_min_y, tol);
+    ELI_ASSERT_FLT_NEAR(dl->vtx[base + 7].y, inner_min_y, tol);
 
     eli_end();
     frame_end();
@@ -334,8 +334,8 @@ ELI_TEST(plot_lines_overlay_text_does_not_crash) {
                    ELI_PLOT_SCALE_AUTO, ELI_PLOT_SCALE_AUTO,
                    eli_make_vec2(200.0f, 100.0f), 0);
 
-    /* frame bg: 4 vtx  +  polyline 2 segs: 8 vtx = 12 total */
-    ELI_ASSERT_EQ(dl->vtx_count - vtx_before, 12u);
+    /* frame bg: 4 vtx  +  polyline 3 points: 6 vtx = 10 total */
+    ELI_ASSERT_EQ(dl->vtx_count - vtx_before, 10u);
 
     eli_end();
     frame_end();

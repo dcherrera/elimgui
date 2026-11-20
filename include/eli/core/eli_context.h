@@ -343,6 +343,7 @@ static inline eli_context *eli_create_context(void)
     eli_style_set_defaults(&ctx->style);
 
     ctx->io.config_redraw_settle_frames = 2;
+    ctx->io.config_memory_compact_frames = 600;
 #if defined(__APPLE__)
     ctx->io.config_mac_os_behaviors = true;
 #endif
