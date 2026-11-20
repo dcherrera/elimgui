@@ -4,7 +4,8 @@
  * @file eli_font.h
  * @brief Aggregator for the elimgui font category: font types, the embedded
  *        default font, glyph-range tables, the stb-backed atlas builder, and
- *        text measurement/rendering plus the context font stack.
+ *        text measurement/rendering plus the context font stack, faux bold and
+ *        single-line cuts with an ellipsis.
  *
  * Include this to pull in the whole font system:
  *     #include <eli/font/eli_font.h>
@@ -30,5 +31,6 @@
 #include "eli_font_atlas_on_demand.h"
 #include "eli_font_atlas.h"
 #include "eli_font_text.h"
+#include "eli_font_text_style.h"
 
 #endif /* ELI_FONT_ELI_FONT_H */

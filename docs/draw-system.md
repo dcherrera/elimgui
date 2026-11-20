@@ -227,6 +227,25 @@ splitting is not supported.
 
 ---
 
+## Dashed strokes (`eli_draw_dash.h`)
+
+```c
+void eli_draw_list_path_stroke_dashed(list, col, flags, thickness, dash, gap);
+void eli_draw_list_add_rect_dashed(list, p_min, p_max, col, rounding, flags, thickness, dash, gap);
+void eli_draw_list_add_circle_dashed(list, center, radius, col, num_segments, thickness, dash, gap);
+```
+
+- The pattern starts with a dash at the first point and runs along the arc
+  length, so its phase carries round corners (a dash bends round a corner).
+- `ELI_DRAW_CLOSED` (always set by the rect / circle calls) stretches the pattern
+  so the perimeter holds a whole number of periods: no partial dash at the seam.
+- Each dash is one polyline (four vertices per segment). `dash <= 0` or
+  `gap <= 0` strokes solid.
+- Dash points are staged in the path buffer after the path itself: no
+  allocation beyond the draw list's own growth.
+
+---
+
 ## Example
 
 ```c

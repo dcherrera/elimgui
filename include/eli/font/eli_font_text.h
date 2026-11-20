@@ -48,15 +48,15 @@ static inline int eli_text_utf8_decode(const char *s, const char *end, uint32_t 
         *out_cp = c;
         return 1;
     }
-    if ((c & 0xE0) == 0xC0 && s + 1 < end + 1 && (u[1] & 0xC0) == 0x80) {
+    if ((c & 0xE0) == 0xC0 && s + 1 < end && (u[1] & 0xC0) == 0x80) {
         *out_cp = (uint32_t)((c & 0x1F) << 6) | (u[1] & 0x3F);
         return 2;
     }
-    if ((c & 0xF0) == 0xE0 && s + 2 < end + 1 && (u[1] & 0xC0) == 0x80 && (u[2] & 0xC0) == 0x80) {
+    if ((c & 0xF0) == 0xE0 && s + 2 < end && (u[1] & 0xC0) == 0x80 && (u[2] & 0xC0) == 0x80) {
         *out_cp = (uint32_t)((c & 0x0F) << 12) | (uint32_t)((u[1] & 0x3F) << 6) | (u[2] & 0x3F);
         return 3;
     }
-    if ((c & 0xF8) == 0xF0 && s + 3 < end + 1 && (u[1] & 0xC0) == 0x80 && (u[2] & 0xC0) == 0x80 &&
+    if ((c & 0xF8) == 0xF0 && s + 3 < end && (u[1] & 0xC0) == 0x80 && (u[2] & 0xC0) == 0x80 &&
         (u[3] & 0xC0) == 0x80) {
         *out_cp = (uint32_t)((c & 0x07) << 18) | (uint32_t)((u[1] & 0x3F) << 12) |
                   (uint32_t)((u[2] & 0x3F) << 6) | (u[3] & 0x3F);
