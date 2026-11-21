@@ -13,7 +13,8 @@
  *                     [--font-size PX] [--driver NAME] [--idle-report SECONDS]
  *                     [--focus-input] [--skip-unchanged] [--drawables 2|3] [--no-vsync]
  *                     [--release-hidden] [--hide-after S] [--warm-frames N] [--redraw-every S]
- *                     [--release-idle MS] [--on-demand]
+ *                     [--release-idle MS] [--on-demand] [--live-dot] [--live-fallback]
+ *                     [--live-fallback-interval S] [--live-selftest]
  *   --frames N         build and render N frames, then exit 0 (CI / sanitizer runs)
  *   --screenshot F     save the last rendered frame as a BMP
  *   --font F           use a TTF instead of the embedded ProggyClean
@@ -38,6 +39,11 @@
  *   --release-idle MS  release the swapchain after MS ms without a frame (visible window)
  *   --swapchain-selftest  check drawable count, vsync, release when idle, release/restore on hide/show and
  *                      timers paused while hidden; print PASS/FAIL, exit with failures
+ *   --live-dot         show a pulsing live dot in the Editor pane (graphics footprint probe)
+ *   --live-fallback    no Core Animation layers: live widgets redraw the main surface
+ *   --live-fallback-interval S  the fallback's redraw interval (default 0.25)
+ *   --live-selftest    check the Core Animation live widget layers (on-demand atlas, idle
+ *                      release 500 ms); print PASS/FAIL, exit with the number of failures
  *
  * @status In use (spec §17).
  * @issues None
@@ -46,6 +52,7 @@
 #define _POSIX_C_SOURCE 200809L   /* sigwait/pthread_sigmask under -std=c11 (glibc) */
 #define ELI_IMPLEMENTATION
 #include <eli/elimgui.h>
+#include <sdl3/eli_sdl3_live.h>
 #include <sdl3/eli_sdl3_platform.h>
 #include <sdl3/eli_sdl3_quit_signals.h>
 #include <sdl3/eli_sdl3_renderer.h>
@@ -86,6 +93,9 @@ typedef struct example_options {
     int release_idle_ms;        /* 0 = off */
     bool on_demand;
     bool atlas_selftest;
+    bool live_fallback;
+    float live_fallback_interval;   /* 0 = the library default */
+    bool live_selftest;
 } example_options;
 
 /** App-owned SDL + elimgui handles. */
@@ -175,13 +185,23 @@ static bool example_parse_args(int argc, char **argv, example_options *opt)
             opt->on_demand = true;
         else if (!strcmp(a, "--atlas-selftest"))
             opt->atlas_selftest = true;
+        else if (!strcmp(a, "--live-dot"))
+            g_example_live_dot = true;
+        else if (!strcmp(a, "--live-fallback"))
+            opt->live_fallback = true;
+        else if (!strcmp(a, "--live-fallback-interval") && has_value)
+            opt->live_fallback_interval = strtof(argv[++i], NULL);
+        else if (!strcmp(a, "--live-selftest"))
+            opt->live_selftest = true;
         else {
             fprintf(stderr, "usage: %s [--frames N] [--screenshot F.bmp] [--font F.ttf] "
                             "[--font-size PX] [--driver NAME] [--idle-report S] "
                             "[--focus-input] [--skip-unchanged] [--hidden] "
                             "[--input-selftest] [--swapchain-selftest] [--drawables 2|3] "
                             "[--no-vsync] [--release-hidden] [--hide-after S] "
-                            "[--warm-frames N] [--redraw-every S] [--release-idle MS] [--on-demand] [--atlas-selftest]\n", argv[0]);
+                            "[--warm-frames N] [--redraw-every S] [--release-idle MS] [--on-demand] "
+                            "[--atlas-selftest] [--live-dot] [--live-fallback] "
+                            "[--live-fallback-interval S] [--live-selftest]\n", argv[0]);
             return false;
         }
     }
@@ -189,6 +209,11 @@ static bool example_parse_args(int argc, char **argv, example_options *opt)
         opt->drawables = 2;
         opt->no_vsync = false;
         opt->release_hidden = true;
+    }
+    if (opt->live_selftest) {          /* live text needs CPU atlas pixels; idle release on */
+        opt->on_demand = true;
+        opt->live_fallback = false;
+        opt->release_idle_ms = 500;
     }
     return true;
 }
@@ -263,6 +288,10 @@ static bool example_init(example_app *app, const example_options *opt)
     };
     if (!eli_sdl3_platform_init(app->window) || !eli_sdl3_renderer_init_ex(app->renderer, &surface))
         return false;
+    if (opt->live_fallback_interval > 0.0f)
+        eli_live_set_fallback_interval(opt->live_fallback_interval);
+    if (!opt->live_fallback && !eli_sdl3_live_init(app->renderer))
+        SDL_Log("example: no Core Animation layers here; live widgets use the fallback");
     return example_build_fonts(app, opt, SDL_GetWindowPixelDensity(app->window));
 }
 
@@ -272,11 +301,14 @@ static bool example_handle_event(example_app *app, const example_options *opt, c
     example_log_event(e->type);
     if (e->type == SDL_EVENT_QUIT || e->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
         return false;
-    if (e->type == g_example_wake_event)
-        example_tasks_apply_wake();
-    else if (e->type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED)
+    if (e->type == g_example_wake_event) {
+        example_tasks_apply_wake(e);
+    } else if (e->type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED) {
         example_build_fonts(app, opt, SDL_GetWindowPixelDensity(app->window));
+        eli_request_redraw();
+    }
     eli_sdl3_renderer_process_event(e);
+    eli_sdl3_live_process_event(e);
     eli_sdl3_platform_process_event(e);
     return true;
 }
@@ -285,8 +317,10 @@ static bool example_handle_event(example_app *app, const example_options *opt, c
  * Sleep until an event or the redraw deadline (capped at `cap_ms` when >= 0),
  * then drain all pending events.
  *
- * @param need_frame  Set when a frame should be built (events, or the library's
- *                    deadline expired rather than the cap).
+ * @param need_frame  Set when a frame should be built: an event asked for one
+ *                    (eli_request_redraw: input, a worker result), or the library's
+ *                    deadline expired rather than the cap. Other events (a live
+ *                    widget update, the renderer's) build none.
  * @return            false when the app should quit.
  */
 static bool example_wait_events(example_app *app, const example_options *opt, int cap_ms,
@@ -301,11 +335,12 @@ static bool example_wait_events(example_app *app, const example_options *opt, in
     bool got = (wait_ms < 0) ? SDL_WaitEvent(&e) : SDL_WaitEventTimeout(&e, wait_ms);
     eli_sdl3_renderer_idle_step();
     bool running = true;
-    *need_frame = got || (lib_ms >= 0 && wait_ms == lib_ms);
+    bool deadline = lib_ms >= 0 && wait_ms == lib_ms;
     while (got) {
         running = example_handle_event(app, opt, &e) && running;
         got = SDL_PollEvent(&e);
     }
+    *need_frame = deadline || eli_get_redraw_timeout() == 0.0f;
     return running;
 }
 
@@ -313,8 +348,12 @@ static bool example_wait_events(example_app *app, const example_options *opt, in
 static void example_drive_focus(example_app *app)
 {
     float x = 0.0f, y = 0.0f;
-    if (app->focus_step >= 3 || !example_shell_name_field_center(&x, &y))
+    if (app->focus_step >= 3)
         return;
+    if (!example_shell_name_field_center(&x, &y)) {
+        eli_request_redraw();   /* frames until the dock layout has placed the field */
+        return;
+    }
     if (app->focus_step == 0) {
         eli_io_add_mouse_pos_event(x, y);
         eli_io_add_mouse_button_event(0, true);
@@ -357,6 +396,7 @@ static void example_save_screenshot(example_app *app, const char *path)
 /** Release everything example_init created. */
 static void example_shutdown(example_app *app)
 {
+    eli_sdl3_live_shutdown();
     eli_sdl3_renderer_shutdown();
     eli_sdl3_platform_shutdown();
     eli_destroy_context(NULL);
@@ -497,6 +537,11 @@ int main(int argc, char **argv)
         example_shutdown(&app);
         return failed ? 3 : 0;
     }
+    if (opt.live_selftest) {
+        int failed = example_live_selftest(app.window, app.renderer);
+        example_shutdown(&app);
+        return failed ? 3 : 0;
+    }
     if (opt.idle_report_s > 0.0)
         SDL_WarpMouseGlobal(0.0f, 0.0f);   /* spec §20.3: mouse outside the window */
     probe.start_ms = SDL_GetTicks();
@@ -530,6 +575,10 @@ int main(int argc, char **argv)
             eli_sdl3_renderer_surface_released() ? " (released)" : "");
     SDL_Log("example: font atlas %d page(s), %zu texels (single-channel GPU bytes; RGBA32 was 4x)",
             eli_font_atlas_live_page_count(app.atlas), eli_font_atlas_texture_bytes(app.atlas));
+    const eli_live_stats *live = eli_live_get_stats();
+    SDL_Log("example: live widgets %d (%d layers), %llu creates, %llu updates, %llu destroys",
+            live->count, live->live, (unsigned long long)live->creates,
+            (unsigned long long)live->updates, (unsigned long long)live->destroys);
     example_shutdown(&app);
     return 0;
 }
