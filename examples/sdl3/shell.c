@@ -87,6 +87,7 @@ static void shell_draw_editor(void)
 {
     shell_dock_next(g_shell_right_id);
     if (eli_begin("Editor", NULL, 0)) {
+        example_tasks_draw_probe();
         eli_input_text("Name", g_shell_name, sizeof(g_shell_name), 0, NULL, NULL);
         eli_vec2 mn = eli_get_item_rect_min(), mx = eli_get_item_rect_max();
         g_shell_name_center = eli_make_vec2((mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f);

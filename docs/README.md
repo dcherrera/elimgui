@@ -94,5 +94,6 @@ need finer control; `eli_frame_begin`/`eli_frame_end` are the recommended compos
 | 33 | [Optimization](optimization.md) | Draw-gen profiling, buffer reuse, batching, per-frame allocations, wasm size |
 | 34 | [Docking](docking.md) | Dock-node tree, drag-to-dock, edge splitting, tabbed docking, dock space |
 | 35 | [Native Backends](native-backends.md) | libc/state build modes, SDL3 platform + renderer backend, desktop example, DPI/fonts, static linking |
+| — | [Live Widgets](live-widgets.md) | Dot, spinner, progress, text drawn by compositor layers: no main-surface frames while they animate; macOS Core Animation backend, fallback |
 
 _Additional phase documents are added here as each phase lands._

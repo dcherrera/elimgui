@@ -6,7 +6,7 @@
  *
  * main.c (the ELI_IMPLEMENTATION TU: SDL, loop, fonts), shell.c (dockspace and
  * panes), perf_fixture.c (text-heavy window + frame overlay), tasks.c (worker
- * thread + spinner) and the two selftests are separate TUs built with
+ * thread, spinner, live widgets) and the selftests are separate TUs built with
  * ELI_SHARED_STATE, proving one elimgui context across files (D4).
  *
  * @status In use.
@@ -101,10 +101,31 @@ extern uint32_t g_example_wake_event;
 /** Register the wake event (tasks.c). Call after SDL_Init. */
 void example_tasks_init(void);
 
-/** Apply worker results on the main thread and request a redraw (tasks.c). */
-void example_tasks_apply_wake(void);
+/**
+ * Apply a wake event on the main thread (tasks.c): a finished job requests a redraw;
+ * job progress and the live clock's tick only update live widgets (no frame when
+ * they are layers).
+ */
+void example_tasks_apply_wake(const SDL_Event *e);
 
-/** Worker-job button and spinner toggle, drawn inside the Editor pane (tasks.c). */
+/** Worker-job button, spinner toggle and live widgets, inside the Editor pane (tasks.c). */
 void example_tasks_draw(void);
+
+/** `--live-dot`: show one pulsing live dot at the top of the Editor pane (tasks.c). */
+extern bool g_example_live_dot;
+
+/** The `--live-dot` probe dot, drawn first in the Editor pane (tasks.c). */
+void example_tasks_draw_probe(void);
+
+/**
+ * `--live-selftest`: check the Core Animation live widget layers through the real
+ * backend: one layer tree per widget with its animation, the layers drawn where
+ * the widgets are (offscreen render of the layer tree), no frame built while they
+ * animate and the swapchain released meanwhile, a setter without a frame,
+ * occlusion, removal, and the fallback without the backend (live_selftest.c).
+ *
+ * @return the number of failed checks
+ */
+int example_live_selftest(SDL_Window *window, SDL_Renderer *renderer);
 
 #endif /* ELI_EXAMPLE_APP_H */

@@ -48,6 +48,7 @@ typedef struct eli_font_atlas eli_font_atlas;
 #include "layout/eli_layout.h"   /* Phase 8:  layout system    */
 #include "widgets/eli_widgets.h" /* Phases 9-24: widgets + item status */
 #include "interaction/eli_interaction.h" /* Phase 25: disabling/clipping/focus */
+#include "live/eli_live.h"         /* live widgets (compositor layers) */
 #include "util/eli_list_clipper.h"       /* Phase 26: list clipper     */
 #include "util/eli_util.h"        /* Phase 27: misc utils + bg/fg lists */
 #include "util/eli_settings.h"    /* Phase 28: INI settings     */

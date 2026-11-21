@@ -253,6 +253,18 @@ current suite/test counts (62 suites, 337 tests total as of Phase 32).
 | `test_font_pages` | 11 | On-demand glyphs (== baked glyph and texels), missing-codepoint cache, backend hooks + dirty upload, LRU recycle, soft cap, idle free, two-level lookup, text switching page textures, allocations through the eli_mem seam |
 | `test_font_fallback` | 8 | Merge mode (missing codepoints only, baseline, cell-advance fit, baked == on-demand), tofu box default, `fallback_char`, custom glyph ranges |
 
+### Live widgets
+
+| Suite | Tests | What is covered |
+|-------|-------|-----------------|
+| `test_live_frames` | 6 | With a backend: 0 main-surface frames in 30 s of animation, nothing drawn on the main surface; fallback: the 0.25 s redraw (120 frames / 30 s), static at interval 0; setters between frames update the layer without a frame; pulse/spinner curves |
+| `test_live_allocs` | 3 | 0 elimgui allocations in 100 frames after 100 warm-up (layers with text and fraction changing every frame, setters, fallback, pool overflow); a full pool leaves the heap byte-identical, under 8 MB |
+| `test_live_lifetime` | 9 | Created once, steady frames send nothing, removed when not submitted or collapsed, no removal without a built frame, a move sends geometry only, per-window ids, pool overflow and refused create fall back, kind change, context destroy, text raster / no CPU pixels |
+| `test_live_occlusion` | 5 | A window or the foreground list over a widget hides its layer and the main surface draws it static (no timed redraw); uncovered, the layer returns after the static copy is gone; clip cuts, clipped out hides; a setter on an occluded widget redraws |
+
+`tests/probe/red_proof_live.sh` runs nine source mutations against these suites (all go
+red); `tests/probe/red_proof_live_sdl3.sh` five against the example's `--live-selftest`.
+
 ### Cross-subsystem integration
 
 | Suite | Tests | What is covered |

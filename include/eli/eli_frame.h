@@ -30,13 +30,14 @@
 #include "util/eli_logging.h"
 #include "docking/eli_dock.h"
 #include "interaction/eli_interaction.h"
+#include "live/eli_live.h"
 
 /**
  * Release all widget-subsystem heap state (table pool, tab-bar pool, plot
  * scratch, settings store, log buffer, pending drag-drop payload, clipboard
- * fallback). Registered as the context's widget_shutdown_fn by
- * eli_frame_begin so eli_destroy_context can reach it without a core->widget
- * include cycle.
+ * fallback) and remove every live widget (their layers go). Registered as
+ * the context's widget_shutdown_fn by eli_frame_begin so eli_destroy_context
+ * can reach it without a core->widget include cycle.
  *
  * @param ctx  Owning context (unused; the widget pools are module globals).
  *
@@ -53,6 +54,7 @@ static inline void eli_frame__shutdown_widgets(struct eli_context *ctx)
     eli_log_shutdown();
     eli_clear_drag_drop();
     eli_clipboard_shutdown();
+    eli_live_shutdown();
 }
 
 /**
@@ -96,8 +98,8 @@ static inline void eli_frame_begin(void)
  * eli_get_draw_data returns this frame's populated draw data.
  *
  * Order: eli_popup_end_frame -> eli_drag_drop_end_frame -> eli_window_render
- * -> eli_render -> eli_input_update_capture_flags -> eli_input_update_end_frame
- * -> eli_redraw_end_frame (then
+ * -> eli_live_end_frame -> eli_render -> eli_input_update_capture_flags
+ * -> eli_input_update_end_frame -> eli_redraw_end_frame (then
  * eli_get_redraw_timeout() tells the loop how long it may sleep).
  *
  * Thread-safe: no
@@ -108,6 +110,7 @@ static inline void eli_frame_end(void)
     eli_popup_end_frame();
     eli_drag_drop_end_frame();
     eli_window_render();
+    eli_live_end_frame();
     eli_render();
     eli_input_update_capture_flags();
     eli_input_update_end_frame();

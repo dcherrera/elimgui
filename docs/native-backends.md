@@ -74,6 +74,7 @@ so either can be replaced alone.
 | `sdl3/eli_sdl3_platform.h` | SDL events -> `eli_io`; cursor, clipboard, open URL, mouse warp; display size / density / delta time; `eli_sdl3_wait_timeout_ms` |
 | `sdl3/eli_sdl3_renderer.h` | `eli_draw_data` -> `SDL_RenderGeometryRaw`; RGBA and single-channel texture helpers; font-atlas pages; present surface (vsync, drawable count, release while hidden) |
 | `sdl3/eli_sdl3_metal.h` | CAMetalLayer drawable count / size from C via the ObjC runtime (used by the renderer; Apple links libobjc) |
+| `sdl3/eli_sdl3_live.h` | Live widgets as Core Animation layers on the CAMetalLayer (macOS; [live-widgets.md](live-widgets.md)); no-op elsewhere |
 | `sdl3/eli_sdl3_keymap.h` | SDL keycode/scancode -> `eli_key` (used by the platform header) |
 | `sdl3/eli_sdl3_quit_signals.h` | Optional: SIGINT/SIGTERM wake an idle loop with `SDL_EVENT_QUIT` (POSIX) |
 
@@ -246,7 +247,9 @@ Link flags for a static SDL3 3.4.10 (`pkg-config --static --libs sdl3`):
   -weak_framework UniformTypeIdentifiers -framework IOKit -framework ForceFeedback
   -framework Carbon -framework CoreAudio -framework AudioToolbox -framework AVFoundation
   -framework Foundation -framework GameController -framework Metal -framework QuartzCore
-  -weak_framework CoreHaptics -lpthread -lm`
+  -weak_framework CoreHaptics -lpthread -lm`, plus `-lobjc -framework CoreGraphics` for
+  `eli_sdl3_metal.h` / `eli_sdl3_live.h` (a dynamic SDL3 build adds
+  `-lobjc -framework QuartzCore -framework CoreGraphics`).
 - **Linux:** `libSDL3.a -lm -pthread`. SDL3 loads X11/Wayland/ALSA/etc. with `dlopen` by
   default, so they are not link-time dependencies (they must be present at runtime).
 
@@ -263,7 +266,10 @@ Four translation units built with `ELI_SHARED_STATE` + `ELI_DRAW_IDX_32`: `main.
 split into Files | Editor / Perf fixture, a table, single- and multi-line input),
 `perf_fixture.c` (120 x 48 monospace text block, ~18K vertices visible, plus a frame
 counter overlay with build and submit times) and `tasks.c` (worker-thread job that wakes
-the loop with a custom SDL event, and a spinner toggle).
+the loop with a custom SDL event, a spinner toggle, and a live widgets toggle: pulsing
+dot, spinner, the job's progress and a 1 s clock, all updated without frames), plus the
+selftests. The loop builds a frame only when elimgui asks (an event consumed, a
+`eli_request_redraw`, a timed deadline); other events build none.
 
 ```
 ./build.sh sdl3-example            # -O2, dynamic SDL3 from pkg-config
@@ -276,13 +282,18 @@ examples/sdl3/build/elimgui_sdl3 [--frames N] [--screenshot out.bmp] [--font f.t
                                  [--drawables 2|3] [--no-vsync] [--release-hidden]
                                  [--hide-after S] [--warm-frames N]
                                  [--on-demand] [--atlas-selftest]
+                                 [--live-dot] [--live-fallback]
+                                 [--live-fallback-interval S] [--live-selftest]
 ```
 
 `--frames N` renders N frames and exits 0 (used for the sanitizer runs); `--screenshot`
 saves the last frame as BMP. `--on-demand` uses an on-demand atlas; the exit log
 prints the font pages' GPU bytes. `--atlas-selftest` checks the pages are INDEX8 and
 that a frame drawn with them is byte-identical to the same draw data drawn with RGBA32
-copies (offscreen readback); it exits with the number of failures. On macOS the debug build uses Homebrew LLVM: Apple clang
+copies (offscreen readback); it exits with the number of failures. `--live-dot` shows a pulsing live dot at the top of the Editor pane;
+`--live-fallback` skips the Core Animation backend (live widgets redraw the main surface
+every `--live-fallback-interval` seconds); `--live-selftest` checks the layers (see
+[live-widgets.md](live-widgets.md#tests)). On macOS the debug build uses Homebrew LLVM: Apple clang
 17's ASan runtime hangs at startup on macOS 26 (even for an empty `main`).
 
 ### Results (Phase B)
